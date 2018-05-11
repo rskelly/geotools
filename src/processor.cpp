@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <cmath>
 #include <thread>
+#include <condition_variable>
 
 #include <geos/algorithm/ConvexHull.h>
 #include <geos/geom/Coordinate.h>
@@ -22,6 +23,8 @@
 #include <geos/geom/Point.h>
 
 #include "processor.hpp"
+#include "reader.hpp"
+#include "writer.hpp"
 
 #define MIN_VALUE 0.000001
 
@@ -52,11 +55,12 @@ public:
 	double ss; // Sample spectra
 	double ch; // Intersection with convex hull (y)
 	double cr; // Continuum removal (ss/ch)
+	double crn;
 	double crm; // Mirrored cr
 	double crnm; // Mirrored normalized cr
 	outpoint(inpoint& in, double ch) :
 		w(in.w), ss(in.ss),
-		ch(ch), cr(0), crm(0), crnm(0) {}
+		ch(ch), cr(0), crn(0), crm(0), crnm(0) {}
 	outpoint(inpoint& in) :
 		outpoint(in, 0) {}
 };
@@ -81,6 +85,7 @@ public:
 	double rarea; // Right hand area.
 	double symmetry; // larea / area
 	std::vector<outpoint> data;
+	output() : output(0, 0) {}
 	output(input& in) :
 		output(in.c, in.r) {}
 	output(int c, int r) :
@@ -93,7 +98,7 @@ public:
  * NaN if no intersection found.
  */
 double interpolate(double x, double x0, double y0, double x1, double y1) {
-	if(x < x0 && x > x1) {
+	if(x < x0 || x > x1) {
 		return std::numeric_limits<double>::quiet_NaN();
 	} else if(x == x0) {
 		return y0;
@@ -114,11 +119,12 @@ std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 	// Make a list of Coordinates.
 	std::vector<Coordinate> coords;
 	for(const inpoint& pt : in)
-		coords.emplace_back(pt.w, std::max(MIN_VALUE, pt.ss));
+		coords.emplace_back(pt.w, pt.ss);
 
 	// Make a MultiPoint from the coords and get the ConvexHull.
 	MultiPoint* mp = gf->createMultiPoint(coords);
 	Polygon* hull = dynamic_cast<Polygon*>(mp->convexHull());
+	delete mp;
 
 	// Get the area for output.
 	area = hull->getArea();
@@ -132,22 +138,33 @@ std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 		double x0 = p0->getX(), y0 = p0->getY();
 		double x1 = p1->getX(), y1 = p1->getY();
 		// Only add a segment if it isn't at a corner where y=0.
-		if(y0 > 0.0 && y1 > 0.0)
+		if(y0 > 0 && y1 > 0)
 			lines.emplace_back(x0, y0, x1, y1);
 	}
+
+	delete hull;
 
 	return lines;
 }
 
-void processQueue(std::list<input>* queue, std::mutex* mtx) {
+void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
+		std::mutex* inmtx, std::condition_variable* incv, std::mutex* outmtx, std::condition_variable* outcv, std::condition_variable* readcv, bool* running) {
 
 	input in;
 	while(true) {
 		{
-			std::lock_guard<std::mutex> lk(*mtx);
-			in = queue->front();
-			queue->pop_front();
+			std::unique_lock<std::mutex> lk(*inmtx);
+			while((inqueue->empty() || outqueue->size() > 10000) && *running)
+				incv->wait(lk);
+			if(inqueue->empty() && !*running)
+				break;
+			in = inqueue->front();
+			inqueue->pop_front();
 		}
+
+		// Adjust <=0 intensities.
+		for(size_t i = 0; i < in.data.size(); ++i)
+			if(in.data[i].ss <= MIN_VALUE) in.data[i].ss = MIN_VALUE;
 
 		// Add two corner points to make the hull full.
 		std::vector<inpoint> pts(in.data.begin(), in.data.end());
@@ -175,18 +192,21 @@ void processQueue(std::list<input>* queue, std::mutex* mtx) {
 				throw std::runtime_error("Failed to find an intersection point.");
 		}
 
-		double maxCrm = 0;
+		double maxCrm = 0, maxCr = 0;
 		int maxIdx = 0, i = 0;
 		for(outpoint& pt : out.data) {
 			pt.cr = pt.ss / pt.ch;
 			pt.crm = 1 - pt.cr;
+			if(pt.cr > maxCr)
+				maxCr = pt.cr;
 			if(pt.crm > maxCrm) {
-				maxCrm = 0;
+				maxCrm = pt.crm;
 				maxIdx = i;
 			}
 			++i;
 		}
 		for(outpoint& pt : out.data) {
+			pt.crn = pt.cr / maxCr;
 			pt.crm = 1 - pt.cr;
 			pt.crnm = pt.crm / maxCrm;
 		}
@@ -201,36 +221,144 @@ void processQueue(std::list<input>* queue, std::mutex* mtx) {
 
 		// Compute the rest of the numbers.
 		out.rarea = out.area - out.larea;
-		out.symmetry = out.larea / out.area;
+		out.symmetry = out.larea / out.rarea;
+
+		// Send to output queue and notify.
+		{
+			std::lock_guard<std::mutex> lk(*outmtx);
+			outqueue->push_back(out);
+		}
+
+		outcv->notify_one();
+		readcv->notify_one();
+
+		std::cerr << "inqueue " << inqueue->size() << "; outqueue " << outqueue->size() << "\n";
 
 	}
 }
 
-void Processor::process(const std::vector<double>& buffer, const std::vector<double>& wavelengths,
-		std::vector<double>& output, int cols, int rows, int bands, int bufSize) {
+void writeQueue(const std::string* outfile, int cols, int rows, int bands, std::list<output>* outqueue,
+		std::mutex* outmtx, std::condition_variable* outcv, std::condition_variable* incv, bool* running) {
 
-	if(wavelengths.size() != (size_t) bands)
-		std::invalid_argument("Wavelengths array must be the same size as the number of bands.");
+	GDALWriter writerss(*outfile + "_ss.tif", cols, rows, bands);
+	GDALWriter writerch(*outfile + "_ch.tif", cols, rows, bands);
+	GDALWriter writercr(*outfile + "_cr.tif", cols, rows, bands);
+	GDALWriter writercrn(*outfile + "_crn.tif", cols, rows, bands);
+	GDALWriter writercrm(*outfile + "_crm.tif", cols, rows, bands);
+	GDALWriter writercrnm(*outfile + "_crnm.tif", cols, rows, bands);
+	GDALWriter writerhull(*outfile + "_hull.tif", cols, rows, 4);
 
-	std::list<input> queue;
-	std::mutex mtx;
+	std::vector<double> ss;
+	std::vector<double> ch;
+	std::vector<double> cr;
+	std::vector<double> crn;
+	std::vector<double> crm;
+	std::vector<double> crnm;
+	std::vector<double> hull;
 
-	std::thread t(processQueue, &queue, &mtx);
+	output out;
+	while(true) {
+		{
+			std::unique_lock<std::mutex> lk(*outmtx);
+			while(outqueue->empty() && *running)
+				outcv->wait(lk);
+			if(outqueue->empty() && !*running)
+				break;
+			std::cerr << "c\n";
+			out = outqueue->front();
+			outqueue->pop_front();
+		}
 
-	for(int r = 0; r < rows; ++r) {
-		for(int c = 0; c < cols; ++c) {
-			input in(c, r);
-			for(int b = 0; b < bands; ++b) {
-				double v = buffer[b * bufSize * bufSize + r * cols + c];
-				double w = wavelengths[0];
-				in.data.emplace_back(w, v);
+		for(const outpoint& o : out.data) {
+			ss.push_back(o.ss);
+			ch.push_back(o.ch);
+			cr.push_back(o.cr);
+			crn.push_back(o.crn);
+			crm.push_back(o.crm);
+			crnm.push_back(o.crnm);
+		}
+
+		hull = {out.area, out.larea, out.rarea, out.symmetry};
+
+		writerss.write(ss, out.c, out.r, 1, 1, 1);
+		writerch.write(ch, out.c, out.r, 1, 1, 1);
+		writercr.write(cr, out.c, out.r, 1, 1, 1);
+		writercrn.write(crn, out.c, out.r, 1, 1, 1);
+		writercrm.write(crm, out.c, out.r, 1, 1, 1);
+		writercrnm.write(crnm, out.c, out.r, 1, 1, 1);
+		writerhull.write(hull, out.c, out.r, 1, 1, 1);
+
+		ss.clear();
+		ch.clear();
+		cr.clear();
+		crn.clear();
+		crm.clear();
+		crnm.clear();
+
+		incv->notify_one();
+
+		std::cerr << "outqueue " << outqueue->size() << "\n";
+	}
+
+	writerhull.writeStats(*outfile + "_hullstats.csv");
+
+}
+
+void Processor::process(Reader& reader, const std::string& outfile, int bufSize, int threads) {
+
+	std::list<input> inqueue;
+	std::list<output> outqueue;
+	std::mutex inmtx;
+	std::mutex outmtx;
+	std::mutex readmtx;
+	std::condition_variable incv;
+	std::condition_variable outcv;
+	std::condition_variable readcv;
+	bool inrunning = true;
+	bool outrunning = true;
+
+	std::list<std::thread> t0;
+	for(int i = 0; i < threads; ++i)
+		t0.emplace_back(processQueue, &inqueue, &outqueue, &inmtx, &incv, &outmtx, &outcv, &readcv, &inrunning);
+	std::thread t1(writeQueue, &outfile, reader.cols(), reader.rows(), reader.bands(), &outqueue, &outmtx, &outcv, &incv, &outrunning);
+
+	std::vector<double> buf(bufSize * bufSize * reader.bands());
+	const std::vector<double>& wavelengths = reader.getBands();
+
+	int col, row, cols, rows;
+	while(reader.next(buf, col, row, cols, rows)) {
+		std::cerr << row << " of " << reader.rows() << "\n";
+		std::lock_guard<std::mutex> lk(inmtx);
+		for(int r = 0; r < rows; ++r) {
+			for(int c = 0; c < cols; ++c) {
+				input in(c, r);
+				for(int b = 0; b < reader.bands(); ++b) {
+					double v = buf[b * bufSize * bufSize + r * cols + c];
+					double w = wavelengths[b];
+					in.data.emplace_back(w, v);
+				}
+				inqueue.push_back(in);
 			}
-			queue.push_back(in);
+		}
+		incv.notify_all();
+		std::cout << "a\n";
+		{
+			std::unique_lock<std::mutex> lk(readmtx);
+			if(inqueue.size() > (size_t) 2 * bufSize * bufSize)
+				readcv.wait(lk);
 		}
 	}
 
-	t.join();
+	inrunning = false;
+	incv.notify_all();
 
+	for(std::thread& t : t0)
+		t.join();
+
+	outrunning = false;
+	outcv.notify_all();
+
+	t1.join();
 }
 
 

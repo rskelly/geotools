@@ -10,6 +10,8 @@
 
 #include "reader.hpp"
 
+#define WL_SCALE 100000
+
 GDALReader::GDALReader(const std::string& filename) :
 	m_ds(nullptr),
 	m_cols(0), m_rows(0), m_bands(0),
@@ -28,20 +30,24 @@ GDALReader::GDALReader(const std::string& filename) :
 	m_rows = m_ds->GetRasterYSize();
 
 	{
+		std::map<int, int> bandMap;
 		for(int i = 1; i <= m_bands; ++i) {
 			GDALRasterBand* band = m_ds->GetRasterBand(i);
-			char** meta = band->GetMetadata();
-			if(*meta) {
-				double wl = atof(*meta);
-				if(wl > 0.0) {
-					m_bandMap[wl] = i;
+			std::string meta(*band->GetMetadata());
+			if(!meta.empty() && meta[0] == 'w') {
+				meta = meta.substr(meta.find('=') + 1);
+				// The wavelength is scaled so that exact matches can occur.
+				int wl = (int) (atof(meta.c_str()) * WL_SCALE);
+				if(wl > 0) {
+					bandMap[wl] = i;
 				} else {
-					m_bandMap.clear();
+					bandMap.clear();
 					std::cerr << "Failed to read band map from metadata." << std::endl;
 					break;
 				}
 			}
 		}
+		setBandMap(bandMap);
 	}
 }
 
@@ -61,39 +67,53 @@ bool GDALReader::next(std::vector<double>& buf, int& col, int& row, int& cols, i
 	cols = std::min(m_bufSize, m_cols - m_col);
 	rows = std::min(m_bufSize, m_rows - m_row);
 	double* data = (double*) buf.data();
-	for(int i = 1; i <= m_bands; ++i) {
+	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		if(band->RasterIO(GF_Read, m_col, m_row, cols, rows,
-				(void*) (data + (i - 1) * m_bufSize * m_bufSize),
+				(void*) (data + (i - m_minIdx) * m_bufSize * m_bufSize),
 				m_bufSize, m_bufSize, GDT_Float64, 0, 0, 0))
 			return false;
 	}
 	return true;
 }
 
-void GDALReader::setBandMap(std::map<double, int>& map) {
+void GDALReader::setBandMap(std::map<int, int>& map) {
 	m_bandMap = map;
 	m_minIdx = 0;
 	m_maxIdx = map.size() - 1;
-	m_minWl = m_bandMap.begin()->first;
-	m_maxWl = std::next(m_bandMap.begin(), m_bandMap.size())->first;
+	m_minWl = std::next(m_bandMap.begin(), m_minIdx)->first;
+	m_maxWl = std::next(m_bandMap.begin(), m_maxIdx)->first;
+}
+
+void GDALReader::setBandMap(std::string& bandfile) {
+	throw std::runtime_error("Not implemented.");
 }
 
 void GDALReader::setBandRange(double min, double max) {
-	for(const auto& pair : m_bandMap) {
-		if(pair.first <= min)
-			m_minIdx = std::max(0, pair.second - 1);
-		if(pair.first >= max) {
-			m_maxIdx = pair.second;
+	int mins = (int) (min * WL_SCALE);
+	int maxs = (int) (max * WL_SCALE);
+	for(auto it = m_bandMap.begin(); it != m_bandMap.end(); ++it) {
+		if(it->first <= mins) {
+			m_minWl = it->first;
+			m_minIdx = it->second;
+		}
+		if(it->first >= maxs) {
+			m_maxWl = it->first;
+			m_maxIdx = it->second;
 			break;
 		}
 	}
-	m_minWl = min;
-	m_maxWl = max;
+}
+
+std::vector<double> GDALReader::getBandRange() const {
+	return {(double) m_minWl / WL_SCALE, (double) m_maxWl / WL_SCALE};
 }
 
 std::vector<double> GDALReader::getBands() const {
-	return {m_minWl, m_maxWl};
+	std::vector<double> bands;
+	for(auto p = std::next(m_bandMap.begin(), m_minIdx); p != std::next(m_bandMap.begin(), m_maxIdx + 1); ++p)
+		bands.push_back((double) p->first / WL_SCALE);
+	return bands;
 }
 
 std::vector<int> GDALReader::getIndices() const {
@@ -109,7 +129,7 @@ int GDALReader::rows() const {
 }
 
 int GDALReader::bands() const {
-	return m_bands;
+	return m_maxIdx - m_minIdx + 1;
 }
 
 GDALReader::~GDALReader() {

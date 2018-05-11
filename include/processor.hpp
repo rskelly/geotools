@@ -8,14 +8,11 @@
 #ifndef PROCESSOR_HPP_
 #define PROCESSOR_HPP_
 
-#include <vector>
+#include "reader.hpp"
 
 class Processor {
 public:
-	void process(const std::vector<double>& buffer, const std::vector<double>& wavelengths,
-			std::vector<double>& output, int cols, int rows, int bands, int bufSize);
+	void process(Reader& reader, const std::string& outfile, int bufSize, int threads);
 };
-
-
 
 #endif /* PROCESSOR_HPP_ */

@@ -7,33 +7,82 @@
 //============================================================================
 
 #include <iostream>
+#include <unistd.h>
 
 #include "reader.hpp"
 #include "writer.hpp"
 #include "processor.hpp"
 
+void usage() {
+	std::cerr << "Usage: contrem [options]\n"
+			<< " -d A GDAL-readable data file containing spectral samples; can contain any number of bands >= 2.\n"
+			<< " -b A CSV or Excel file containing a mapping from wavelength to (1-based) band index.\n"
+			<< " -w An integer giving the (0-based) column index in -b which contains wavelengths.\n"
+			<< " -i An integer giving the (0-based) column index in -b which contains the band indices.\n"
+			<< " -o An output file template. This is a filename with no extension that will be modified as\n"
+			<< "    appropriate. Parent directories will be created.\n"
+			<< " -l The minimum wavelength to consider.\n"
+			<< " -h The maximum wavelength to consider.\n"
+			<< " -s The size of the buffer. Default is 256. Larger buffers are possible, but one must\n"
+			<< "    consider that multiple buffers may be in memory at once.\n"
+			<< " -t The number of threads to use. Default 2.\n";
+}
+
 int main(int argc, char** argv) {
 
 	int bufSize = 256;
-	std::string datafile = argv[1];
-	std::string bandfile = argv[2];
-	std::string outfile = argv[3];
+	double minWl = 0;
+	double maxWl = 0;
+	std::string datafile;
+	std::string bandfile;
+	int wlCol = -1;
+	int bandCol = -1;
+	std::string outfile;
+	int threads = 1;
 
-	GDALReader reader(datafile);
-	reader.setBufSize(bufSize);
+	try {
+		int c;
+		while((c = getopt(argc, argv, "d:b:o:l:h:s:w:i:t:")) != -1) {
+			switch(c) {
+			case 'd': datafile = optarg; break;
+			case 'b': bandfile = optarg; break;
+			case 'o': outfile = optarg; break;
+			case 'l': minWl = atof(optarg); break;
+			case 'h': maxWl = atof(optarg); break;
+			case 's': bufSize = atoi(optarg); break;
+			case 'w': wlCol = atoi(optarg); break;
+			case 'i': bandCol = atoi(optarg); break;
+			case 't': threads = atoi(optarg); break;
+			default: break;
+			}
+		}
 
-	GDALWriter writer(outfile, reader.cols(), reader.rows(), 1);
+		if(bufSize <= 0)
+			throw std::invalid_argument("Buffer size must be larger than zero.");
+		if(datafile.empty())
+			throw std::invalid_argument("Data file not given.");
+		if(outfile.empty())
+			throw std::invalid_argument("Output file template not given.");
+		if(threads < 1)
+			throw std::invalid_argument("At least one thread is required.");
+		if(!bandfile.empty() && (bandCol < 0 || wlCol < 0))
+			throw std::invalid_argument("If the band file is given, wavelength and band columns must also be given.");
 
-	Processor processor;
+		GDALReader reader(datafile);
+		if(!bandfile.empty())
+			reader.setBandMap(bandfile);
+		if(minWl > 0 && maxWl > 0)
+			reader.setBandRange(minWl, maxWl);
+		reader.setBufSize(bufSize);
 
-	std::vector<double> buf(bufSize * bufSize * reader.bands());
-	std::vector<double> wavelengths = reader.getBands();
-	std::vector<double> output(bufSize * bufSize * 1);
+		Processor processor;
 
-	int col, row, cols, rows;
-	while(reader.next(buf, col, row, cols, rows)) {
-		processor.process(buf, wavelengths, output, cols, rows, reader.bands(), bufSize);
-		writer.write(output, col, row, cols, rows, bufSize);
+		processor.process(reader, outfile, bufSize, threads);
+
+	} catch(const std::exception& ex) {
+		std::cerr << ex.what() << "\n";
+		usage();
+		return 1;
 	}
 
 	return 0;
