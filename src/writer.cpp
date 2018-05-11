@@ -74,7 +74,10 @@ bool __isnonzero(const double& v) {
 	return v > 0;
 }
 
-bool GDALWriter::writeStats(const std::string& filename) {
+bool GDALWriter::writeStats(const std::string& filename, const std::vector<std::string>& names) {
+
+	if(!names.empty() && (int) names.size() != m_bands)
+		throw std::invalid_argument("Band names must be the same size as the number of bands, or empty.");
 
 	Stats stats;
 
@@ -99,7 +102,7 @@ bool GDALWriter::writeStats(const std::string& filename) {
 		std::copy_if(buf.begin(), buf.end(), std::back_inserter(values), __isnonzero);
 		stats.computeStats(values, results);
 
-		out << band->GetDescription();
+		out << names[i - 1];
 		for(double v : results)
 			out << "," << v;
 		out << "\n";

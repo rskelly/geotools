@@ -312,7 +312,7 @@ void writeQueue(const std::string* outfile, const std::vector<std::string>& wave
 		//std::cerr << "outqueue " << outqueue->size() << "\n";
 	}
 
-	writerhull.writeStats(*outfile + "_hullstats.csv");
+	writerhull.writeStats(*outfile + "_hullstats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry"});
 
 }
 

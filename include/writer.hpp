@@ -16,7 +16,7 @@
 class Writer {
 public:
 	virtual bool write(std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize) = 0;
-	virtual bool writeStats(const std::string& filename) = 0;
+	virtual bool writeStats(const std::string& filename, const std::vector<std::string>& names = {}) = 0;
 	virtual ~Writer() {}
 };
 
@@ -30,7 +30,7 @@ private:
 public:
 	GDALWriter(const std::string& filename, int cols, int rows, int bands, const std::string& fieldName = "", const std::vector<std::string>& bandNames = {});
 	bool write(std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize);
-	bool writeStats(const std::string& filename);
+	bool writeStats(const std::string& filename, const std::vector<std::string>& names = {});
 	~GDALWriter();
 };
 
