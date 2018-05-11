@@ -114,17 +114,16 @@ double interpolate(double x, double x0, double y0, double x1, double y1) {
  */
 std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 
-	const GeometryFactory* gf = GeometryFactory::getDefaultInstance();
+	const GeometryFactory gf;
 
 	// Make a list of Coordinates.
 	std::vector<Coordinate> coords;
 	for(const inpoint& pt : in)
-		coords.emplace_back(pt.w, pt.ss);
+		coords.emplace_back(pt.w, pt.ss, 0);
 
 	// Make a MultiPoint from the coords and get the ConvexHull.
-	MultiPoint* mp = gf->createMultiPoint(coords);
+	MultiPoint* mp = gf.createMultiPoint(coords);
 	Polygon* hull = dynamic_cast<Polygon*>(mp->convexHull());
-	delete mp;
 
 	// Get the area for output.
 	area = hull->getArea();
@@ -133,15 +132,18 @@ std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 	std::vector<line> lines;
 	const LineString* ring = hull->getExteriorRing();
 	for(size_t i = 0; i < ring->getNumPoints() - 1; ++i) {
-		Point* p0 = ring->getPointN(i);
+		Point* p0 = ring->getPointN(i); // This call implies an allocation. LAME. Delete at the end.
 		Point* p1 = ring->getPointN(i + 1);
 		double x0 = p0->getX(), y0 = p0->getY();
 		double x1 = p1->getX(), y1 = p1->getY();
 		// Only add a segment if it isn't at a corner where y=0.
 		if(y0 > 0 && y1 > 0)
 			lines.emplace_back(x0, y0, x1, y1);
+		delete p0;
+		delete p1;
 	}
 
+	delete mp;
 	delete hull;
 
 	return lines;
@@ -154,15 +156,17 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 	while(true) {
 		{
 			std::unique_lock<std::mutex> lk(*inmtx);
-			while((inqueue->empty() || outqueue->size() > 10000) && *running)
+			// If the input is empty or the output is too large, pause.
+			while((inqueue->empty() || outqueue->size() > 1000) && *running)
 				incv->wait(lk);
+			// If input is empty and reading is done, quit the loop.
 			if(inqueue->empty() && !*running)
 				break;
 			in = inqueue->front();
 			inqueue->pop_front();
 		}
 
-		// Adjust <=0 intensities.
+		// Adjust <=0 intensities to MIN_VALUE.
 		for(size_t i = 0; i < in.data.size(); ++i)
 			if(in.data[i].ss <= MIN_VALUE) in.data[i].ss = MIN_VALUE;
 
@@ -192,6 +196,7 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 				throw std::runtime_error("Failed to find an intersection point.");
 		}
 
+		// Calculate the cr and crm, and get the max value and index.
 		double maxCrm = 0, maxCr = 0;
 		int maxIdx = 0, i = 0;
 		for(outpoint& pt : out.data) {
@@ -205,32 +210,35 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 			}
 			++i;
 		}
+
+		// Calculate the other ch metrics.
 		for(outpoint& pt : out.data) {
 			pt.crn = pt.cr / maxCr;
 			pt.crm = 1 - pt.cr;
 			pt.crnm = pt.crm / maxCrm;
 		}
 
-		// Add two corner points to make the hull full.
+		// Calculate the split hull; add two corner points to make the hull full.
 		pts.assign(in.data.begin(), in.data.begin() + maxIdx);
 		pts.emplace_back(pts[pts.size() - 1].w, 0.0);
 		pts.emplace_back(pts[0].w, 0.0);
 
-		// Compute the hull, assign area to the output.
+		// Compute the hull, assign area to the left output.
 		lines = convexHull(pts, out.larea);
 
 		// Compute the rest of the numbers.
 		out.rarea = out.area - out.larea;
 		out.symmetry = out.larea / out.rarea;
 
-		// Send to output queue and notify.
 		{
+			// Send to output queue and notify.
 			std::lock_guard<std::mutex> lk(*outmtx);
 			outqueue->push_back(out);
 		}
 
 		outcv->notify_one();
-		readcv->notify_one();
+		if(inqueue->size() < 1000)
+			readcv->notify_one();
 
 		std::cerr << "inqueue " << inqueue->size() << "; outqueue " << outqueue->size() << "\n";
 
@@ -264,7 +272,6 @@ void writeQueue(const std::string* outfile, int cols, int rows, int bands, std::
 				outcv->wait(lk);
 			if(outqueue->empty() && !*running)
 				break;
-			std::cerr << "c\n";
 			out = outqueue->front();
 			outqueue->pop_front();
 		}
@@ -297,7 +304,7 @@ void writeQueue(const std::string* outfile, int cols, int rows, int bands, std::
 
 		incv->notify_one();
 
-		std::cerr << "outqueue " << outqueue->size() << "\n";
+		//std::cerr << "outqueue " << outqueue->size() << "\n";
 	}
 
 	writerhull.writeStats(*outfile + "_hullstats.csv");
@@ -327,26 +334,35 @@ void Processor::process(Reader& reader, const std::string& outfile, int bufSize,
 
 	int col, row, cols, rows;
 	while(reader.next(buf, col, row, cols, rows)) {
+
 		std::cerr << row << " of " << reader.rows() << "\n";
-		std::lock_guard<std::mutex> lk(inmtx);
-		for(int r = 0; r < rows; ++r) {
-			for(int c = 0; c < cols; ++c) {
-				input in(c, r);
-				for(int b = 0; b < reader.bands(); ++b) {
-					double v = buf[b * bufSize * bufSize + r * cols + c];
-					double w = wavelengths[b];
-					in.data.emplace_back(w, v);
-				}
-				inqueue.push_back(in);
-			}
-		}
-		incv.notify_all();
-		std::cout << "a\n";
+
 		{
+			// If input queue gets too large, wait before adding more.
 			std::unique_lock<std::mutex> lk(readmtx);
-			if(inqueue.size() > (size_t) 2 * bufSize * bufSize)
+			if(inqueue.size() > 1000)
 				readcv.wait(lk);
 		}
+
+		{
+			// Read out the input objects and add to the queue.
+			std::lock_guard<std::mutex> lk(inmtx);
+			for(int r = 0; r < rows; ++r) {
+				for(int c = 0; c < cols; ++c) {
+					input in(c, r);
+					for(int b = 0; b < reader.bands(); ++b) {
+						double v = buf[b * bufSize * bufSize + r * cols + c];
+						double w = wavelengths[b];
+						in.data.emplace_back(w, v);
+					}
+					inqueue.push_back(in);
+				}
+			}
+		}
+
+		// Notify the input processor.
+		incv.notify_all();
+		break;
 	}
 
 	inrunning = false;
