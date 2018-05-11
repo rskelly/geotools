@@ -31,11 +31,11 @@ GDALReader::GDALReader(const std::string& filename) :
 
 	{
 		std::map<int, int> bandMap;
+		std::string name = "wavelength";
 		for(int i = 1; i <= m_bands; ++i) {
 			GDALRasterBand* band = m_ds->GetRasterBand(i);
-			std::string meta(*band->GetMetadata());
-			if(!meta.empty() && meta[0] == 'w') {
-				meta = meta.substr(meta.find('=') + 1);
+			std::string meta(band->GetMetadataItem(name.c_str()));
+			if(!meta.empty()) {
 				// The wavelength is scaled so that exact matches can occur.
 				int wl = (int) (atof(meta.c_str()) * WL_SCALE);
 				if(wl > 0) {
@@ -115,8 +115,13 @@ std::vector<double> GDALReader::getBandRange() const {
 
 std::vector<double> GDALReader::getBands() const {
 	std::vector<double> bands;
-	for(auto p = std::next(m_bandMap.begin(), m_minIdx); p != std::next(m_bandMap.begin(), m_maxIdx + 1); ++p)
-		bands.push_back((double) p->first / WL_SCALE);
+	if(m_maxIdx > 0 && m_maxIdx > m_minIdx) {
+		for(auto p = std::next(m_bandMap.begin(), m_minIdx - 1); p != std::next(m_bandMap.begin(), m_maxIdx); ++p)
+			bands.push_back((double) p->first / WL_SCALE);
+	} else {
+		for(const auto& p : m_bandMap)
+			bands.push_back((double) p.first / WL_SCALE);
+	}
 	return bands;
 }
 
