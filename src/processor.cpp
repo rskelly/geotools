@@ -220,11 +220,16 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 
 		// Calculate the split hull; add two corner points to make the hull full.
 		pts.assign(in.data.begin(), in.data.begin() + maxIdx);
-		pts.emplace_back(pts[pts.size() - 1].w, 0.0);
-		pts.emplace_back(pts[0].w, 0.0);
 
-		// Compute the hull, assign area to the left output.
-		lines = convexHull(pts, out.larea);
+		if(pts.size() > 1) {
+			pts.emplace_back(pts[pts.size() - 1].w, 0.0);
+			pts.emplace_back(pts[0].w, 0.0);
+
+			// Compute the hull, assign area to the left output.
+			lines = convexHull(pts, out.larea);
+		} else {
+			out.larea = 0;
+		}
 
 		// Compute the rest of the numbers.
 		out.rarea = out.area - out.larea;
@@ -240,21 +245,21 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 		if(inqueue->size() < 1000)
 			readcv->notify_one();
 
-		std::cerr << "inqueue " << inqueue->size() << "; outqueue " << outqueue->size() << "\n";
+		//std::cerr << "inqueue " << inqueue->size() << "; outqueue " << outqueue->size() << "\n";
 
 	}
 }
 
-void writeQueue(const std::string* outfile, int cols, int rows, int bands, std::list<output>* outqueue,
+void writeQueue(const std::string* outfile, const std::vector<std::string>& wavelengths, int cols, int rows, int bands, std::list<output>* outqueue,
 		std::mutex* outmtx, std::condition_variable* outcv, std::condition_variable* incv, bool* running) {
 
-	GDALWriter writerss(*outfile + "_ss.tif", cols, rows, bands);
-	GDALWriter writerch(*outfile + "_ch.tif", cols, rows, bands);
-	GDALWriter writercr(*outfile + "_cr.tif", cols, rows, bands);
-	GDALWriter writercrn(*outfile + "_crn.tif", cols, rows, bands);
-	GDALWriter writercrm(*outfile + "_crm.tif", cols, rows, bands);
-	GDALWriter writercrnm(*outfile + "_crnm.tif", cols, rows, bands);
-	GDALWriter writerhull(*outfile + "_hull.tif", cols, rows, 4);
+	GDALWriter writerss(*outfile + "_ss.tif", cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writerch(*outfile + "_ch.tif", cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercr(*outfile + "_cr.tif", cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrn(*outfile + "_crn.tif", cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrm(*outfile + "_crm.tif", cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrnm(*outfile + "_crnm.tif", cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writerhull(*outfile + "_hull.tif", cols, rows, 4, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry"});
 
 	std::vector<double> ss;
 	std::vector<double> ch;
@@ -324,18 +329,24 @@ void Processor::process(Reader& reader, const std::string& outfile, int bufSize,
 	bool inrunning = true;
 	bool outrunning = true;
 
+	std::vector<double> buf(bufSize * bufSize * reader.bands());
+
+	const std::vector<double>& wavelengths = reader.getBands();
+
+	std::vector<std::string> wavelengthMeta;
+	for(double w : wavelengths)
+		wavelengthMeta.push_back(std::to_string(w));
+
 	std::list<std::thread> t0;
 	for(int i = 0; i < threads; ++i)
 		t0.emplace_back(processQueue, &inqueue, &outqueue, &inmtx, &incv, &outmtx, &outcv, &readcv, &inrunning);
-	std::thread t1(writeQueue, &outfile, reader.cols(), reader.rows(), reader.bands(), &outqueue, &outmtx, &outcv, &incv, &outrunning);
+	std::thread t1(writeQueue, &outfile, wavelengthMeta, reader.cols(), reader.rows(), reader.bands(), &outqueue, &outmtx, &outcv, &incv, &outrunning);
 
-	std::vector<double> buf(bufSize * bufSize * reader.bands());
-	const std::vector<double>& wavelengths = reader.getBands();
 
 	int col, row, cols, rows;
 	while(reader.next(buf, col, row, cols, rows)) {
 
-		std::cerr << row << " of " << reader.rows() << "\n";
+		std::cerr << col << "," << row << " of " << reader.cols() << "," << reader.rows() << "\n";
 
 		{
 			// If input queue gets too large, wait before adding more.
@@ -349,9 +360,9 @@ void Processor::process(Reader& reader, const std::string& outfile, int bufSize,
 			std::lock_guard<std::mutex> lk(inmtx);
 			for(int r = 0; r < rows; ++r) {
 				for(int c = 0; c < cols; ++c) {
-					input in(c, r);
+					input in(c + col, r + row);
 					for(int b = 0; b < reader.bands(); ++b) {
-						double v = buf[b * bufSize * bufSize + r * cols + c];
+						double v = buf[b * bufSize * bufSize + r * bufSize + c];
 						double w = wavelengths[b];
 						in.data.emplace_back(w, v);
 					}
@@ -362,7 +373,6 @@ void Processor::process(Reader& reader, const std::string& outfile, int bufSize,
 
 		// Notify the input processor.
 		incv.notify_all();
-		break;
 	}
 
 	inrunning = false;

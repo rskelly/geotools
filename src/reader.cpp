@@ -62,14 +62,18 @@ bool GDALReader::next(std::vector<double>& buf, int& col, int& row, int& cols, i
 	}
 	if(m_row >= m_rows)
 		return false;
+
 	col = m_col;
 	row = m_row;
 	cols = std::min(m_bufSize, m_cols - m_col);
 	rows = std::min(m_bufSize, m_rows - m_row);
+
+	m_col += m_bufSize;
+
 	double* data = (double*) buf.data();
 	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		if(band->RasterIO(GF_Read, m_col, m_row, cols, rows,
+		if(band->RasterIO(GF_Read, col, row, cols, rows,
 				(void*) (data + (i - m_minIdx) * m_bufSize * m_bufSize),
 				m_bufSize, m_bufSize, GDT_Float64, 0, 0, 0))
 			return false;

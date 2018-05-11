@@ -29,6 +29,6 @@ link_directories(. /usr/lib)
 
 # Build support libraries ################################################################################
 
-add_executable (contrem src/contrem.cpp src/reader.cpp src/writer.cpp src/processor.cpp)
+add_executable (contrem src/contrem.cpp src/reader.cpp src/writer.cpp src/processor.cpp src/stats.cpp)
 target_link_libraries (contrem gdal ${GEOS_LIBRARY})
 

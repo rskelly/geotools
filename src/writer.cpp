@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
+#include <cstdlib>
+#include <cstring>
 
 #include "writer.hpp"
 
@@ -25,7 +27,7 @@ int makedir(const std::string& filename) {
 	}
 }
 
-GDALWriter::GDALWriter(const std::string& filename, int cols, int rows, int bands) :
+GDALWriter::GDALWriter(const std::string& filename, int cols, int rows, int bands, const std::string& fieldName, const std::vector<std::string>& bandNames) :
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
 
@@ -42,6 +44,11 @@ GDALWriter::GDALWriter(const std::string& filename, int cols, int rows, int band
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();
+
+	if(!bandNames.empty()) {
+		for(int i = 1; i <= std::min((int) bandNames.size(), m_bands); ++i)
+			m_ds->GetRasterBand(i)->SetMetadataItem(fieldName.c_str(), bandNames[i - 1].c_str());
+	}
 }
 
 bool GDALWriter::write(std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize) {
@@ -59,76 +66,27 @@ bool GDALWriter::write(std::vector<double>& buf, int col, int row, int cols, int
 	return true;
 }
 
-#define SMIN std::numeric_limits<double>::lowest()
-#define SMAX std::numeric_limits<double>::max()
-#define SNaN std::numeric_limits<double>::quiet_NaN()
-#define p2(x) (x*x)
-#define p3(x) (x*x*x)
-#define p4(x) (x*x*x*x)
 
-inline void stats1(std::vector<double>& v, double& min, double& max, double& mean) {
-	min = SMAX;
-	max = SMIN;
-	double sum = 0;
-	for(double d : v) {
-		if(d < min) min = d;
-		if(d > max) max = d;
-		sum += d;
-	}
-	mean = sum / v.size();
-}
 
-inline void stats2(std::vector<double>& v, double mean, double& variance, double& stddev, double& kurtosis, double& skewness, double& cov) {
-	double sum2 = 0, sum3 = 0, sum4 = 0;
-	for(double d : v) {
-		sum2 += p2(d - mean);
-		sum3 += p3(d - mean);
-		sum4 += p4(d - mean);
-	}
-	int n = v.size() - 1;
-	variance = sum2 / n;
-	skewness = sum3 / n * p3(mean);
-	kurtosis = sum4 / n * p4(mean);
-	stddev = std::sqrt(variance);
-	cov = stddev / mean;
-}
+#include "stats.hpp"
 
-inline void stats3(std::vector<double>& v, double& median, double& mode) {
-	std::unordered_map<double, int> map;
-	for(double d : v)
-		map[d]++;
-	int c = 1;
-	mode = SNaN;
-	for(const auto& p : map) {
-		if(p.second > c) {
-			c = p.second;
-			mode = p.first;
-		}
-	}
-	int idx = v.size() / 2;
-	median = v.size() % 2 == 1 ? v[idx] : (v[idx - 1] + v[idx]) / 2.0;
-}
-
-inline void stats4(std::vector<double>& v, double* deciles, double& p25, double& p75, double& iqr2575) {
-	std::sort(v.begin(), v.end());
-	int step = (int) std::ceil(v.size() / 10.0);
-	for(size_t i = step, j = 0; i < v.size(); i += step, ++j)
-		deciles[j] = v[i];
-	double idx = std::ceil(v.size() / 100.0);
-	p25 = v[(int) idx * 25];
-	p75 = v[(int) idx * 75];
-	iqr2575 = p75 - p25;
+bool __isnonzero(const double& v) {
+	return v > 0;
 }
 
 bool GDALWriter::writeStats(const std::string& filename) {
-	//double min, max, mean, variance, stddev, kurtosis, skewness, cov, median, mode;
-	//double p25, p75, iqr2575;
-	std::vector<double> stats(23);
+
+	Stats stats;
+
 	std::vector<double> buf(m_cols * m_rows);
+	std::vector<double> results(23);
+	std::vector<std::string> statNames = stats.getStatNames();
 
 	std::ofstream out(filename, std::ios::out);
-	out << std::setprecision(12);
-	out << "min,max,mean,variance,stddev,kurtosis,skewness,cov,median,mode,p25,p75,iqr2575,d0,d1,d2,d3,d4,d5,d6,d7,d8,d9\n";
+	out << std::setprecision(12) << "name";
+	for(const std::string& name : statNames)
+		out << "," << name;
+	out << "\n";
 
 	m_ds->FlushCache();
 
@@ -136,12 +94,14 @@ bool GDALWriter::writeStats(const std::string& filename) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		if(band->RasterIO(GF_Read, 0, 0, m_cols, m_rows, (void*) buf.data(), m_cols, m_rows, GDT_Float64, 0, 0, 0))
 			return false;
-		stats1(buf, stats[0], stats[1], stats[2]); // min, max, mean
-		stats2(buf, stats[2], stats[3], stats[4], stats[5], stats[6], stats[7]); // mean (in), variance, stddev, kurtosis, skewness, cov);
-		stats3(buf, stats[8], stats[9]); // median, mode);
-		stats4(buf, (stats.data() + 10), stats[20], stats[21], stats[22]); // deciles, p25, p75, iqr2575);
-		for(double s: stats)
-			out << s << ",";
+
+		std::vector<double> values;
+		std::copy_if(buf.begin(), buf.end(), std::back_inserter(values), __isnonzero);
+		stats.computeStats(values, results);
+
+		out << band->GetDescription();
+		for(double v : results)
+			out << "," << v;
 		out << "\n";
 	}
 	return true;
