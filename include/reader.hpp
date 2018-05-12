@@ -30,6 +30,15 @@ public:
 	virtual ~Reader() {}
 };
 
+class BandMapReader {
+private:
+	std::map<int, int> m_bandMap;
+
+public:
+	BandMapReader(const std::string& filename, int wlCol, int idxCol, bool hasHeader = true);
+	const std::map<int, int>& bandMap() const;
+};
+
 class GDALReader : public Reader {
 private:
 	GDALDataset* m_ds;
@@ -64,6 +73,7 @@ public:
 };
 
 class px {
+public:
 	int c, r;
 	std::vector<double> values;
 	px(int c, int r) :
@@ -71,7 +81,7 @@ class px {
 	px() : px(0, 0) {}
 };
 
-class TextReader : public Reader {
+class ROIReader : public Reader {
 private:
 	int m_cols;
 	int m_rows;
@@ -88,7 +98,7 @@ private:
 	int m_maxIdx;
 
 public:
-	TextReader(const std::string& filename);
+	ROIReader(const std::string& filename);
 	void setBufSize(int bufSize);
 	bool next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows);
 	void setBandMap(std::map<int, int>& map);
@@ -100,7 +110,7 @@ public:
 	int bands() const;
 	int cols() const;
 	int rows() const;
-	~TextReader();
+	~ROIReader();
 };
 
 #endif /* READER_HPP_ */
