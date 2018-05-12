@@ -15,13 +15,81 @@
 
 #define WL_SCALE 100000
 
-GDALReader::GDALReader(const std::string& filename) :
-	m_ds(nullptr),
+Reader::Reader() :
 	m_cols(0), m_rows(0), m_bands(0),
 	m_col(0), m_row(0),
 	m_bufSize(256),
 	m_minWl(0), m_maxWl(0),
 	m_minIdx(0), m_maxIdx(0) {
+}
+
+void Reader::setBufSize(int bufSize) {
+	m_bufSize = bufSize;
+}
+
+void Reader::setBandMap(std::map<int, int>& map) {
+	m_bandMap = map;
+	m_minIdx = 0;
+	m_maxIdx = map.size() - 1;
+	m_minWl = std::next(m_bandMap.begin(), m_minIdx)->first;
+	m_maxWl = std::next(m_bandMap.begin(), m_maxIdx)->first;
+}
+
+void Reader::setBandMap(std::string& bandfile) {
+	throw std::runtime_error("Not implemented.");
+}
+
+void Reader::setBandRange(double min, double max) {
+	int mins = (int) (min * WL_SCALE);
+	int maxs = (int) (max * WL_SCALE);
+	for(auto it = m_bandMap.begin(); it != m_bandMap.end(); ++it) {
+		if(it->first <= mins) {
+			m_minWl = it->first;
+			m_minIdx = it->second;
+		}
+		if(it->first >= maxs) {
+			m_maxWl = it->first;
+			m_maxIdx = it->second;
+			break;
+		}
+	}
+}
+
+std::vector<double> Reader::getBandRange() const {
+	return {(double) m_minWl / WL_SCALE, (double) m_maxWl / WL_SCALE};
+}
+
+std::vector<double> Reader::getBands() const {
+	std::vector<double> bands;
+	if(m_maxIdx > 0 && m_maxIdx > m_minIdx) {
+		for(auto p = std::next(m_bandMap.begin(), m_minIdx - 1); p != std::next(m_bandMap.begin(), m_maxIdx); ++p)
+			bands.push_back((double) p->first / WL_SCALE);
+	} else {
+		for(const auto& p : m_bandMap)
+			bands.push_back((double) p.first / WL_SCALE);
+	}
+	return bands;
+}
+
+std::vector<int> Reader::getIndices() const {
+	return {m_minIdx, m_maxIdx};
+}
+
+int Reader::cols() const {
+	return m_cols;
+}
+
+int Reader::rows() const {
+	return m_rows;
+}
+
+int Reader::bands() const {
+	return m_maxIdx - m_minIdx + 1;
+}
+
+
+GDALReader::GDALReader(const std::string& filename) : Reader(),
+		m_ds(nullptr) {
 
 	GDALAllRegister();
 
@@ -54,10 +122,6 @@ GDALReader::GDALReader(const std::string& filename) :
 	}
 }
 
-void GDALReader::setBufSize(int bufSize) {
-	m_bufSize = bufSize;
-}
-
 bool GDALReader::next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows) {
 	if(m_col >= m_cols) {
 		m_row += m_bufSize;
@@ -84,78 +148,13 @@ bool GDALReader::next(std::vector<double>& buf, int& col, int& row, int& cols, i
 	return true;
 }
 
-void GDALReader::setBandMap(std::map<int, int>& map) {
-	m_bandMap = map;
-	m_minIdx = 0;
-	m_maxIdx = map.size() - 1;
-	m_minWl = std::next(m_bandMap.begin(), m_minIdx)->first;
-	m_maxWl = std::next(m_bandMap.begin(), m_maxIdx)->first;
-}
-
-void GDALReader::setBandMap(std::string& bandfile) {
-	throw std::runtime_error("Not implemented.");
-}
-
-void GDALReader::setBandRange(double min, double max) {
-	int mins = (int) (min * WL_SCALE);
-	int maxs = (int) (max * WL_SCALE);
-	for(auto it = m_bandMap.begin(); it != m_bandMap.end(); ++it) {
-		if(it->first <= mins) {
-			m_minWl = it->first;
-			m_minIdx = it->second;
-		}
-		if(it->first >= maxs) {
-			m_maxWl = it->first;
-			m_maxIdx = it->second;
-			break;
-		}
-	}
-}
-
-std::vector<double> GDALReader::getBandRange() const {
-	return {(double) m_minWl / WL_SCALE, (double) m_maxWl / WL_SCALE};
-}
-
-std::vector<double> GDALReader::getBands() const {
-	std::vector<double> bands;
-	if(m_maxIdx > 0 && m_maxIdx > m_minIdx) {
-		for(auto p = std::next(m_bandMap.begin(), m_minIdx - 1); p != std::next(m_bandMap.begin(), m_maxIdx); ++p)
-			bands.push_back((double) p->first / WL_SCALE);
-	} else {
-		for(const auto& p : m_bandMap)
-			bands.push_back((double) p.first / WL_SCALE);
-	}
-	return bands;
-}
-
-std::vector<int> GDALReader::getIndices() const {
-	return {m_minIdx, m_maxIdx};
-}
-
-int GDALReader::cols() const {
-	return m_cols;
-}
-
-int GDALReader::rows() const {
-	return m_rows;
-}
-
-int GDALReader::bands() const {
-	return m_maxIdx - m_minIdx + 1;
-}
-
 GDALReader::~GDALReader() {
 	GDALClose(m_ds);
 }
 
 
 
-ROIReader::ROIReader(const std::string& filename) :
-	m_cols(0), m_rows(0), m_bands(0),
-	m_col(0), m_row(0),
-	m_bufSize(256),
-	m_minWl(0), m_maxWl(0),
-	m_minIdx(0), m_maxIdx(0) {
+ROIReader::ROIReader(const std::string& filename) : Reader() {
 
 	// Attempt to read in the ROI file.
 	std::ifstream input(filename, std::ios::in);
@@ -192,10 +191,6 @@ ROIReader::ROIReader(const std::string& filename) :
 
 }
 
-void ROIReader::setBufSize(int bufSize) {
-	m_bufSize = bufSize;
-}
-
 bool ROIReader::next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows) {
 	if(m_col >= m_cols) {
 		m_row += m_bufSize;
@@ -221,66 +216,6 @@ bool ROIReader::next(std::vector<double>& buf, int& col, int& row, int& cols, in
 		}
 	}
 	return true;
-}
-
-void ROIReader::setBandMap(std::map<int, int>& map) {
-	m_bandMap = map;
-	m_minIdx = 0;
-	m_maxIdx = map.size() - 1;
-	m_minWl = std::next(m_bandMap.begin(), m_minIdx)->first;
-	m_maxWl = std::next(m_bandMap.begin(), m_maxIdx)->first;
-}
-
-void ROIReader::setBandMap(std::string& bandfile) {
-	throw std::runtime_error("Not implemented.");
-}
-
-void ROIReader::setBandRange(double min, double max) {
-	int mins = (int) (min * WL_SCALE);
-	int maxs = (int) (max * WL_SCALE);
-	for(auto it = m_bandMap.begin(); it != m_bandMap.end(); ++it) {
-		if(it->first <= mins) {
-			m_minWl = it->first;
-			m_minIdx = it->second;
-		}
-		if(it->first >= maxs) {
-			m_maxWl = it->first;
-			m_maxIdx = it->second;
-			break;
-		}
-	}
-}
-
-std::vector<double> ROIReader::getBandRange() const {
-	return {(double) m_minWl / WL_SCALE, (double) m_maxWl / WL_SCALE};
-}
-
-std::vector<double> ROIReader::getBands() const {
-	std::vector<double> bands;
-	if(m_maxIdx > 0 && m_maxIdx > m_minIdx) {
-		for(auto p = std::next(m_bandMap.begin(), m_minIdx - 1); p != std::next(m_bandMap.begin(), m_maxIdx); ++p)
-			bands.push_back((double) p->first / WL_SCALE);
-	} else {
-		for(const auto& p : m_bandMap)
-			bands.push_back((double) p.first / WL_SCALE);
-	}
-	return bands;
-}
-
-std::vector<int> ROIReader::getIndices() const {
-	return {m_minIdx, m_maxIdx};
-}
-
-int ROIReader::cols() const {
-	return m_cols;
-}
-
-int ROIReader::rows() const {
-	return m_rows;
-}
-
-int ROIReader::bands() const {
-	return m_maxIdx - m_minIdx + 1;
 }
 
 ROIReader::~ROIReader() {
