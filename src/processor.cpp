@@ -31,6 +31,9 @@
 using namespace geos::geom;
 using namespace geos::algorithm;
 
+/**
+ * A line, representing a segment from a convex hull.
+ */
 class line {
 public:
 	double x0;
@@ -41,6 +44,9 @@ public:
 		x0(x0), y0(y0), x1(x1), y1(y1) {}
 };
 
+/**
+ * An input point. Contains a wavelength and sample intensity.
+ */
 class inpoint {
 public:
 	double w; // Wavelength
@@ -49,6 +55,10 @@ public:
 		w(w), ss(ss) {}
 };
 
+/**
+ * An output point. Contains the same info as an input point,
+ * plus continuum removal values.
+ */
 class outpoint {
 public:
 	double w; // Wavelength
@@ -65,8 +75,10 @@ public:
 		outpoint(in, 0) {}
 };
 
-
-
+/**
+ * An input pixel, which includes spectral information
+ * and cell coordinates.
+ */
 class input {
 public:
 	int c, r;
@@ -77,6 +89,10 @@ public:
 	}
 };
 
+/**
+ * An output pixel which contains convex hull information,
+ * continuum removal information and cell coordinates.
+ */
 class output {
 public:
 	int c, r;
@@ -149,8 +165,14 @@ std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 	return lines;
 }
 
+/**
+ * Process the input queue.
+ */
 void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
-		std::mutex* inmtx, std::condition_variable* incv, std::mutex* outmtx, std::condition_variable* outcv, std::condition_variable* readcv, bool* running) {
+		std::mutex* inmtx, std::condition_variable* incv,
+		std::mutex* outmtx, std::condition_variable* outcv,
+		std::condition_variable* readcv,
+		bool* running) {
 
 	input in;
 	while(true) {
@@ -250,8 +272,15 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 	}
 }
 
-void writeQueue(const std::string* outfile, const std::vector<std::string>& wavelengths, int cols, int rows, int bands, std::list<output>* outqueue,
-		std::mutex* outmtx, std::condition_variable* outcv, std::condition_variable* incv, bool* running) {
+/**
+ * Process the output queue and write to file.
+ */
+void writeQueue(const std::string* outfile, const std::vector<std::string>& wavelengths,
+		int cols, int rows, int bands,
+		std::list<output>* outqueue,
+		std::mutex* outmtx, std::condition_variable* outcv,
+		std::condition_variable* incv,
+		bool* running) {
 
 	GDALWriter writerss(*outfile + "_ss.tif", cols, rows, bands, "wavelength", wavelengths);
 	GDALWriter writerch(*outfile + "_ch.tif", cols, rows, bands, "wavelength", wavelengths);
@@ -316,7 +345,7 @@ void writeQueue(const std::string* outfile, const std::vector<std::string>& wave
 
 }
 
-void Processor::process(Reader& reader, const std::string& outfile, int bufSize, int threads) {
+void Processor::process(Reader* reader, const std::string& outfile, int bufSize, int threads, bool sample) {
 
 	std::list<input> inqueue;
 	std::list<output> outqueue;
@@ -329,24 +358,31 @@ void Processor::process(Reader& reader, const std::string& outfile, int bufSize,
 	bool inrunning = true;
 	bool outrunning = true;
 
-	std::vector<double> buf(bufSize * bufSize * reader.bands());
+	// A buffer for input data.
+	std::vector<double> buf(bufSize * bufSize * reader->bands());
 
-	const std::vector<double>& wavelengths = reader.getBands();
+	// A list of wavelengths.
+	const std::vector<double>& wavelengths = reader->getBands();
 
+	// A list of wavelengths as strings for labelling.
 	std::vector<std::string> wavelengthMeta;
 	for(double w : wavelengths)
 		wavelengthMeta.push_back(std::to_string(w));
 
+	// Start the processing threads.
 	std::list<std::thread> t0;
 	for(int i = 0; i < threads; ++i)
 		t0.emplace_back(processQueue, &inqueue, &outqueue, &inmtx, &incv, &outmtx, &outcv, &readcv, &inrunning);
-	std::thread t1(writeQueue, &outfile, wavelengthMeta, reader.cols(), reader.rows(), reader.bands(), &outqueue, &outmtx, &outcv, &incv, &outrunning);
 
+	// Start the output thread.
+	std::thread t1(writeQueue, &outfile, wavelengthMeta,
+			reader->cols(), reader->rows(), reader->bands(), &outqueue, &outmtx, &outcv, &incv, &outrunning);
 
+	// Read through the buffer and populate the input queue.
 	int col, row, cols, rows;
-	while(reader.next(buf, col, row, cols, rows)) {
+	while(reader->next(buf, col, row, cols, rows)) {
 
-		std::cerr << col << "," << row << " of " << reader.cols() << "," << reader.rows() << "\n";
+		std::cerr << col << "," << row << " of " << reader->cols() << "," << reader->rows() << "\n";
 
 		{
 			// If input queue gets too large, wait before adding more.
@@ -361,7 +397,7 @@ void Processor::process(Reader& reader, const std::string& outfile, int bufSize,
 			for(int r = 0; r < rows; ++r) {
 				for(int c = 0; c < cols; ++c) {
 					input in(c + col, r + row);
-					for(int b = 0; b < reader.bands(); ++b) {
+					for(int b = 0; b < reader->bands(); ++b) {
 						double v = buf[b * bufSize * bufSize + r * bufSize + c];
 						double w = wavelengths[b];
 						in.data.emplace_back(w, v);
@@ -375,15 +411,15 @@ void Processor::process(Reader& reader, const std::string& outfile, int bufSize,
 		incv.notify_all();
 	}
 
+	// Let the processor threads finish.
 	inrunning = false;
 	incv.notify_all();
-
 	for(std::thread& t : t0)
 		t.join();
 
+	// Let the output thread finish.
 	outrunning = false;
 	outcv.notify_all();
-
 	t1.join();
 }
 
