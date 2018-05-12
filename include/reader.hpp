@@ -35,8 +35,7 @@ public:
 	Reader();
 	virtual bool next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows) = 0;
 	void setBufSize(int bufSize);
-	void setBandMap(std::map<int, int>& map);
-	void setBandMap(std::string& bandfile);
+	void setBandMap(const std::map<int, int>& map);
 	void setBandRange(double min, double max);
 	std::vector<double> getBands() const;
 	std::vector<double> getBandRange() const;

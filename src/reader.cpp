@@ -27,16 +27,12 @@ void Reader::setBufSize(int bufSize) {
 	m_bufSize = bufSize;
 }
 
-void Reader::setBandMap(std::map<int, int>& map) {
+void Reader::setBandMap(const std::map<int, int>& map) {
 	m_bandMap = map;
 	m_minIdx = 0;
 	m_maxIdx = map.size() - 1;
 	m_minWl = std::next(m_bandMap.begin(), m_minIdx)->first;
 	m_maxWl = std::next(m_bandMap.begin(), m_maxIdx)->first;
-}
-
-void Reader::setBandMap(std::string& bandfile) {
-	throw std::runtime_error("Not implemented.");
 }
 
 void Reader::setBandRange(double min, double max) {
@@ -130,6 +126,8 @@ bool GDALReader::next(std::vector<double>& buf, int& col, int& row, int& cols, i
 	if(m_row >= m_rows)
 		return false;
 
+	std::fill(buf.begin(), buf.end(), 0);
+
 	col = m_col;
 	row = m_row;
 	cols = std::min(m_bufSize, m_cols - m_col);
@@ -163,7 +161,8 @@ ROIReader::ROIReader(const std::string& filename) : Reader() {
 	while(std::getline(input, buf)) {
 		if(buf[0] == ';') continue;
 
-		while(std::getline(std::stringstream(item), buf, ' ')) {
+		std::stringstream sbuf(buf);
+		while(std::getline(sbuf, item, ' ')) {
 			if(!item.empty())
 				fields.push_back(item);
 		}
@@ -199,6 +198,8 @@ bool ROIReader::next(std::vector<double>& buf, int& col, int& row, int& cols, in
 	if(m_row >= m_rows)
 		return false;
 
+	std::fill(buf.begin(), buf.end(), 0);
+
 	col = m_col;
 	row = m_row;
 	cols = std::min(m_bufSize, m_cols - m_col);
@@ -209,9 +210,11 @@ bool ROIReader::next(std::vector<double>& buf, int& col, int& row, int& cols, in
 	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
 		for(int r = row; r < std::min(row + m_bufSize, m_rows); ++r) {
 			for(int c = col; c < std::min(col + m_bufSize, m_cols); ++c) {
-				int idx = (i - m_minIdx) * m_bufSize * m_bufSize + r * m_bufSize + c;
-				long px = ((long) col << 32) | row;
-				buf[idx] = m_pixels[px].values[i];
+				long px = ((long) c << 32) | r;
+				if(m_pixels.find(px) != m_pixels.end()) {
+					int idx = (i - m_minIdx) * m_bufSize * m_bufSize + r * m_bufSize + c;
+					buf[idx] = m_pixels[px].values[i];
+				}
 			}
 		}
 	}
@@ -236,7 +239,8 @@ BandMapReader::BandMapReader(const std::string& filename, int wlCol, int idxCol,
 	std::vector<std::string> fields;
 	while(std::getline(input, buf)) {
 
-		while(std::getline(std::stringstream(item), buf, ' ')) {
+		std::stringstream bufs(buf);
+		while(std::getline(bufs, item, ',')) {
 			if(!item.empty())
 				fields.push_back(item);
 		}
@@ -250,6 +254,8 @@ BandMapReader::BandMapReader(const std::string& filename, int wlCol, int idxCol,
 		int idx = atoi(fields[idxCol].c_str());
 
 		m_bandMap[wl] = idx;
+
+		fields.clear();
 	}
 }
 
