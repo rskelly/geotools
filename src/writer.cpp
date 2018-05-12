@@ -100,7 +100,8 @@ bool GDALWriter::writeStats(const std::string& filename, const std::vector<std::
 
 		std::vector<double> values;
 		std::copy_if(buf.begin(), buf.end(), std::back_inserter(values), __isnonzero);
-		stats.computeStats(values, results);
+		if(!values.empty())
+			stats.computeStats(values, results);
 
 		out << names[i - 1];
 		for(double v : results)
