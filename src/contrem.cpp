@@ -20,6 +20,7 @@ void usage() {
 			<< " -b A CSV file containing a mapping from wavelength to (1-based) band index.\n"
 			<< " -w An integer giving the (0-based) column index in -b which contains wavelengths.\n"
 			<< " -i An integer giving the (0-based) column index in -b which contains the band indices.\n"
+			<< " -z If given, indicates the presence of a header in the band map that must be skipped.\n"
 			<< " -o An output file template. This is a filename with no extension that will be modified as\n"
 			<< "    appropriate. Parent directories will be created.\n"
 			<< " -l The minimum wavelength to consider.\n"
@@ -37,10 +38,11 @@ int main(int argc, char** argv) {
 	double minWl = 0;
 	double maxWl = 0;
 	std::string datafile;
-	std::string bandfile;
 	std::string roifile;
+	std::string bandfile;
 	int wlCol = -1;
 	int bandCol = -1;
+	bool bandHeader = false;
 	std::string outfile;
 	int threads = 1;
 	bool sample = true;
@@ -60,14 +62,15 @@ int main(int argc, char** argv) {
 			case 'i': bandCol = atoi(optarg); break;
 			case 't': threads = atoi(optarg); break;
 			case 'p': sample = false; break;
+			case 'z': bandHeader = true; break;
 			default: break;
 			}
 		}
 
 		if(bufSize <= 0)
 			throw std::invalid_argument("Buffer size must be larger than zero.");
-		if(datafile.empty())
-			throw std::invalid_argument("Data file not given.");
+		if(datafile.empty() && roifile.empty())
+			throw std::invalid_argument("Data  or ROI file not given.");
 		if(outfile.empty())
 			throw std::invalid_argument("Output file template not given.");
 		if(threads < 1)
@@ -84,8 +87,13 @@ int main(int argc, char** argv) {
 			throw std::invalid_argument("No input file (-r or -d) given.");
 		}
 
-		if(!bandfile.empty())
-			reader->setBandMap(bandfile);
+		if(!bandfile.empty()) {
+			if(wlCol == -1 || bandCol == -1 || wlCol == bandCol)
+				throw std::invalid_argument("If a band file is given, the indices for "
+						"wavelength and band must be >=0 and different from each other.");
+			BandMapReader br(bandfile, wlCol, bandCol, bandHeader);
+			reader->setBandMap(br.bandMap());
+		}
 
 		if(minWl > 0 && maxWl > 0)
 			reader->setBandRange(minWl, maxWl);
