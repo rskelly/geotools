@@ -28,7 +28,7 @@ int makedir(const std::string& filename) {
 }
 
 GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
-		const std::string& fieldName, const std::vector<std::string>& bandNames) :
+		const std::string& fieldName, const std::vector<std::string>& bandNames, DataType type) :
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
 
@@ -36,12 +36,22 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	if((err = makedir(filename)))
 		throw std::runtime_error("Could not create directory for " + filename + "; " + std::to_string(err));
 
+	GDALDataType gtype;
+	switch(type) {
+	case DataType::Byte: gtype = GDT_Byte; break;
+	case DataType::Int32: gtype = GDT_Int32; break;
+	case DataType::Float32: gtype = GDT_Float32; break;
+	default:
+		throw std::invalid_argument("Invalid data type.");
+	}
+
 	GDALAllRegister();
 	GDALDriverManager* gm = GetGDALDriverManager();
 	GDALDriver* drv = gm->GetDriverByName(driver.c_str());
+
 	if(!drv)
 		throw std::runtime_error("Driver not found: " + driver);
-	m_ds = drv->Create(filename.c_str(), cols, rows, bands, GDT_Float32, nullptr);
+	m_ds = drv->Create(filename.c_str(), cols, rows, bands, gtype, nullptr);
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();

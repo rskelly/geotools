@@ -28,8 +28,15 @@ private:
 	int m_rows;
 
 public:
+
+	enum DataType {
+		Byte,
+		Int32,
+		Float32
+	};
+
 	GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
-			const std::string& fieldName = "", const std::vector<std::string>& bandNames = {});
+			const std::string& fieldName = "", const std::vector<std::string>& bandNames = {}, DataType type = DataType::Float32);
 	bool write(std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize);
 	bool writeStats(const std::string& filename, const std::vector<std::string>& names = {});
 	~GDALWriter();
