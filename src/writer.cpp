@@ -48,9 +48,9 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	GDALAllRegister();
 	GDALDriverManager* gm = GetGDALDriverManager();
 	GDALDriver* drv = gm->GetDriverByName(driver.c_str());
-
 	if(!drv)
 		throw std::runtime_error("Driver not found: " + driver);
+
 	m_ds = drv->Create(filename.c_str(), cols, rows, bands, gtype, nullptr);
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();

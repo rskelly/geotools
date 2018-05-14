@@ -166,27 +166,43 @@ std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 	return lines;
 }
 
+class QConfig {
+public:
+	ProcessorConfig pconfig;
+	std::list<input> inqueue;
+	std::list<output> outqueue;
+	std::mutex inmtx;
+	std::mutex outmtx;
+	std::mutex readmtx;
+	std::condition_variable incv;
+	std::condition_variable outcv;
+	std::condition_variable readcv;
+	bool inRunning;
+	bool outRunning;
+
+	int cols;
+	int rows;
+	int bands;
+	std::vector<std::string> wavelengthNames;
+};
+
 /**
  * Process the input queue.
  */
-void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
-		std::mutex* inmtx, std::condition_variable* incv,
-		std::mutex* outmtx, std::condition_variable* outcv,
-		std::condition_variable* readcv,
-		bool* running) {
+void processQueue(QConfig* config) {
 
 	input in;
 	while(true) {
 		{
-			std::unique_lock<std::mutex> lk(*inmtx);
+			std::unique_lock<std::mutex> lk(config->inmtx);
 			// If the input is empty or the output is too large, pause.
-			while((inqueue->empty() || outqueue->size() > 1000) && *running)
-				incv->wait(lk);
+			while((config->inqueue.empty() || config->outqueue.size() > 1000) && config->inRunning)
+				config->incv.wait(lk);
 			// If input is empty and reading is done, quit the loop.
-			if(inqueue->empty() && !*running)
+			if(config->inqueue.empty() && !config->inRunning)
 				break;
-			in = inqueue->front();
-			inqueue->pop_front();
+			in = config->inqueue.front();
+			config->inqueue.pop_front();
 		}
 
 		// Adjust <=0 intensities to MIN_VALUE.
@@ -235,12 +251,33 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 		}
 
 		// Calculate the other ch metrics.
-		for(outpoint& pt : out.data) {
+		// These variables are for detecting co-maxima, so that a modeled maximum can be determined using
+		// the parabolic interpolation method below.
+		double prevMax = 0, nextMax = 0;
+		int prevMaxIdx = 0, nextMaxIdx = 0;
+		for(size_t i = 0; i < out.data.size(); ++i) {
+			outpoint& pt = out.data[i];
 			pt.crn = pt.cr / maxCr;
 			pt.crm = 1 - pt.cr;
 			pt.crnm = pt.crm / maxCrm;
-			if(pt.crnm > out.maxCrnm)
+			if(pt.crnm > out.maxCrnm) {
 				out.maxCrnm = pt.crnm;
+				prevMax = out.maxCrnm;
+				prevMaxIdx = i;
+				nextMax = 0;
+				nextMaxIdx = 0;
+			} else if(pt.crnm == out.maxCrnm) {
+				nextMax = out.maxCrnm;
+				nextMaxIdx = i;
+			}
+		}
+
+		if(nextMax > 0 && prevMax == nextMax && prevMaxIdx != nextMaxIdx) {
+			// Interpolate the maximum using
+			// Kopăcková, V., & Koucká, L. (2017). Integration of absorption feature information from visible to
+			// longwave infrared spectral ranges for mineral mapping. Remote Sensing, 9(10), 8–13. https://doi.org/10.3390/rs9101006
+
+
 		}
 
 		// Calculate the split hull; add two corner points to make the hull full.
@@ -262,13 +299,13 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 
 		{
 			// Send to output queue and notify.
-			std::lock_guard<std::mutex> lk(*outmtx);
-			outqueue->push_back(out);
+			std::lock_guard<std::mutex> lk(config->outmtx);
+			config->outqueue.push_back(out);
 		}
 
-		outcv->notify_one();
-		if(inqueue->size() < 1000)
-			readcv->notify_one();
+		config->outcv.notify_one();
+		if(config->inqueue.size() < 1000)
+			config->readcv.notify_one();
 
 	}
 }
@@ -276,21 +313,23 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 /**
  * Process the output queue and write to file.
  */
-void writeQueue(const std::string* outfile, const std::string* driver, const std::string* ext,
-		const std::vector<std::string>& wavelengths,
-		int cols, int rows, int bands,
-		std::list<output>* outqueue,
-		std::mutex* outmtx, std::condition_variable* outcv,
-		std::condition_variable* incv,
-		bool* running) {
+void writeQueue(QConfig* config) {
 
-	GDALWriter writerss(*outfile + "_ss" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writerch(*outfile + "_ch" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercr(*outfile + "_cr" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrn(*outfile + "_crn" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrm(*outfile + "_crm" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrnm(*outfile + "_crnm" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writerhull(*outfile + "_hull" + *ext, *driver, cols, rows, 5, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
+	const std::string& outfile = config->pconfig.outfile;
+	const std::string& driver = config->pconfig.driver;
+	const std::string& ext = config->pconfig.extension;
+	const std::vector<std::string>& wavelengths = config->wavelengthNames;
+	int cols = config->cols;
+	int rows = config->rows;
+	int bands = config->bands;
+
+	GDALWriter writerss(outfile + "_ss" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writerch(outfile + "_ch" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercr(outfile + "_cr" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrn(outfile + "_crn" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrm(outfile + "_crm" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrnm(outfile + "_crnm" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writerhull(outfile + "_hull" + ext, driver, cols, rows, 5, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
 
 	std::vector<double> ss;
 	std::vector<double> ch;
@@ -303,13 +342,13 @@ void writeQueue(const std::string* outfile, const std::string* driver, const std
 	output out;
 	while(true) {
 		{
-			std::unique_lock<std::mutex> lk(*outmtx);
-			while(outqueue->empty() && *running)
-				outcv->wait(lk);
-			if(outqueue->empty() && !*running)
+			std::unique_lock<std::mutex> lk(config->outmtx);
+			while(config->outqueue.empty() && config->outRunning)
+				config->outcv.wait(lk);
+			if(config->outqueue.empty() && !config->outRunning)
 				break;
-			out = outqueue->front();
-			outqueue->pop_front();
+			out = config->outqueue.front();
+			config->outqueue.pop_front();
 		}
 
 		for(const outpoint& o : out.data) {
@@ -338,28 +377,20 @@ void writeQueue(const std::string* outfile, const std::string* driver, const std
 		crm.clear();
 		crnm.clear();
 
-		incv->notify_one();
+		config->incv.notify_one();
 
 	}
 
-	writerhull.writeStats(*outfile + "_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
+	writerhull.writeStats(outfile + "_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
 
 }
 
-void Processor::process(Reader* reader, const std::string& outfile,
-		const std::string& outDriver, const std::string& outExt,
-		int bufSize, int threads, bool sample) {
+void Processor::process(Reader* reader, const ProcessorConfig& config) {
 
-	std::list<input> inqueue;
-	std::list<output> outqueue;
-	std::mutex inmtx;
-	std::mutex outmtx;
-	std::mutex readmtx;
-	std::condition_variable incv;
-	std::condition_variable outcv;
-	std::condition_variable readcv;
-	bool inrunning = true;
-	bool outrunning = true;
+	QConfig qconfig;
+	qconfig.pconfig = config;
+
+	int bufSize = config.bufferSize;
 
 	// A buffer for input data.
 	std::vector<double> buf(bufSize * bufSize * reader->bands());
@@ -374,12 +405,11 @@ void Processor::process(Reader* reader, const std::string& outfile,
 
 	// Start the processing threads.
 	std::list<std::thread> t0;
-	for(int i = 0; i < threads; ++i)
-		t0.emplace_back(processQueue, &inqueue, &outqueue, &inmtx, &incv, &outmtx, &outcv, &readcv, &inrunning);
+	for(int i = 0; i < config.threads; ++i)
+		t0.emplace_back(processQueue, &qconfig);
 
 	// Start the output thread.
-	std::thread t1(writeQueue, &outfile, &outDriver, &outExt, wavelengthMeta,
-			reader->cols(), reader->rows(), reader->bands(), &outqueue, &outmtx, &outcv, &incv, &outrunning);
+	std::thread t1(writeQueue, &qconfig);
 
 	// Read through the buffer and populate the input queue.
 	int col, row, cols, rows;
@@ -389,14 +419,14 @@ void Processor::process(Reader* reader, const std::string& outfile,
 
 		{
 			// If input queue gets too large, wait before adding more.
-			std::unique_lock<std::mutex> lk(readmtx);
-			if(inqueue.size() > 1000)
-				readcv.wait(lk);
+			std::unique_lock<std::mutex> lk(qconfig.readmtx);
+			if(qconfig.inqueue.size() > 1000)
+				qconfig.readcv.wait(lk);
 		}
 
 		{
 			// Read out the input objects and add to the queue.
-			std::lock_guard<std::mutex> lk(inmtx);
+			std::lock_guard<std::mutex> lk(qconfig.inmtx);
 			for(int r = 0; r < rows; ++r) {
 				for(int c = 0; c < cols; ++c) {
 					input in(c + col, r + row);
@@ -405,24 +435,24 @@ void Processor::process(Reader* reader, const std::string& outfile,
 						double w = wavelengths[b];
 						in.data.emplace_back(w, v);
 					}
-					inqueue.push_back(in);
+					qconfig.inqueue.push_back(in);
 				}
 			}
 		}
 
 		// Notify the input processor.
-		incv.notify_all();
+		qconfig.incv.notify_all();
 	}
 
 	// Let the processor threads finish.
-	inrunning = false;
-	incv.notify_all();
+	qconfig.inRunning = false;
+	qconfig.incv.notify_all();
 	for(std::thread& t : t0)
 		t.join();
 
 	// Let the output thread finish.
-	outrunning = false;
-	outcv.notify_all();
+	qconfig.outRunning = false;
+	qconfig.outcv.notify_all();
 	t1.join();
 }
 

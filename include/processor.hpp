@@ -10,11 +10,21 @@
 
 #include "reader.hpp"
 
+class ProcessorConfig {
+public:
+	std::string outfile;
+	std::string driver;
+	std::string extension;
+	int bufferSize;
+	int threads;
+	bool sampleStats;
+	bool flagsRaster;
+	double interpDistance;
+};
+
 class Processor {
 public:
-	void process(Reader* reader, const std::string& outfile,
-			const std::string& outDriver, const std::string& outExt,
-			int bufSize, int threads, bool sample);
+	void process(Reader* reader, const ProcessorConfig& config);
 };
 
 #endif /* PROCESSOR_HPP_ */
