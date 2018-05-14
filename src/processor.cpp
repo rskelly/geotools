@@ -100,14 +100,14 @@ public:
 	double larea; // Left hand area
 	double rarea; // Right hand area.
 	double symmetry; // larea / area
-	double maxCrnm; // maximum normalized mirrored continuum removal
+	double maxCrm; // maximum normalized mirrored continuum removal
 	std::vector<outpoint> data;
 	output() : output(0, 0) {}
 	output(input& in) :
 		output(in.c, in.r) {}
 	output(int c, int r) :
 		c(c), r(r),
-		area(0), larea(0), rarea(0), symmetry(0), maxCrnm(0) {}
+		area(0), larea(0), rarea(0), symmetry(0), maxCrm(0) {}
 };
 
 /**
@@ -184,6 +184,9 @@ public:
 	int rows;
 	int bands;
 	std::vector<std::string> wavelengthNames;
+	std::vector<double> wavelengths;
+
+	std::unordered_map<size_t, bool> maximaFlag;
 };
 
 /**
@@ -236,49 +239,40 @@ void processQueue(QConfig* config) {
 		}
 
 		// Calculate the cr and crm, and get the max value and index.
-		double maxCrm = 0, maxCr = 0;
+		out.maxCrm = 0;
 		int maxIdx = 0, i = 0;
 		for(outpoint& pt : out.data) {
 			pt.cr = pt.ss / pt.ch;
 			pt.crm = 1 - pt.cr;
-			if(pt.cr > maxCr)
-				maxCr = pt.cr;
-			if(pt.crm > maxCrm) {
-				maxCrm = pt.crm;
+			if(pt.crm > out.maxCrm) {
+				out.maxCrm = pt.crm;
 				maxIdx = i;
 			}
 			++i;
 		}
 
 		// Calculate the other ch metrics.
-		// These variables are for detecting co-maxima, so that a modeled maximum can be determined using
-		// the parabolic interpolation method below.
-		double prevMax = 0, nextMax = 0;
-		int prevMaxIdx = 0, nextMaxIdx = 0;
+		int maxCount = 0;
 		for(size_t i = 0; i < out.data.size(); ++i) {
 			outpoint& pt = out.data[i];
-			pt.crn = pt.cr / maxCr;
-			pt.crm = 1 - pt.cr;
-			pt.crnm = pt.crm / maxCrm;
-			if(pt.crnm > out.maxCrnm) {
-				out.maxCrnm = pt.crnm;
-				prevMax = out.maxCrnm;
-				prevMaxIdx = i;
-				nextMax = 0;
-				nextMaxIdx = 0;
-			} else if(pt.crnm == out.maxCrnm) {
-				nextMax = out.maxCrnm;
-				nextMaxIdx = i;
-			}
+			pt.crn = pt.crm / out.maxCrm;
+			pt.crnm = 1 - pt.crn;
+			if(pt.crm > out.maxCrm)
+				out.maxCrm = pt.crnm;
+			if(pt.crm == out.maxCrm)
+				++maxCount;
 		}
 
-		if(nextMax > 0 && prevMax == nextMax && prevMaxIdx != nextMaxIdx) {
-			// Interpolate the maximum using
-			// Kopăcková, V., & Koucká, L. (2017). Integration of absorption feature information from visible to
-			// longwave infrared spectral ranges for mineral mapping. Remote Sensing, 9(10), 8–13. https://doi.org/10.3390/rs9101006
-
-
+		if(maxCount > 1) {
+			// There is more than one equal maximum. Flag it.
+			config->maximaFlag[((size_t) out.c << 16) | out.r] = true;
 		}
+
+		// We were going to do interpolation for adjacent maxima, but put it off.
+		// Kopăcková, V., & Koucká, L. (2017). Integration of absorption feature information from visible to
+		// longwave infrared spectral ranges for mineral mapping. Remote Sensing, 9(10), 8–13. https://doi.org/10.3390/rs9101006
+		// If there are  >2 maxima, or the distance between them is > than the configured
+		// interp distance, flag the cell and move on. Otherwise, interpolate.
 
 		// Calculate the split hull; add two corner points to make the hull full.
 		pts.assign(in.data.begin(), in.data.begin() + maxIdx);
@@ -304,8 +298,7 @@ void processQueue(QConfig* config) {
 		}
 
 		config->outcv.notify_one();
-		if(config->inqueue.size() < 1000)
-			config->readcv.notify_one();
+		config->readcv.notify_one();
 
 	}
 }
@@ -330,6 +323,7 @@ void writeQueue(QConfig* config) {
 	GDALWriter writercrm(outfile + "_crm" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
 	GDALWriter writercrnm(outfile + "_crnm" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
 	GDALWriter writerhull(outfile + "_hull" + ext, driver, cols, rows, 5, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
+	GDALWriter writermax(outfile + "_maxima" + ext, driver, cols, rows, 1, "flag", {"maximum"}, DataType::Byte);
 
 	std::vector<double> ss;
 	std::vector<double> ch;
@@ -360,7 +354,7 @@ void writeQueue(QConfig* config) {
 			crnm.push_back(o.crnm);
 		}
 
-		hull = {out.area, out.larea, out.rarea, out.symmetry};
+		hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm};
 
 		writerss.write(ss, out.c, out.r, 1, 1, 1);
 		writerch.write(ch, out.c, out.r, 1, 1, 1);
@@ -378,17 +372,26 @@ void writeQueue(QConfig* config) {
 		crnm.clear();
 
 		config->incv.notify_one();
-
 	}
 
-	writerhull.writeStats(outfile + "_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
+	writerhull.writeStats(outfile + "_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm"});
 
+	std::vector<int> maxima(cols * rows);
+	for(const auto& item : config->maximaFlag) {
+		int c = (item.first >> 16) & 0xffff;
+		int r = item.first & 0xffff;
+		maxima[r * cols + c] = item.second;
+	}
+	writermax.write(maxima, 0, 0, cols, rows, 1);
 }
 
 void Processor::process(Reader* reader, const ProcessorConfig& config) {
 
 	QConfig qconfig;
 	qconfig.pconfig = config;
+	qconfig.cols = reader->cols();
+	qconfig.rows = reader->rows();
+	qconfig.bands = reader->bands();
 
 	int bufSize = config.bufferSize;
 
@@ -396,11 +399,14 @@ void Processor::process(Reader* reader, const ProcessorConfig& config) {
 	std::vector<double> buf(bufSize * bufSize * reader->bands());
 
 	// A list of wavelengths.
-	const std::vector<double>& wavelengths = reader->getBands();
+	qconfig.wavelengths = reader->getBands();
+
+	qconfig.inRunning = true;
+	qconfig.outRunning = true;
 
 	// A list of wavelengths as strings for labelling.
 	std::vector<std::string> wavelengthMeta;
-	for(double w : wavelengths)
+	for(double w : qconfig.wavelengths)
 		wavelengthMeta.push_back(std::to_string(w));
 
 	// Start the processing threads.
@@ -418,13 +424,6 @@ void Processor::process(Reader* reader, const ProcessorConfig& config) {
 		std::cerr << col << "," << row << " of " << reader->cols() << "," << reader->rows() << "\n";
 
 		{
-			// If input queue gets too large, wait before adding more.
-			std::unique_lock<std::mutex> lk(qconfig.readmtx);
-			if(qconfig.inqueue.size() > 1000)
-				qconfig.readcv.wait(lk);
-		}
-
-		{
 			// Read out the input objects and add to the queue.
 			std::lock_guard<std::mutex> lk(qconfig.inmtx);
 			for(int r = 0; r < rows; ++r) {
@@ -432,7 +431,7 @@ void Processor::process(Reader* reader, const ProcessorConfig& config) {
 					input in(c + col, r + row);
 					for(int b = 0; b < reader->bands(); ++b) {
 						double v = buf[b * bufSize * bufSize + r * bufSize + c];
-						double w = wavelengths[b];
+						double w = qconfig.wavelengths[b];
 						in.data.emplace_back(w, v);
 					}
 					qconfig.inqueue.push_back(in);
@@ -442,6 +441,11 @@ void Processor::process(Reader* reader, const ProcessorConfig& config) {
 
 		// Notify the input processor.
 		qconfig.incv.notify_all();
+
+		// If input queue gets too large, wait before adding more.
+		std::unique_lock<std::mutex> lk(qconfig.readmtx);
+		while(qconfig.inqueue.size() > 1000)
+			qconfig.readcv.wait(lk);
 	}
 
 	// Let the processor threads finish.

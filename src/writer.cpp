@@ -16,6 +16,12 @@
 #include <cstring>
 
 #include "writer.hpp"
+#include "stats.hpp"
+
+bool __isnonzero(const double& v) {
+	return v > 0;
+}
+
 
 int makedir(const std::string& filename) {
 	std::string path = filename.substr(0, filename.find_last_of('/'));
@@ -52,6 +58,8 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 		throw std::runtime_error("Driver not found: " + driver);
 
 	m_ds = drv->Create(filename.c_str(), cols, rows, bands, gtype, nullptr);
+	if(!m_ds)
+		throw std::runtime_error("Failed to open " + filename + " for writing");
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();
@@ -62,11 +70,11 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	}
 }
 
-bool GDALWriter::write(std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize) {
+bool GDALWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize) {
 	if(col < 0 || col >= m_cols || col + cols > m_cols
 			|| row < 0 || row >= m_rows || row + rows > m_rows)
 		return false;
-	double* data = buf.data();
+	const double* data = buf.data();
 	for(int i = 1; i <= m_bands; ++i) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		if(band->RasterIO(GF_Write, col, row, cols, rows,
@@ -77,13 +85,21 @@ bool GDALWriter::write(std::vector<double>& buf, int col, int row, int cols, int
 	return true;
 }
 
-
-
-#include "stats.hpp"
-
-bool __isnonzero(const double& v) {
-	return v > 0;
+bool GDALWriter::write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSize) {
+	if(col < 0 || col >= m_cols || col + cols > m_cols
+			|| row < 0 || row >= m_rows || row + rows > m_rows)
+		return false;
+	const int* data = buf.data();
+	for(int i = 1; i <= m_bands; ++i) {
+		GDALRasterBand* band = m_ds->GetRasterBand(i);
+		if(band->RasterIO(GF_Write, col, row, cols, rows,
+				(void*) (data + (i - 1) * bufSize * bufSize),
+				bufSize, bufSize, GDT_Int32, 0, 0, 0))
+			return false;
+	}
+	return true;
 }
+
 
 bool GDALWriter::writeStats(const std::string& filename, const std::vector<std::string>& names) {
 
@@ -93,8 +109,8 @@ bool GDALWriter::writeStats(const std::string& filename, const std::vector<std::
 	Stats stats;
 
 	std::vector<double> buf(m_cols * m_rows);
-	std::vector<double> results(23);
 	std::vector<std::string> statNames = stats.getStatNames();
+	std::vector<double> results(statNames.size());
 
 	std::ofstream out(filename, std::ios::out);
 	out << std::setprecision(12) << "name";

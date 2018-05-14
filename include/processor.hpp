@@ -18,8 +18,6 @@ public:
 	int bufferSize;
 	int threads;
 	bool sampleStats;
-	bool flagsRaster;
-	double interpDistance;
 };
 
 class Processor {

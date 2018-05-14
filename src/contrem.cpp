@@ -37,20 +37,21 @@ void usage() {
 
 int main(int argc, char** argv) {
 
-	int bufSize = 256;
+	ProcessorConfig config;
+	config.bufferSize = 256;
+	config.sampleStats = false;
+	config.driver = "ENVI";
+	config.extension = ".dat";
+	config.threads = 1;
+
+	int wlCol = -1;
+	int bandCol = -1;
+	bool bandHeader = false;
 	double minWl = 0;
 	double maxWl = 0;
 	std::string datafile;
 	std::string roifile;
 	std::string bandfile;
-	int wlCol = -1;
-	int bandCol = -1;
-	bool bandHeader = false;
-	std::string outfile;
-	int threads = 1;
-	bool sample = true;
-	std::string outDriver = "ENVI";
-	std::string outExt = ".dat";
 
 	try {
 		int c;
@@ -59,28 +60,28 @@ int main(int argc, char** argv) {
 			case 'd': datafile = optarg; break;
 			case 'r': roifile = optarg; break;
 			case 'b': bandfile = optarg; break;
-			case 'o': outfile = optarg; break;
 			case 'l': minWl = atof(optarg); break;
 			case 'h': maxWl = atof(optarg); break;
-			case 's': bufSize = atoi(optarg); break;
 			case 'w': wlCol = atoi(optarg); break;
 			case 'i': bandCol = atoi(optarg); break;
-			case 't': threads = atoi(optarg); break;
-			case 'p': sample = false; break;
 			case 'z': bandHeader = true; break;
-			case 'v': outDriver = optarg; break;
-			case 'e': outExt = optarg; break;
+			case 'o': config.outfile = optarg; break;
+			case 's': config.bufferSize = atoi(optarg); break;
+			case 't': config.threads = atoi(optarg); break;
+			case 'p': config.sampleStats = false; break;
+			case 'v': config.driver = optarg; break;
+			case 'e': config.extension = optarg; break;
 			default: break;
 			}
 		}
 
-		if(bufSize <= 0)
+		if(config.bufferSize <= 0)
 			throw std::invalid_argument("Buffer size must be larger than zero.");
 		if(datafile.empty() && roifile.empty())
 			throw std::invalid_argument("Data  or ROI file not given.");
-		if(outfile.empty())
+		if(config.outfile.empty())
 			throw std::invalid_argument("Output file template not given.");
-		if(threads < 1)
+		if(config.threads < 1)
 			throw std::invalid_argument("At least one thread is required.");
 		if(!bandfile.empty() && (bandCol < 0 || wlCol < 0))
 			throw std::invalid_argument("If the band file is given, wavelength and band columns must also be given.");
@@ -105,11 +106,11 @@ int main(int argc, char** argv) {
 		if(minWl > 0 && maxWl > 0)
 			reader->setBandRange(minWl, maxWl);
 
-		reader->setBufSize(bufSize);
+		reader->setBufSize(config.bufferSize);
 
 		Processor processor;
 
-		processor.process(reader, outfile, outDriver, outExt, bufSize, threads, sample);
+		processor.process(reader, config);
 
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";

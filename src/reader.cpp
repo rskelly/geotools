@@ -137,6 +137,7 @@ bool GDALReader::next(std::vector<double>& buf, int& col, int& row, int& cols, i
 
 	double* data = (double*) buf.data();
 	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
+		//std::cerr << "band " << i << "\n";
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		if(band->RasterIO(GF_Read, col, row, cols, rows,
 				(void*) (data + (i - m_minIdx) * m_bufSize * m_bufSize),
