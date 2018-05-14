@@ -29,7 +29,9 @@ void usage() {
 			<< "    consider that multiple buffers may be in memory at once.\n"
 			<< " -t The number of threads to use. Default 2.\n"
 			<< " -p By default, sample statistics are used. This flag forces the use of\n"
-			<< "    population statistics.\n";
+			<< "    population statistics.\n"
+			<< " -v The driver to use for output rasters. Defaults to GTiff, but any GDAL-writable\n"
+			<< "    format will do.\n";
 }
 
 int main(int argc, char** argv) {
@@ -46,6 +48,7 @@ int main(int argc, char** argv) {
 	std::string outfile;
 	int threads = 1;
 	bool sample = true;
+	std::string outDriver = "GTiff";
 
 	try {
 		int c;
@@ -63,6 +66,7 @@ int main(int argc, char** argv) {
 			case 't': threads = atoi(optarg); break;
 			case 'p': sample = false; break;
 			case 'z': bandHeader = true; break;
+			case 'v': outDriver = optarg; break;
 			default: break;
 			}
 		}
@@ -102,7 +106,7 @@ int main(int argc, char** argv) {
 
 		Processor processor;
 
-		processor.process(reader, outfile, bufSize, threads, sample);
+		processor.process(reader, outfile, outDriver, bufSize, threads, sample);
 
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";

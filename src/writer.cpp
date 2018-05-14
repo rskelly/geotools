@@ -27,7 +27,8 @@ int makedir(const std::string& filename) {
 	}
 }
 
-GDALWriter::GDALWriter(const std::string& filename, int cols, int rows, int bands, const std::string& fieldName, const std::vector<std::string>& bandNames) :
+GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
+		const std::string& fieldName, const std::vector<std::string>& bandNames) :
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
 
@@ -37,9 +38,9 @@ GDALWriter::GDALWriter(const std::string& filename, int cols, int rows, int band
 
 	GDALAllRegister();
 	GDALDriverManager* gm = GetGDALDriverManager();
-	GDALDriver* drv = gm->GetDriverByName("GTiff");
+	GDALDriver* drv = gm->GetDriverByName(driver.c_str());
 	if(!drv)
-		throw std::runtime_error("GeoTiff driver not found.");
+		throw std::runtime_error("Driver not found: " + driver);
 	m_ds = drv->Create(filename.c_str(), cols, rows, bands, GDT_Float32, nullptr);
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();

@@ -28,7 +28,8 @@ private:
 	int m_rows;
 
 public:
-	GDALWriter(const std::string& filename, int cols, int rows, int bands, const std::string& fieldName = "", const std::vector<std::string>& bandNames = {});
+	GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
+			const std::string& fieldName = "", const std::vector<std::string>& bandNames = {});
 	bool write(std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize);
 	bool writeStats(const std::string& filename, const std::vector<std::string>& names = {});
 	~GDALWriter();

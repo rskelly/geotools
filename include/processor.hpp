@@ -12,7 +12,7 @@
 
 class Processor {
 public:
-	void process(Reader* reader, const std::string& outfile, int bufSize, int threads, bool sample);
+	void process(Reader* reader, const std::string& outfile, const std::string& outDriver, int bufSize, int threads, bool sample);
 };
 
 #endif /* PROCESSOR_HPP_ */

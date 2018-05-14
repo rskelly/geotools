@@ -275,20 +275,20 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 /**
  * Process the output queue and write to file.
  */
-void writeQueue(const std::string* outfile, const std::vector<std::string>& wavelengths,
+void writeQueue(const std::string* outfile, const std::string* driver, const std::vector<std::string>& wavelengths,
 		int cols, int rows, int bands,
 		std::list<output>* outqueue,
 		std::mutex* outmtx, std::condition_variable* outcv,
 		std::condition_variable* incv,
 		bool* running) {
 
-	GDALWriter writerss(*outfile + "_ss.tif", cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writerch(*outfile + "_ch.tif", cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercr(*outfile + "_cr.tif", cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrn(*outfile + "_crn.tif", cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrm(*outfile + "_crm.tif", cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrnm(*outfile + "_crnm.tif", cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writerhull(*outfile + "_hull.tif", cols, rows, 4, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry"});
+	GDALWriter writerss(*outfile + "_ss.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writerch(*outfile + "_ch.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercr(*outfile + "_cr.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrn(*outfile + "_crn.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrm(*outfile + "_crm.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrnm(*outfile + "_crnm.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writerhull(*outfile + "_hull.dat", *driver, cols, rows, 4, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry"});
 
 	std::vector<double> ss;
 	std::vector<double> ch;
@@ -345,7 +345,8 @@ void writeQueue(const std::string* outfile, const std::vector<std::string>& wave
 
 }
 
-void Processor::process(Reader* reader, const std::string& outfile, int bufSize, int threads, bool sample) {
+void Processor::process(Reader* reader, const std::string& outfile, const std::string& outDriver,
+		int bufSize, int threads, bool sample) {
 
 	std::list<input> inqueue;
 	std::list<output> outqueue;
@@ -375,7 +376,7 @@ void Processor::process(Reader* reader, const std::string& outfile, int bufSize,
 		t0.emplace_back(processQueue, &inqueue, &outqueue, &inmtx, &incv, &outmtx, &outcv, &readcv, &inrunning);
 
 	// Start the output thread.
-	std::thread t1(writeQueue, &outfile, wavelengthMeta,
+	std::thread t1(writeQueue, &outfile, &outDriver, wavelengthMeta,
 			reader->cols(), reader->rows(), reader->bands(), &outqueue, &outmtx, &outcv, &incv, &outrunning);
 
 	// Read through the buffer and populate the input queue.
