@@ -30,8 +30,9 @@ void usage() {
 			<< " -t The number of threads to use. Default 2.\n"
 			<< " -p By default, sample statistics are used. This flag forces the use of\n"
 			<< "    population statistics.\n"
-			<< " -v The driver to use for output rasters. Defaults to GTiff, but any GDAL-writable\n"
-			<< "    format will do.\n";
+			<< " -v The driver to use for output rasters. Defaults to ENVI, but any GDAL-writable\n"
+			<< "    format will do.\n"
+			<< " -e File extension for raster files. Defaults to .dat for ENVI files.\n";
 }
 
 int main(int argc, char** argv) {
@@ -48,7 +49,8 @@ int main(int argc, char** argv) {
 	std::string outfile;
 	int threads = 1;
 	bool sample = true;
-	std::string outDriver = "GTiff";
+	std::string outDriver = "ENVI";
+	std::string outExt = ".dat";
 
 	try {
 		int c;
@@ -67,6 +69,7 @@ int main(int argc, char** argv) {
 			case 'p': sample = false; break;
 			case 'z': bandHeader = true; break;
 			case 'v': outDriver = optarg; break;
+			case 'e': outExt = optarg; break;
 			default: break;
 			}
 		}
@@ -106,7 +109,7 @@ int main(int argc, char** argv) {
 
 		Processor processor;
 
-		processor.process(reader, outfile, outDriver, bufSize, threads, sample);
+		processor.process(reader, outfile, outDriver, outExt, bufSize, threads, sample);
 
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";

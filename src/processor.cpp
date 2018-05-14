@@ -100,13 +100,14 @@ public:
 	double larea; // Left hand area
 	double rarea; // Right hand area.
 	double symmetry; // larea / area
+	double maxCrnm; // maximum normalized mirrored continuum removal
 	std::vector<outpoint> data;
 	output() : output(0, 0) {}
 	output(input& in) :
 		output(in.c, in.r) {}
 	output(int c, int r) :
 		c(c), r(r),
-		area(0), larea(0), rarea(0), symmetry(0) {}
+		area(0), larea(0), rarea(0), symmetry(0), maxCrnm(0) {}
 };
 
 /**
@@ -238,6 +239,8 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 			pt.crn = pt.cr / maxCr;
 			pt.crm = 1 - pt.cr;
 			pt.crnm = pt.crm / maxCrm;
+			if(pt.crnm > out.maxCrnm)
+				out.maxCrnm = pt.crnm;
 		}
 
 		// Calculate the split hull; add two corner points to make the hull full.
@@ -267,28 +270,27 @@ void processQueue(std::list<input>* inqueue, std::list<output>* outqueue,
 		if(inqueue->size() < 1000)
 			readcv->notify_one();
 
-		//std::cerr << "inqueue " << inqueue->size() << "; outqueue " << outqueue->size() << "\n";
-
 	}
 }
 
 /**
  * Process the output queue and write to file.
  */
-void writeQueue(const std::string* outfile, const std::string* driver, const std::vector<std::string>& wavelengths,
+void writeQueue(const std::string* outfile, const std::string* driver, const std::string* ext,
+		const std::vector<std::string>& wavelengths,
 		int cols, int rows, int bands,
 		std::list<output>* outqueue,
 		std::mutex* outmtx, std::condition_variable* outcv,
 		std::condition_variable* incv,
 		bool* running) {
 
-	GDALWriter writerss(*outfile + "_ss.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writerch(*outfile + "_ch.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercr(*outfile + "_cr.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrn(*outfile + "_crn.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrm(*outfile + "_crm.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrnm(*outfile + "_crnm.dat", *driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writerhull(*outfile + "_hull.dat", *driver, cols, rows, 4, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry"});
+	GDALWriter writerss(*outfile + "_ss" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writerch(*outfile + "_ch" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercr(*outfile + "_cr" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrn(*outfile + "_crn" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrm(*outfile + "_crm" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writercrnm(*outfile + "_crnm" + *ext, *driver, cols, rows, bands, "wavelength", wavelengths);
+	GDALWriter writerhull(*outfile + "_hull" + *ext, *driver, cols, rows, 5, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
 
 	std::vector<double> ss;
 	std::vector<double> ch;
@@ -338,14 +340,14 @@ void writeQueue(const std::string* outfile, const std::string* driver, const std
 
 		incv->notify_one();
 
-		//std::cerr << "outqueue " << outqueue->size() << "\n";
 	}
 
-	writerhull.writeStats(*outfile + "_hullstats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry"});
+	writerhull.writeStats(*outfile + "_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
 
 }
 
-void Processor::process(Reader* reader, const std::string& outfile, const std::string& outDriver,
+void Processor::process(Reader* reader, const std::string& outfile,
+		const std::string& outDriver, const std::string& outExt,
 		int bufSize, int threads, bool sample) {
 
 	std::list<input> inqueue;
@@ -376,7 +378,7 @@ void Processor::process(Reader* reader, const std::string& outfile, const std::s
 		t0.emplace_back(processQueue, &inqueue, &outqueue, &inmtx, &incv, &outmtx, &outcv, &readcv, &inrunning);
 
 	// Start the output thread.
-	std::thread t1(writeQueue, &outfile, &outDriver, wavelengthMeta,
+	std::thread t1(writeQueue, &outfile, &outDriver, &outExt, wavelengthMeta,
 			reader->cols(), reader->rows(), reader->bands(), &outqueue, &outmtx, &outcv, &incv, &outrunning);
 
 	// Read through the buffer and populate the input queue.

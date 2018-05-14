@@ -95,12 +95,16 @@ bool GDALWriter::writeStats(const std::string& filename, const std::vector<std::
 	m_ds->FlushCache();
 
 	for(int i = 1; i <= m_bands; ++i) {
+
+		// Read an entire band into the buffer.
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		if(band->RasterIO(GF_Read, 0, 0, m_cols, m_rows, (void*) buf.data(), m_cols, m_rows, GDT_Float64, 0, 0, 0))
 			return false;
 
+		// Filter the values list to eliminate zeroes.
 		std::vector<double> values;
 		std::copy_if(buf.begin(), buf.end(), std::back_inserter(values), __isnonzero);
+
 		if(!values.empty())
 			stats.computeStats(values, results);
 
