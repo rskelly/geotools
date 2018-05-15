@@ -131,7 +131,7 @@ double interpolate(double x, double x0, double y0, double x1, double y1) {
  */
 std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 
-	const GeometryFactory gf;
+	const GeometryFactory::unique_ptr gf = GeometryFactory::create();
 
 	// Make a list of Coordinates.
 	std::vector<Coordinate> coords;
@@ -139,7 +139,7 @@ std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 		coords.emplace_back(pt.w, pt.ss, 0);
 
 	// Make a MultiPoint from the coords and get the ConvexHull.
-	MultiPoint* mp = gf.createMultiPoint(coords);
+	MultiPoint* mp = gf->createMultiPoint(coords);
 	Polygon* hull = dynamic_cast<Polygon*>(mp->convexHull());
 
 	// Get the area for output.

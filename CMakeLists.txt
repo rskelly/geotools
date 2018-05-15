@@ -6,7 +6,11 @@ set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_EXTENSIONS OFF)
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fopenmp -Wno-unknown-pragmas -Wall -D_GLIBCXX_PARALLEL")
+if(APPLE)
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -Wno-unknown-pragmas -Wall -D_GLIBCXX_PARALLEL")
+else()
+	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fopenmp -Wno-unknown-pragmas -Wall -D_GLIBCXX_PARALLEL")
+endif()
 
 set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -18,14 +22,14 @@ set (CMAKE_CXX_COMPILER_LAUNCHER ccache)
 set (THREADS_PREFER_PTHREAD_FLAG ON)
 
 find_package (GDAL 2.2 REQUIRED)
-find_library (GEOS_LIBRARY geos)
+find_library (GEOS_LIBRARY geos PATHS /opt/lib /usr/lib /usr/local/lib)
 
 project (contrem)
 
 # Configure directories###################################################################################
 
-include_directories(BEFORE SYSTEM ./include /usr/include/gdal) 
-link_directories(. /usr/lib)
+include_directories(BEFORE SYSTEM ./include /opt/include /usr/include/gdal) 
+link_directories(. /opt/lib /usr/lib)
 
 # Build support libraries ################################################################################
 
