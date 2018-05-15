@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
 
 	try {
 		int c;
-		while((c = getopt(argc, argv, "d:r:b:o:l:h:s:w:i:t:p")) != -1) {
+		while((c = getopt(argc, argv, "d:r:b:o:l:h:s:w:i:t:e:v:zp")) != -1) {
 			switch(c) {
 			case 'd': datafile = optarg; break;
 			case 'r': roifile = optarg; break;
@@ -120,3 +120,23 @@ int main(int argc, char** argv) {
 
 	return 0;
 }
+
+/*
+#include <iostream>
+#include "stats.hpp"
+
+int stats_test() {
+	std::vector<double> values;
+	for(int i = 1; i <= 1000; ++i)
+		values.push_back(i);
+	Stats s = Stats::computeStats(values, false);
+	for(double d : values)
+		std::cerr << d << " ";
+	std::cerr << "\n";
+	const std::vector<std::string>& names = s.getStatNames();
+	const std::vector<double> stats = s.getStats();
+	for(size_t i = 0; i < names.size(); ++i)
+		std::cerr << names[i] << ": " << stats[i] << "\n";
+	return 0;
+}
+*/

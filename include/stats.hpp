@@ -13,12 +13,34 @@
 
 class Stats {
 public:
-	std::vector<std::string> getStatNames() const;
+
+	int n;
+	double min;
+	double max;
+	double mean;
+	double median;
+	double variance;
+	double stddev;
+	double stderr;
+	double cov;
+	double kurtosis;
+	double skewness;
+	double mode;
+	double p25;
+	double p75;
+	double iqr;
+	std::vector<double> deciles;
+
+	static std::vector<std::string> getStatNames();
+
+	std::vector<double> getStats();
+
 	/**
 	 * Compute stats.
 	 * If sample is true, use sample statistics. If false, use population.
 	 */
-	int computeStats(const std::vector<double>& values, std::vector<double>& output, bool sample = true) const;
+	static Stats computeStats(const std::vector<double>& values, bool sample = true);
+
 };
 
 

@@ -131,13 +131,13 @@ bool GDALWriter::writeStats(const std::string& filename, const std::vector<std::
 		std::vector<double> values;
 		std::copy_if(buf.begin(), buf.end(), std::back_inserter(values), __isnonzero);
 
-		if(!values.empty())
-			stats.computeStats(values, results);
-
-		out << names[i - 1];
-		for(double v : results)
-			out << "," << v;
-		out << "\n";
+		if(!values.empty()) {
+			Stats s = Stats::computeStats(values);
+			out << names[i - 1];
+			for(double v : s.getStats())
+				out << "," << v;
+			out << "\n";
+		}
 	}
 	return true;
 }
