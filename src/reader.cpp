@@ -101,18 +101,26 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 		std::string name = "wavelength";
 		for(int i = 1; i <= m_bands; ++i) {
 			GDALRasterBand* band = m_ds->GetRasterBand(i);
-			std::string meta(band->GetMetadataItem(name.c_str()));
-			if(!meta.empty()) {
+			const char* m = band->GetMetadataItem(name.c_str());
+			if(m) {
 				// The wavelength is scaled so that exact matches can occur.
-				int wl = (int) (atof(meta.c_str()) * WL_SCALE);
+				int wl = (int) (atof(m) * WL_SCALE);
 				if(wl > 0) {
 					bandMap[wl] = i;
-				} else {
-					bandMap.clear();
-					std::cerr << "Failed to read band map from metadata." << std::endl;
-					break;
+					continue;
 				}
 			}
+			m = band->GetDescription();
+			if(m) {
+				int wl = (int) (atof(m) * WL_SCALE);
+				{
+					bandMap[wl] = i;
+					continue;
+				}
+			}
+			bandMap.clear();
+			std::cerr << "Failed to read band map from metadata." << std::endl;
+			break;
 		}
 		setBandMap(bandMap);
 	}

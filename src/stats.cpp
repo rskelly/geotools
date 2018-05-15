@@ -35,6 +35,9 @@ inline void stats1(const std::vector<double>& v, double& n, double& min, double&
 	mean = sum / v.size();
 }
 
+#include <iomanip>
+#include <fstream>
+
 inline void stats2(const std::vector<double>& v, bool sample, double mean, double& variance, double& stddev, double& stderr, double& kurtosis, double& skewness, double& cov) {
 	double sum2 = 0, sum3 = 0, sum4 = 0;
 	for(double d : v) {
@@ -42,12 +45,18 @@ inline void stats2(const std::vector<double>& v, bool sample, double mean, doubl
 		sum3 += p3(d - mean);
 		sum4 += p4(d - mean);
 	}
+	{
+		std::ofstream tmp("data/stats.txt");
+		tmp << std::setprecision(12);
+		for(const double& vv : v)
+			tmp << vv << ",";
+	}
 	int n = sample ? v.size() - 1 : v.size();
 	variance = sum2 / n;
 	stddev = std::sqrt(variance);
 	stderr = stddev / std::sqrt(sample ? n + 1 : n);
-	skewness = sum3 / std::pow(std::sqrt(sum2), 3.0 / 2.0);
-	kurtosis = sum4 / p2(sum2);
+	skewness = (sum3 / n) / std::pow(std::sqrt(sum2), 3.0 / 2.0);
+	kurtosis = (sum4 / n) / p2(variance);
 	cov = stddev / mean;
 }
 
@@ -57,10 +66,15 @@ void quantiles(const std::vector<double>& values, size_t quantiles, std::vector<
 		for(size_t i = 0; i < values.size(); ++i)
 			output.push_back(SNaN);
 	} else {
-		size_t step = n / (quantiles - 1);
-		output.resize(quantiles);
-		for(size_t i = step, j = 0; i < n; i += step, ++j)
-			output[j] = (values[i + 1] + values[i]) / 2.0;
+		double step = (double) n / (quantiles - 1);
+		output.resize(quantiles - 1);
+		int i0, i1;
+		for(size_t i = 1; i <= quantiles - 1; ++i) {
+			i0 = (int) i * step;
+			i1 = (int) std::ceil(i * step);
+			output[i - 1] = (values[i1] + values[i0]) / 2.0;
+
+		}
 	}
 }
 
@@ -97,13 +111,16 @@ inline void stats3(const std::vector<double>& v, double& median, double& mode, d
 	{
 		// Compute quartiles, iqr and median.
 		std::vector<double> perc;
-		int idx = n / 100;
-		p25 = (v0[idx * 25] + v0[(idx + 1) * 25]) / 2.0;
-		p75 = (v0[idx * 75] + v0[(idx + 1) * 75]) / 2.0;
+		int i0 = (int) (double) n / 99;
+		int i1 = (int) std::ceil((double) n / 99);
+		p25 = (v0[i0 * 25] + v0[i1 * 25]) / 2.0;
+		p75 = (v0[i0 * 75] + v0[i1 * 75]) / 2.0;
 
 		iqr2575 = p75 - p25;
 
-		median = (v0[idx * 50] + v0[(idx + 1) * 50]) / 2.0;
+		i0 = (int) (double) n / 2;
+		i1 = (int) std::ceil((double) n / 2);
+		median = (v0[i0] + v0[i1]) / 2.0;
 	}
 
 }
@@ -120,8 +137,8 @@ int Stats::computeStats(const std::vector<double>& values, std::vector<double>& 
 	output.resize(__stats.size());
 
 	stats1(values, output[0], output[1], output[2], output[3]); // n, min, max, mean
-	stats2(values, sample, output[2], output[3], output[4], output[5], output[6], output[7], output[8]); // mean (in), variance, stddev, stderr, kurtosis, skewness, cov);
-	stats3(values, output[8], output[9], (output.data() + 10), output[20], output[21], output[22]); // median, mode, deciles, p25, p75, iqr2575);
+	stats2(values, sample, output[3], output[4], output[5], output[6], output[7], output[8], output[9]); // mean (in), variance, stddev, stderr, kurtosis, skewness, cov);
+	stats3(values, output[9], output[10], (output.data() + 11), output[21], output[22], output[23]); // median, mode, deciles, p25, p75, iqr2575);
 
 	return output.size();
 
