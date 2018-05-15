@@ -26,7 +26,7 @@ bool __isnonzero(const double& v) {
 int makedir(const std::string& filename) {
 	std::string path = filename.substr(0, filename.find_last_of('/'));
 	if(mkdir(path.c_str(), 0755) == 0)
-		return true;
+		return 0;
 	switch(errno) {
 	case EEXIST: return 0;
 	default: return errno;
