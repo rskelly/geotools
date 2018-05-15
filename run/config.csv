@@ -1,0 +1,2 @@
+data_file,roi_file,band_map,bm_header,bm_wl_col,bm_idx_col,output_template,low_wl,high_wl,population,driver,extension
+./vineyard_100.dat,,,,,,./output/vinyard,500,700,f,ENVI,.dat

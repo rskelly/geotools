@@ -32,3 +32,6 @@ link_directories(. /usr/lib)
 add_executable (contrem src/contrem.cpp src/reader.cpp src/writer.cpp src/processor.cpp src/stats.cpp)
 target_link_libraries (contrem gdal ${GEOS_LIBRARY})
 
+# Install ################################################################################################
+
+install(TARGETS contrem RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
