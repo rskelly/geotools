@@ -182,6 +182,7 @@ public:
 	int rows;
 	int bands;
 	std::vector<double> wavelengths;
+	std::vector<std::string> bandNames;
 
 	std::unordered_map<size_t, bool> maximaFlag;
 
@@ -323,19 +324,20 @@ void writeQueue(QConfig* config) {
 	const std::string& outfile = config->pconfig.outfile;
 	const std::string& driver = config->pconfig.driver;
 	const std::string& ext = config->pconfig.extension;
-	const std::vector<std::string>& wavelengths = config->getWavelengthNames();
+	const std::vector<double>& wavelengths = config->wavelengths;
+	const std::vector<std::string>& bandNames = config->bandNames;
 	int cols = config->cols;
 	int rows = config->rows;
 	int bands = config->bands;
 
-	GDALWriter writerss(outfile + "_ss" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writerch(outfile + "_ch" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercr(outfile + "_cr" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrn(outfile + "_crn" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrm(outfile + "_crm" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writercrnm(outfile + "_crnm" + ext, driver, cols, rows, bands, "wavelength", wavelengths);
-	GDALWriter writerhull(outfile + "_hull" + ext, driver, cols, rows, 5, "stat", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
-	GDALWriter writermax(outfile + "_maxima" + ext, driver, cols, rows, 1, "flag", {"maximum"}, DataType::Byte);
+	GDALWriter writerss(outfile + "_ss" + ext, driver, cols, rows, bands, "wavelength", wavelengths, bandNames);
+	GDALWriter writerch(outfile + "_ch" + ext, driver, cols, rows, bands, "wavelength", wavelengths, bandNames);
+	GDALWriter writercr(outfile + "_cr" + ext, driver, cols, rows, bands, "wavelength", wavelengths, bandNames);
+	GDALWriter writercrn(outfile + "_crn" + ext, driver, cols, rows, bands, "wavelength", wavelengths, bandNames);
+	GDALWriter writercrm(outfile + "_crm" + ext, driver, cols, rows, bands, "wavelength", wavelengths, bandNames);
+	GDALWriter writercrnm(outfile + "_crnm" + ext, driver, cols, rows, bands, "wavelength", wavelengths, bandNames);
+	GDALWriter writerhull(outfile + "_hull" + ext, driver, cols, rows, 5, "stat", {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
+	GDALWriter writermax(outfile + "_maxima" + ext, driver, cols, rows, 1, "flag", {}, {"maximum"}, DataType::Byte);
 
 	std::vector<double> ss;
 	std::vector<double> ch;
@@ -411,7 +413,8 @@ void Processor::process(Reader* reader, const ProcessorConfig& config) {
 	std::vector<double> buf(bufSize * bufSize * reader->bands());
 
 	// A list of wavelengths.
-	qconfig.wavelengths = reader->getBands();
+	qconfig.wavelengths = reader->getWavelengths();
+	qconfig.bandNames = reader->getBandNames();
 
 	qconfig.inRunning = true;
 	qconfig.outRunning = true;

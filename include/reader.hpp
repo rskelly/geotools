@@ -29,6 +29,7 @@ protected:
 	int m_bufSize;
 
 	std::map<int, int> m_bandMap;
+	std::vector<std::string> m_bandNames;
 	int m_minWl; // These are scaled to avoid representation issues.
 	int m_maxWl;
 	int m_minIdx;
@@ -40,7 +41,8 @@ public:
 	void setBufSize(int bufSize);
 	void setBandMap(const std::map<int, int>& map);
 	void setBandRange(double min, double max);
-	std::vector<double> getBands() const;
+	std::vector<double> getWavelengths() const;
+	std::vector<std::string> getBandNames() const;
 	std::vector<double> getBandRange() const;
 	std::vector<int> getIndices() const;
 	int bands() const;

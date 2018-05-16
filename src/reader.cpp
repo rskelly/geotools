@@ -29,8 +29,14 @@ void Reader::setBandMap(const std::map<int, int>& map) {
 	m_bandMap = map;
 	m_minIdx = 1;
 	m_maxIdx = map.size();
-	m_minWl = std::next(m_bandMap.begin(), m_minIdx - 1)->first;
-	m_maxWl = std::next(m_bandMap.begin(), m_maxIdx - 1)->first;
+	if(m_maxIdx > m_minIdx) {
+		m_minWl = std::next(m_bandMap.begin(), m_minIdx - 1)->first;
+		m_maxWl = std::next(m_bandMap.begin(), m_maxIdx - 1)->first;
+	} else {
+		m_minIdx = 0;
+		m_minWl = 0;
+		m_maxWl = 0;
+	}
 }
 
 void Reader::setBandRange(double min, double max) {
@@ -53,7 +59,7 @@ std::vector<double> Reader::getBandRange() const {
 	return {(double) m_minWl / WL_SCALE, (double) m_maxWl / WL_SCALE};
 }
 
-std::vector<double> Reader::getBands() const {
+std::vector<double> Reader::getWavelengths() const {
 	std::vector<double> bands;
 	if(m_maxIdx > 0 && m_maxIdx > m_minIdx) {
 		for(auto p = std::next(m_bandMap.begin(), m_minIdx - 1); p != std::next(m_bandMap.begin(), m_maxIdx); ++p)
@@ -63,6 +69,10 @@ std::vector<double> Reader::getBands() const {
 			bands.push_back((double) p.first / WL_SCALE);
 	}
 	return bands;
+}
+
+std::vector<std::string> Reader::getBandNames() const {
+	return m_bandNames;
 }
 
 std::vector<int> Reader::getIndices() const {
@@ -103,23 +113,15 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 			if(m) {
 				// The wavelength is scaled so that exact matches can occur.
 				int wl = (int) (atof(m) * WL_SCALE);
-				if(wl > 0) {
+				if(wl > 0)
 					bandMap[wl] = i;
-					continue;
-				}
 			}
 			m = band->GetDescription();
-			if(m) {
-				int wl = (int) (atof(m) * WL_SCALE);
-				{
-					bandMap[wl] = i;
-					continue;
-				}
-			}
-			bandMap.clear();
-			std::cerr << "Failed to read band map from metadata." << std::endl;
-			break;
+			if(m)
+				m_bandNames.push_back(m);
 		}
+		if(bandMap.size() <= m_bands)
+			std::runtime_error("The band map is incomplete -- wavelengths could not be read for all layers.");
 		setBandMap(bandMap);
 	}
 }

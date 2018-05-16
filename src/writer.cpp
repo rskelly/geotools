@@ -34,7 +34,7 @@ int makedir(const std::string& filename) {
 }
 
 GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
-		const std::string& fieldName, const std::vector<std::string>& bandNames, DataType type) :
+		const std::string& fieldName, const std::vector<double>& wavelengths, const std::vector<std::string>& bandNames, DataType type) :
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
 
@@ -65,10 +65,10 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	m_rows = m_ds->GetRasterYSize();
 
 	if(!bandNames.empty()) {
-		for(int i = 1; i <= std::min((int) bandNames.size(), m_bands); ++i) {
-			if(CE_None != m_ds->GetRasterBand(i)->SetMetadataItem(fieldName.c_str(), bandNames[i - 1].c_str()))
-				std::cerr << "Failed to set metadata item " << fieldName << "\n";
-		}
+		for(int i = 1; i <= std::min((int) bandNames.size(), m_bands); ++i)
+			m_ds->GetRasterBand(i)->SetDescription(bandNames[i - 1].c_str());
+		for(int i = 1; i <= std::min((int) wavelengths.size(), m_bands); ++i)
+			m_ds->SetMetadataItem("wavelength", std::to_string(wavelengths[i - 1]).c_str());
 	}
 }
 
