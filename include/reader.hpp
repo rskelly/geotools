@@ -15,6 +15,9 @@
 
 #include <gdal_priv.h>
 
+#define MIN_VALUE 0.000001
+#define WL_SCALE 100000
+
 class Reader {
 protected:
 	int m_cols;

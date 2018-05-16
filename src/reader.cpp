@@ -13,8 +13,6 @@
 
 #include "reader.hpp"
 
-#define WL_SCALE 100000
-
 Reader::Reader() :
 	m_cols(0), m_rows(0), m_bands(0),
 	m_col(0), m_row(0),

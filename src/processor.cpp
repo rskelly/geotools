@@ -26,8 +26,6 @@
 #include "reader.hpp"
 #include "writer.hpp"
 
-#define MIN_VALUE 0.000001
-
 using namespace geos::geom;
 using namespace geos::algorithm;
 
@@ -183,10 +181,16 @@ public:
 	int cols;
 	int rows;
 	int bands;
-	std::vector<std::string> wavelengthNames;
 	std::vector<double> wavelengths;
 
 	std::unordered_map<size_t, bool> maximaFlag;
+
+	std::vector<std::string> getWavelengthNames() const {
+		std::vector<std::string> names;
+		for(double w : wavelengths)
+			names.push_back(std::to_string(w));
+		return names;
+	}
 };
 
 /**
@@ -311,7 +315,7 @@ void writeQueue(QConfig* config) {
 	const std::string& outfile = config->pconfig.outfile;
 	const std::string& driver = config->pconfig.driver;
 	const std::string& ext = config->pconfig.extension;
-	const std::vector<std::string>& wavelengths = config->wavelengthNames;
+	const std::vector<std::string>& wavelengths = config->getWavelengthNames();
 	int cols = config->cols;
 	int rows = config->rows;
 	int bands = config->bands;
