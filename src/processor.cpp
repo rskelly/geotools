@@ -292,8 +292,16 @@ void processQueue(QConfig* config) {
 		}
 
 		// Compute the rest of the numbers.
-		out.rarea = out.area - out.larea;
-		out.symmetry = out.larea / out.rarea;
+		if(out.area == 0 || out.larea == 0 || out.larea == out.area) {
+			// If the left or right area is zero, or the total is zero, we
+			out.larea = 0;
+			out.area = 0;
+			out.symmetry = 0;
+			out.rarea = 0;
+		} else {
+			out.rarea = out.area - out.larea;
+			out.symmetry = out.larea / out.rarea;
+		}
 
 		{
 			// Send to output queue and notify.
