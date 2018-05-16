@@ -5,7 +5,6 @@
  *      Author: rob
  */
 
-#include <gdal_priv.h>
 #include <errno.h>
 #include <iostream>
 #include <unordered_map>
@@ -14,6 +13,9 @@
 #include <iomanip>
 #include <cstdlib>
 #include <cstring>
+#include <sstream>
+
+#include <gdal_priv.h>
 
 #include "writer.hpp"
 #include "stats.hpp"
@@ -34,7 +36,8 @@ int makedir(const std::string& filename) {
 }
 
 GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
-		const std::string& fieldName, const std::vector<double>& wavelengths, const std::vector<std::string>& bandNames, DataType type) :
+		const std::vector<double>& wavelengths, const std::vector<std::string>& bandNames,
+		DataType type, const std::string& interleave, const std::string& unit) :
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
 
@@ -52,23 +55,36 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	}
 
 	GDALAllRegister();
+	CPLSetConfigOption("GDAL_PAM_ENABLED", "NO");
+
 	GDALDriverManager* gm = GetGDALDriverManager();
 	GDALDriver* drv = gm->GetDriverByName(driver.c_str());
 	if(!drv)
 		throw std::runtime_error("Driver not found: " + driver);
 
-	m_ds = drv->Create(filename.c_str(), cols, rows, bands, gtype, nullptr);
+	CPLStringList options;
+	options.SetNameValue("INTERLEAVE", interleave.c_str());
+
+	m_ds = drv->Create(filename.c_str(), cols, rows, bands, gtype, options);
 	if(!m_ds)
 		throw std::runtime_error("Failed to open " + filename + " for writing");
+
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();
 
 	if(!bandNames.empty()) {
-		for(int i = 1; i <= std::min((int) bandNames.size(), m_bands); ++i)
+		for(int i = 1; i <= std::min((int) bandNames.size(), m_bands); ++i) {
 			m_ds->GetRasterBand(i)->SetDescription(bandNames[i - 1].c_str());
-		for(int i = 1; i <= std::min((int) wavelengths.size(), m_bands); ++i)
+			m_ds->GetRasterBand(i)->SetMetadataItem("band_name", bandNames[i-1].c_str());
+		}
+	}
+	if(!wavelengths.empty()) {
+		m_ds->SetMetadataItem("wavelength_units", unit.c_str());
+		for(int i = 1; i <= std::min((int) wavelengths.size(), m_bands); ++i) {
 			m_ds->SetMetadataItem("wavelength", std::to_string(wavelengths[i - 1]).c_str());
+			m_ds->SetMetadataItem("wavelength_units", unit.c_str());
+		}
 	}
 }
 
