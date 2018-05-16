@@ -31,8 +31,8 @@ The csv columns are, in order:
 
 Field Name | Description
 ---------- | -----------
-data_file | A raster file containing spectra. This is any GDAL-readable raster. If the raster has wavelengths encided into band metadata or description, these will be loaded as a band map. If they are not present, a separate band map is required This and roi_file are mutually exclusive.
-roi_file | An ENVI ROI file. This and data_file are mutually exclusive.
+data_file | A raster file containing spectra. This is any GDAL-readable raster. If the raster has wavelengths embedded in the band metadata or description, these will be loaded as a band map. If they are not present, a separate band map is required. This and roi_file are mutually exclusive.
+roi_file | An ENVI ROI file. A band map is required with this format. This and data_file are mutually exclusive.
 band_map | A CSV file containing a mapping between the wavelength and band number. If this is given, it will override the band map contained in the raster file.
 bm_header | This value indicates whether the band map file has a header that must be skipped. If 't' is given, the header is skipped, otherwise not. If a band map file is given, this is a required field.
 bm_wl_col | An integer indicating the column where the wavelength is stored. The first column is zero. If a band map file is given, this is a required field.
