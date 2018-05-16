@@ -5,7 +5,7 @@ Application for applying continuum removal using convex hulls.
 
 ## Direct
 
-contrem can be run directly from the command line. Running it witout arguments will yield the following:
+`contrem` can be run directly from the command line. Running it witout arguments will yield the following:
 
     Usage: contrem [options]
      -d A GDAL-readable data file containing spectral samples; can contain any number of bands >= 2.
@@ -25,9 +25,11 @@ contrem can be run directly from the command line. Running it witout arguments w
 
 ## Batch
 
-To run batches, run the run.py in the run folder. The run program takes a single argument, the path to a configuration file (CSV) containing configuration parameters.
+To run batches, open a command prompt in the run folder and invoke the command,
 
-The csv columns are, in order:
+    ./run.py config.csv
+    
+where `config.csv` is the configuration file, a CSV containing the following fields, in order:
 
 Field Name | Description
 ---------- | -----------
