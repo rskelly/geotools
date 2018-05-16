@@ -29,10 +29,10 @@ void Reader::setBufSize(int bufSize) {
 
 void Reader::setBandMap(const std::map<int, int>& map) {
 	m_bandMap = map;
-	m_minIdx = 0;
-	m_maxIdx = map.size() - 1;
-	m_minWl = std::next(m_bandMap.begin(), m_minIdx)->first;
-	m_maxWl = std::next(m_bandMap.begin(), m_maxIdx)->first;
+	m_minIdx = 1;
+	m_maxIdx = map.size();
+	m_minWl = std::next(m_bandMap.begin(), m_minIdx - 1)->first;
+	m_maxWl = std::next(m_bandMap.begin(), m_maxIdx - 1)->first;
 }
 
 void Reader::setBandRange(double min, double max) {
