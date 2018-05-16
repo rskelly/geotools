@@ -46,6 +46,34 @@ population | If 'f' then sample statistics (using n-1) are calculated, other wis
 driver | The output driver -- anything that can be produced by GDAL. "GTiff" and "ENVI" are the two most likely choices.
 extension | The file extension. The driver will not choose this automatically. ENVI files generally use "" or ".dat", GTiff files use ".tif" 
 
+# Outputs
+
+The program outputs a series of raster files and one CSV file. 
+
+The rasters represent:
+
+File | Description
+---- | -----------
+[template]_ss.[ext] | The original intensities as read from the source file.
+[template]_ch.[ext] | The elevation of the convex hull at the given wavelength.
+[template]_cr.[ext] | The continuum removal, where `cr = ss / ch`.
+[template]_crm.[ext] | The mirrored `cr` value, where `crm = 1 - cr`
+[template]_crn.[ext] | The `cr` values normalized to the maximum `cr` value.
+[template]_crnm.[ext] | The mirrored `crn` value, where `crnm = 1 - crn`.
+[template]_hull.[ext] | Characteristics of the hull: total area, left area, right area, symmetry.
+[template]_maxima.[ext] | A binary raster: 1 if there were >1 equal maxima in the raster pixel, 0 otherwise.
+
+The CSV file contains statistics aggregated over the rasters:
+
+Name | Description
+----- | -----------
+hull_area | Aggregate stats for the area of the convex hull over all output pixels.
+hull_left_area | Stats for the side of the hull to the left of the maximum.
+hull_right_area | Stats for the side of the hull to the right of the maximum.
+hull_symmetry | Stats for the ratio between the areas of the left and right sides of the hull.
+max_crm | Stats for the maximum `crm` value.
+
+
 # Install
 Install the program by doing the usual:
 
