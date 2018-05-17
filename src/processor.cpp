@@ -99,13 +99,17 @@ public:
 	double rarea; // Right hand area.
 	double symmetry; // larea / area
 	double maxCrm; // maximum normalized mirrored continuum removal
+	double maxWl; // Wavelength at the maxCrm value
+	int maxCount; // The number of equal maximum values.
 	std::vector<outpoint> data;
 	output() : output(0, 0) {}
 	output(input& in) :
 		output(in.c, in.r) {}
 	output(int c, int r) :
 		c(c), r(r),
-		area(0), larea(0), rarea(0), symmetry(0), maxCrm(0) {}
+		area(0), larea(0), rarea(0), symmetry(0),
+		maxCrm(0), maxWl(0),
+		maxCount(0) {}
 };
 
 /**
@@ -184,8 +188,6 @@ public:
 	std::vector<double> wavelengths;
 	std::vector<std::string> bandNames;
 
-	std::unordered_map<size_t, bool> maximaFlag;
-
 	std::vector<std::string> getWavelengthNames() const {
 		std::vector<std::string> names;
 		for(double w : wavelengths)
@@ -250,27 +252,23 @@ void processQueue(QConfig* config) {
 			pt.cr = pt.ss / pt.ch;
 			pt.crm = 1 - pt.cr;
 			if(pt.crm > out.maxCrm) {
+				// There may be more than one equal max; it'll be flagged at a later step,
+				// so don't worry about it now.
 				out.maxCrm = pt.crm;
+				out.maxWl = pt.w;
 				maxIdx = i;
 			}
 			++i;
 		}
 
 		// Calculate the other ch metrics.
-		int maxCount = 0;
 		for(size_t i = 0; i < out.data.size(); ++i) {
 			outpoint& pt = out.data[i];
 			pt.crn = pt.crm / out.maxCrm;
 			pt.crnm = 1 - pt.crn;
-			if(pt.crm > out.maxCrm)
-				out.maxCrm = pt.crnm;
+			// Count the values equal to max; will flag those with >1.
 			if(pt.crm == out.maxCrm)
-				++maxCount;
-		}
-
-		if(maxCount > 1) {
-			// There is more than one equal maximum. Flag it.
-			config->maximaFlag[((size_t) out.c << 16) | out.r] = true;
+				++out.maxCount;
 		}
 
 		// We were going to do interpolation for adjacent maxima, but put it off.
@@ -333,19 +331,25 @@ void writeQueue(QConfig* config) {
 	GDALWriter writerss(outfile + "_ss" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 	GDALWriter writerch(outfile + "_ch" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 	GDALWriter writercr(outfile + "_cr" + ext, driver, cols, rows, bands, wavelengths, bandNames);
-	GDALWriter writercrn(outfile + "_crn" + ext, driver, cols, rows, bands, wavelengths, bandNames);
-	GDALWriter writercrm(outfile + "_crm" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 	GDALWriter writercrnm(outfile + "_crnm" + ext, driver, cols, rows, bands, wavelengths, bandNames);
-	GDALWriter writerhull(outfile + "_hull" + ext, driver, cols, rows, 5, {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crnm"});
-	GDALWriter writermax(outfile + "_maxima" + ext, driver, cols, rows, 1, {}, {"maximum"}, DataType::Byte);
+	GDALWriter writerhull(outfile + "_agg" + ext, driver, cols, rows, 7, {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count"});
+	GDALWriter writermax(outfile + "_maxcount" + ext, driver, cols, rows, 1, {}, {"equal_max_count"}, DataType::Byte);
+	GDALWriter writervalid(outfile + "_valid" + ext, driver, cols, rows, 1, {}, {"valid_hull"}, DataType::Byte);
+
+	writermax.fill(0);
+	writervalid.fill(0);
 
 	std::vector<double> ss;
 	std::vector<double> ch;
 	std::vector<double> cr;
-	std::vector<double> crn;
-	std::vector<double> crm;
 	std::vector<double> crnm;
 	std::vector<double> hull;
+
+	std::vector<int> maxima(cols * rows);
+	std::vector<int> valid(cols * rows);
+
+	std::fill(maxima.begin(), maxima.end(), 0);
+	std::fill(valid.begin(), valid.end(), 0);
 
 	output out;
 	while(true) {
@@ -363,40 +367,32 @@ void writeQueue(QConfig* config) {
 			ss.push_back(o.ss);
 			ch.push_back(o.ch);
 			cr.push_back(o.cr);
-			crn.push_back(o.crn);
-			crm.push_back(o.crm);
 			crnm.push_back(o.crnm);
 		}
 
-		hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm};
+		maxima[out.r * cols + out.c] = out.maxCount > 1 ? 0 : 1;
+		valid[out.r * cols + out.c] = out.area > 0 && out.rarea > 0 && out.larea > 0;
 
-		writerss.write(ss, out.c, out.r, 1, 1, 1);
-		writerch.write(ch, out.c, out.r, 1, 1, 1);
-		writercr.write(cr, out.c, out.r, 1, 1, 1);
-		writercrn.write(crn, out.c, out.r, 1, 1, 1);
-		writercrm.write(crm, out.c, out.r, 1, 1, 1);
-		writercrnm.write(crnm, out.c, out.r, 1, 1, 1);
-		writerhull.write(hull, out.c, out.r, 1, 1, 1);
+		hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm, out.maxWl, (double) out.maxCount};
+
+		writerss.write(ss, out.c, out.r, 1, 1, 1, 1);
+		writerch.write(ch, out.c, out.r, 1, 1, 1, 1);
+		writercr.write(cr, out.c, out.r, 1, 1, 1, 1);
+		writercrnm.write(crnm, out.c, out.r, 1, 1, 1, 1);
+		writerhull.write(hull, out.c, out.r, 1, 1, 1, 1);
 
 		ss.clear();
 		ch.clear();
 		cr.clear();
-		crn.clear();
-		crm.clear();
 		crnm.clear();
 
 		config->incv.notify_one();
 	}
 
-	writerhull.writeStats(outfile + "_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm"});
+	writermax.write(maxima, 0, 0, cols, rows);
+	writervalid.write(valid, 0, 0, cols, rows);
 
-	std::vector<int> maxima(cols * rows);
-	for(const auto& item : config->maximaFlag) {
-		int c = (item.first >> 16) & 0xffff;
-		int r = item.first & 0xffff;
-		maxima[r * cols + c] = item.second;
-	}
-	writermax.write(maxima, 0, 0, cols, rows, 1);
+	writerhull.writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count"});
 }
 
 void Processor::process(Reader* reader, const ProcessorConfig& config) {
