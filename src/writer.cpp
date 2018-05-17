@@ -88,31 +88,45 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	}
 }
 
-bool GDALWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize) {
+bool GDALWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY) {
 	if(col < 0 || col >= m_cols || col + cols > m_cols
 			|| row < 0 || row >= m_rows || row + rows > m_rows)
 		return false;
+	if(bufSizeX <= 0) bufSizeX = cols;
+	if(bufSizeY <= 0) bufSizeY = rows;
 	const double* data = buf.data();
 	for(int i = 1; i <= m_bands; ++i) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		if(band->RasterIO(GF_Write, col, row, cols, rows,
-				(void*) (data + (i - 1) * bufSize * bufSize),
-				bufSize, bufSize, GDT_Float64, 0, 0, 0))
+				(void*) (data + (i - 1) * bufSizeX * bufSizeY),
+				bufSizeX, bufSizeY, GDT_Float64, 0, 0, 0))
 			return false;
 	}
 	return true;
 }
 
-bool GDALWriter::write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSize) {
+void GDALWriter::fill(double v) {
+	for(int i = 1; i <= m_bands; ++i)
+		m_ds->GetRasterBand(i)->Fill(v);
+}
+
+
+void GDALWriter::fill(int v) {
+	fill((double) v);
+}
+
+bool GDALWriter::write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY) {
 	if(col < 0 || col >= m_cols || col + cols > m_cols
 			|| row < 0 || row >= m_rows || row + rows > m_rows)
 		return false;
+	if(bufSizeX <= 0) bufSizeX = cols;
+	if(bufSizeY <= 0) bufSizeY = rows;
 	const int* data = buf.data();
 	for(int i = 1; i <= m_bands; ++i) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		if(band->RasterIO(GF_Write, col, row, cols, rows,
-				(void*) (data + (i - 1) * bufSize * bufSize),
-				bufSize, bufSize, GDT_Int32, 0, 0, 0))
+				(void*) (data + (i - 1) * bufSizeX * bufSizeY),
+				bufSizeX, bufSizeY, GDT_Int32, 0, 0, 0))
 			return false;
 	}
 	return true;

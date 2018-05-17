@@ -22,8 +22,8 @@ enum DataType {
 
 class Writer {
 public:
-	virtual bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize) = 0;
-	virtual bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSize) = 0;
+	virtual bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0) = 0;
+	virtual bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0) = 0;
 	virtual bool writeStats(const std::string& filename, const std::vector<std::string>& names = {}) = 0;
 	virtual ~Writer() {}
 };
@@ -40,9 +40,11 @@ public:
 	GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
 			const std::vector<double>& wavelengths = {}, const std::vector<std::string>& bandNames = {},
 			DataType type = DataType::Float32, const std::string& interleave = "BIL", const std::string& unit = "nm");
-	bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSize);
-	bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSize);
+	bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0);
+	bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0);
 	bool writeStats(const std::string& filename, const std::vector<std::string>& names = {});
+	void fill(double v);
+	void fill(int v);
 	~GDALWriter();
 };
 
