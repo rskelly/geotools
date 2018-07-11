@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <map>
+#include <string>
 
 #define PI 3.1415926535
 
@@ -98,10 +99,10 @@ public:
 		// Find the bounds for the curve, and the step width.
 		min = wl - inv;
 		max = wl + inv;
-		double step = (max - min) / size;
+		double step = (max - min) / (size - 1);
 		// Compute the steps.
 		kernel.resize(size);
-		for(int i = 1; i < size - 1; ++i)
+		for(int i = 0; i < size; ++i)
 			kernel[i] = gaussian(sigma, min + step * i, wl);
 		// Normalize the kernel.
 		normalize();
@@ -129,15 +130,14 @@ public:
  */
 class BandPropsReader {
 public:
-	std::string filename;
 	std::map<int, BandProp> bandProps;
+	double minWl;
+	double maxWl;
 
-	BandPropsReader(const std::string& filename) :
-		filename(filename) {
-		load();
-	}
+	void load(const std::string& filename) {
+		minWl = std::numeric_limits<double>::max();
+		maxWl = std::numeric_limits<double>::lowest();
 
-	void load() {
 		std::ifstream input(filename, std::ios::in);
 		std::string buf, part;
 		// Try to skip the header. If it doesn't work quit.
@@ -146,6 +146,7 @@ public:
 		// Run over the rows.
 		int band;
 		double wl, fwhm;
+		size_t pos, count;
 		while(std::getline(input, buf)) {
 			std::stringstream ss(buf);
 			std::getline(ss, buf, ',');
@@ -153,8 +154,11 @@ public:
 			std::getline(ss, buf, ',');
 			wl = atof(buf.c_str());
 			std::getline(ss, buf);
-			fwhm = atof(buf.substr(0, buf.find(',')).c_str()); // May or may not be a comma at the end.
+			count = (pos = buf.find(',')) == std::string::npos ? buf.size() : buf.size() - pos;
+			fwhm = atof(buf.substr(0, count).c_str()); // May or may not be a comma at the end.
 			bandProps.emplace(std::piecewise_construct, std::forward_as_tuple(band), std::forward_as_tuple(band, wl, fwhm));
+			if(wl < minWl) minWl = wl;
+			if(wl > maxWl) maxWl = wl;
 		}
 	}
 
@@ -185,13 +189,91 @@ public:
 };
 
 class Spectrum {
+private:
+	std::ifstream m_input;
+	std::string m_buf;
+
 public:
-	std::vector<Band> bands;
+	std::vector<Band> bands;						///<! A list of the bands. This changes as the file is read through.
+	std::map<std::string, std::string> properties;	///<! Properties read from the header block.
+	std::string date;								///<! The date of the current row.
+	long time;										///<! The timestamp of the current row.
+
+	/**
+	 * Load the data file and read the header information.
+	 * After load is called (and returns true), the next method must be
+	 * called to populate the bands list with data.
+	 *
+	 * @param filename A data file.
+	 * @return True if the file is loaded and has information in it.
+	 */
+	bool load(const std::string& filename) {
+		bands.clear();
+		m_input.open(filename, std::ios::in);
+		std::string part;
+		// Try to skip the header. If it doesn't work quit.
+		if(!std::getline(m_input, m_buf))
+			return false;
+		// Run over the rows.
+		bool header = false; // The band wl header hasn't been read yet.
+		while(std::getline(m_input, m_buf)) {
+			//count = (pos = buf.find(',')) == std::string::npos ? buf.size() : buf.size() - pos;
+			//fwhm = atof(buf.substr(0, count).c_str()); // May or may not be a comma at the end.
+			if(!header && m_buf.find(':') < std::string::npos) {
+				// Process the colon-delimited headers for properties.
+				std::stringstream ss(m_buf);
+				std::getline(ss, part, ':');
+				std::getline(ss, m_buf);
+				properties[part] = m_buf;
+			} else if(m_buf.find(">>>") < std::string::npos) {
+				// Skip the divider.
+				continue;
+			} else if(!header) {
+				// Parse the wavelengths out of the header section. The first two columns (date, time) are empty.
+				std::stringstream ss(m_buf);
+				std::getline(ss, part, '\t');
+				std::getline(ss, part, '\t');
+				while(std::getline(ss, part, '\t'))
+					bands.emplace_back(atof(part.c_str()), 0);
+				header = true;
+			} else {
+				// We're at the start of data.
+				break;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Advance the reader to the next line of data. This becomes the Spectrum's current state:
+	 * the list of Bands contains data from the current row.
+	 *
+	 * @return True if a row has been read, false if there were none left.
+	 */
+	bool next() {
+		if(m_buf.empty())
+			return false;
+
+		std::stringstream ss(m_buf);
+		std::string part;
+		std::getline(ss, date, '\t');
+		std::getline(ss, part, '\t');
+		time = atoi(part.c_str());
+		size_t i = 0;
+		while(std::getline(ss, part, '\t'))
+			bands[i++].value = atof(part.c_str());
+
+		std::getline(m_input, m_buf);
+		return true;
+	}
+
+	void setup(Spectrum& spec) {
+		// Instantiate the bands on the new spectrum.
+		for(const Band& b : bands)
+			spec.bands.emplace_back(b.wl, 0);
+	}
 
 	void convolve(Kernel& kernel, Spectrum& spec) {
-		// Instantiate the bands on the new spectrum.
-		for(Band& b : bands)
-			spec.bands.emplace_back(b.wl, 0);
 		// Convolve the bands.
 		for(size_t i = 0; i < bands.size(); ++i) {
 			const Band& b = bands[i];
@@ -202,13 +284,57 @@ public:
 			}
 		}
 	}
+
+	void reset() {
+		for(Band& b : bands)
+			b.value = 0;
+	}
+
+	void writeHeader(std::ostream& out, double minWl, double maxWl) {
+		for(const Band& b : bands) {
+			if(b.wl >= minWl && b.wl <= maxWl)
+				out << b.wl << ",";
+		}
+		out << "\n";
+	}
+
+	void write(std::ostream& out, double minWl, double maxWl) {
+		for(const Band& b : bands) {
+			if(b.wl >= minWl && b.wl <= maxWl)
+				out << b.value << ",";
+		}
+		out << "\n";
+	}
+
 };
 
 int main(int argc, char** argv) {
 
 	Kernel kernel;
-	BandPropsReader rdr("../data/Headwall_NANO_Bands.csv");
-	rdr.configureKernel(kernel, 1, 40, 0.001);
+	BandPropsReader rdr;
+	rdr.load("../data/Headwall_NANO_Bands.csv");
+
+	Spectrum spec;
+	Spectrum output;
+	spec.load("../data/AbsoluteIrradiance_10-35-48-938.txt");
+	spec.setup(output);
+
+	bool header = false;
+	int i = 0;
+	while(spec.next()) {
+		output.reset();
+		for(int b : rdr.bands()) {
+			rdr.configureKernel(kernel, b, 40, 0.001);
+			spec.convolve(kernel, output);
+		}
+		if(!header) {
+			output.writeHeader(std::cout, rdr.minWl, rdr.maxWl);
+			header = true;
+		}
+		output.write(std::cout, rdr.minWl, rdr.maxWl);
+		if(++i > 100)
+			break;
+	}
 
 	/*
 	int size = 40;
