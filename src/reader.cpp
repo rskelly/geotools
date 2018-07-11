@@ -120,7 +120,7 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 			if(m)
 				m_bandNames.push_back(m);
 		}
-		if(bandMap.size() <= m_bands)
+		if((int) bandMap.size() <= m_bands)
 			std::runtime_error("The band map is incomplete -- wavelengths could not be read for all layers.");
 		setBandMap(bandMap);
 	}
