@@ -6,6 +6,7 @@ set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_EXTENSIONS OFF)
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 if(APPLE)
 	# This does not use GCC.
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++ -Wno-unknown-pragmas -Wall -D_GLIBCXX_PARALLEL")
@@ -20,9 +21,15 @@ set (CMAKE_INSTALL_RPATH "/usr/local/lib")
 set (CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set (CMAKE_CXX_COMPILER_LAUNCHER ccache)
 
+set (CMAKE_AUTOUIC ON)
+set (CMAKE_AUTOMOC ON)
+set (CMAKE_INCLUDE_CURRENT_DIR ON)
+set (CMAKE_AUTOMOC_OPTIONS "-Iinclude -Isrc")
+
 set (THREADS_PREFER_PTHREAD_FLAG ON)
 
 find_package (GDAL 2.2 REQUIRED)
+find_package (Qt5Widgets REQUIRED)
 find_library (GEOS_LIBRARY geos PATHS /opt/lib /usr/local/lib /usr/lib NO_CMAKE_SYSTEM_PATH)
 
 project (contrem)
@@ -37,8 +44,10 @@ link_directories(. /opt/lib /usr/local/lib /usr/lib)
 add_executable (contrem src/contrem.cpp src/reader.cpp src/writer.cpp src/processor.cpp src/stats.cpp)
 target_link_libraries (contrem gdal ${GEOS_LIBRARY})
 
-add_executable (convolve src/convolve.cpp)
-#target_link_libraries (contrem gdal ${GEOS_LIBRARY})
+add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve.cpp)
+target_include_directories(convolve PUBLIC convolve_autogen/include  
+	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS})
+target_link_libraries (convolve Qt5::Widgets)
 
 # Install ################################################################################################
 
