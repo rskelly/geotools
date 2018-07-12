@@ -45,14 +45,15 @@ double gaussian(double sigma, double x, double x0) {
  */
 class Kernel {
 public:
+	double wl;
 	double min;
 	double max;
 	std::vector<double> kernel;
 
-	Kernel(double min, double max) :
-		min(min), max(max) {}
+	Kernel(double wl, double min, double max) :
+		wl(wl), min(min), max(max) {}
 
-	Kernel() : Kernel(0, 0) {}
+	Kernel() : Kernel(0, 0, 0) {}
 
 	void resize(int size) {
 		kernel.resize(size);
@@ -97,6 +98,7 @@ public:
 		// Get the distance from wl for the threshold value.
 		double inv = invGaussian(sigma, threshold, wl);
 		// Find the bounds for the curve, and the step width.
+		this->wl = wl;
 		min = wl - inv;
 		max = wl + inv;
 		double step = (max - min) / (size - 1);
@@ -123,62 +125,6 @@ public:
 		band(band), wl(wl), fwhm(fwhm) {}
 };
 
-/**
- * Read the convolution configuration file. The columns are
- * band #, wavelength, full width at half maximum.
- * Names are ignored; the order is important.
- */
-class BandPropsReader {
-public:
-	std::map<int, BandProp> bandProps;
-	double minWl;
-	double maxWl;
-
-	void load(const std::string& filename) {
-		minWl = std::numeric_limits<double>::max();
-		maxWl = std::numeric_limits<double>::lowest();
-
-		std::ifstream input(filename, std::ios::in);
-		std::string buf, part;
-		// Try to skip the header. If it doesn't work quit.
-		if(!std::getline(input, buf))
-			return;
-		// Run over the rows.
-		int band;
-		double wl, fwhm;
-		size_t pos, count;
-		while(std::getline(input, buf)) {
-			std::stringstream ss(buf);
-			std::getline(ss, buf, ',');
-			band = atoi(buf.c_str());
-			std::getline(ss, buf, ',');
-			wl = atof(buf.c_str());
-			std::getline(ss, buf);
-			count = (pos = buf.find(',')) == std::string::npos ? buf.size() : buf.size() - pos;
-			fwhm = atof(buf.substr(0, count).c_str()); // May or may not be a comma at the end.
-			bandProps.emplace(std::piecewise_construct, std::forward_as_tuple(band), std::forward_as_tuple(band, wl, fwhm));
-			if(wl < minWl) minWl = wl;
-			if(wl > maxWl) maxWl = wl;
-		}
-	}
-
-	std::vector<int> bands() const {
-		std::vector<int> bands;
-		for(const auto& p : bandProps)
-			bands.push_back(p.first);
-		return bands;
-	}
-
-	void configureKernel(Kernel& kernel, int band, int size, double threshold) {
-		if(bandProps.find(band) == bandProps.end())
-			throw std::runtime_error("Band not found: " + std::to_string(band));
-		const BandProp& p = bandProps.at(band);
-		kernel.build(size, p.wl, p.fwhm, threshold);
-	}
-
-};
-
-
 class Band {
 public:
 	double wl;
@@ -188,6 +134,13 @@ public:
 	Band() : Band(0, 0) {}
 };
 
+/**
+ * The spectrum object has a list of bands. When loaded from a file,
+ * loads the bands and stores the header properties.
+ *
+ * When the next() method is called, reads the next available spectrum,
+ * updates the bands and the date and timestamp.
+ */
 class Spectrum {
 private:
 	std::ifstream m_input;
@@ -258,10 +211,10 @@ public:
 		std::string part;
 		std::getline(ss, date, '\t');
 		std::getline(ss, part, '\t');
-		time = atoi(part.c_str());
+		time = std::strtol(part.c_str(), nullptr, 10);
 		size_t i = 0;
 		while(std::getline(ss, part, '\t'))
-			bands[i++].value = atof(part.c_str());
+			bands[i++].value = std::strtod(part.c_str(), nullptr);
 
 		std::getline(m_input, m_buf);
 		return true;
@@ -273,16 +226,16 @@ public:
 			spec.bands.emplace_back(b.wl, 0);
 	}
 
-	void convolve(Kernel& kernel, Spectrum& spec) {
-		// Convolve the bands.
+	void convolve(Kernel& kernel, Band& band) {
+		// Find the index nearest the centre of the kernel.
+		size_t idx = 0;
 		for(size_t i = 0; i < bands.size(); ++i) {
-			const Band& b = bands[i];
-			if(b.wl >= kernel.min && b.wl <= kernel.max) {
-				Band& b0 = spec.bands[i];
-				for(double k : kernel.kernel)
-					b0.value += b.value * k;
-			}
+			if(kernel.min < bands[i].wl) break;
+			idx = i;
 		}
+		// Convolve the bands.
+		for(size_t i = 0; i < kernel.kernel.size(); ++i)
+			band.value += bands[i + idx].value * kernel[i];
 	}
 
 	void reset() {
@@ -291,21 +244,84 @@ public:
 	}
 
 	void writeHeader(std::ostream& out, double minWl, double maxWl) {
+		out << "date,timestamp";
 		for(const Band& b : bands) {
 			if(b.wl >= minWl && b.wl <= maxWl)
-				out << b.wl << ",";
+				out << "," << b.wl;
 		}
 		out << "\n";
 	}
 
 	void write(std::ostream& out, double minWl, double maxWl) {
+		out << date << "," << time;
 		for(const Band& b : bands) {
 			if(b.wl >= minWl && b.wl <= maxWl)
-				out << b.value << ",";
+				out << "," << b.value;
 		}
 		out << "\n";
 	}
 
+};
+
+/**
+ * Read the convolution configuration file. The columns are
+ * band #, wavelength, full width at half maximum.
+ * Names are ignored; the order is important.
+ */
+class BandPropsReader {
+public:
+	std::map<int, BandProp> bandProps;
+	double minWl;
+	double maxWl;
+
+	void load(const std::string& filename) {
+		minWl = std::numeric_limits<double>::max();
+		maxWl = std::numeric_limits<double>::lowest();
+
+		std::ifstream input(filename, std::ios::in);
+		std::string buf, part;
+		// Try to skip the header. If it doesn't work quit.
+		if(!std::getline(input, buf))
+			return;
+		// Run over the rows.
+		int band;
+		double wl, fwhm;
+		size_t pos, count;
+		while(std::getline(input, buf)) {
+			std::stringstream ss(buf);
+			std::getline(ss, buf, ',');
+			band = std::strtol(buf.c_str(), nullptr, 10);
+			std::getline(ss, buf, ',');
+			wl = std::strtod(buf.c_str(), nullptr);
+			std::getline(ss, buf);
+			count = (pos = buf.find(',')) == std::string::npos ? buf.size() : buf.size() - pos;
+			fwhm = std::strtod(buf.substr(0, count).c_str(), nullptr); // May or may not be a comma at the end.
+			bandProps.emplace(std::piecewise_construct, std::forward_as_tuple(band), std::forward_as_tuple(band, wl, fwhm));
+			if(wl < minWl) minWl = wl;
+			if(wl > maxWl) maxWl = wl;
+		}
+	}
+
+	std::vector<int> bands() const {
+		std::vector<int> bands;
+		for(const auto& p : bandProps)
+			bands.push_back(p.first);
+		return bands;
+	}
+
+	void configureKernel(Kernel& kernel, int band, int size, double threshold) {
+		if(bandProps.find(band) == bandProps.end())
+			throw std::runtime_error("Band not found: " + std::to_string(band));
+		const BandProp& p = bandProps.at(band);
+		kernel.build(size, p.wl, p.fwhm, threshold);
+	}
+
+	void configureSpectrum(Spectrum& spec) {
+		spec.bands.resize(bandProps.size());
+		size_t i = 0;
+		for(const auto& p : bandProps)
+			spec.bands[i++].wl = p.second.wl;
+	}
 };
 
 int main(int argc, char** argv) {
@@ -315,45 +331,26 @@ int main(int argc, char** argv) {
 	rdr.load("../data/Headwall_NANO_Bands.csv");
 
 	Spectrum spec;
-	Spectrum output;
 	spec.load("../data/AbsoluteIrradiance_10-35-48-938.txt");
-	spec.setup(output);
+
+	Spectrum output;
+	rdr.configureSpectrum(output);
 
 	bool header = false;
-	int i = 0;
 	while(spec.next()) {
 		output.reset();
+		output.date = spec.date;
+		output.time = spec.time;
 		for(int b : rdr.bands()) {
 			rdr.configureKernel(kernel, b, 40, 0.001);
-			spec.convolve(kernel, output);
+			spec.convolve(kernel, output.bands[b - 1]);
 		}
 		if(!header) {
 			output.writeHeader(std::cout, rdr.minWl, rdr.maxWl);
 			header = true;
 		}
 		output.write(std::cout, rdr.minWl, rdr.maxWl);
-		if(++i > 100)
-			break;
 	}
-
-	/*
-	int size = 40;
-	Kernel kernel;
-	kernel.build(size, 100, 5, 0.001);
-
-	Spectrum orig;
-	orig.bands.emplace_back(98, 0.1);
-	orig.bands.emplace_back(99, 0.2);
-	orig.bands.emplace_back(100, 0.5);
-	orig.bands.emplace_back(101, 0.3);
-
-	Spectrum conv;
-	orig.convolve(kernel, conv);
-
-	std::cerr << kernel.min << ", " << kernel.max << "\n";
-	for(Band& b : conv.bands)
-		std::cerr << b.wl << ", " << b.value << "\n";
-	*/
 
 	return 0;
 }
