@@ -44,7 +44,7 @@ link_directories(. /opt/lib /usr/local/lib /usr/lib)
 add_executable (contrem src/contrem.cpp src/reader.cpp src/writer.cpp src/processor.cpp src/stats.cpp)
 target_link_libraries (contrem gdal ${GEOS_LIBRARY})
 
-add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve.cpp)
+add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include  
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS})
 target_link_libraries (convolve Qt5::Widgets)

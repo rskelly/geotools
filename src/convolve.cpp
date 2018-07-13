@@ -12,7 +12,7 @@
 #include <QtWidgets/QMessageBox>
 
 #include "convolver.hpp"
-#include "ui/convolve.hpp"
+#include "ui/convolve_ui.hpp"
 
 
 int runWithGui(int argc, char **argv) {
@@ -58,7 +58,7 @@ public:
 };
 
 void usage() {
-	std::cerr << "Usage: convolve [<band definition file> <spectra file> <output file>]\n"
+	std::cerr << "Usage: convolve [<band definition file> <spectra file> <output file> [input scale]]\n"
 			<< "    Run without arguments to use the gui.\n";
 }
 
@@ -72,11 +72,14 @@ int main(int argc, char** argv) {
 			std::string bandDef = argv[1];
 			std::string spectra = argv[2];
 			std::string output = argv[3];
+			double inputScale = 1.0;
+			if(argc > 4)
+				inputScale = std::strtod(argv[4], nullptr);
 
 			Convolver conv;
 			DummyListener listener;
 			bool running = true;
-			conv.run(listener, bandDef, spectra, output, running);
+			conv.run(listener, bandDef, spectra, output, inputScale, running);
 		}
 	} else {
 		return runWithGui(argc, argv);

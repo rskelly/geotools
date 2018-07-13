@@ -95,7 +95,7 @@ BandProp::BandProp(int band, double wl, double fwhm) :
 
 
 Band::Band(double wl, double value) :
-			wl(wl), value(value) {
+			wl(wl), value(value), scaledValue(value) {
 }
 
 Band::Band() : Band(0, 0) {
@@ -204,13 +204,14 @@ void Spectrum::convolve(Kernel& kernel, Band& band) {
 	// Convolve the bands.
 	for(size_t i = idx0; i < idx1; ++i) {
 		double v = kernel(bands[i].wl);
-		band.value += bands[i].value * v;
+		band.value += bands[i].scaledValue * v;
 	}
 }
 
 void Spectrum::reset() {
 	for(Band& b : bands)
-		b.value = 0;
+		b.scaledValue = b.value = 0;
+
 }
 
 void Spectrum::writeHeader(std::ostream& out, double minWl, double maxWl) {
@@ -231,6 +232,10 @@ void Spectrum::write(std::ostream& out, double minWl, double maxWl) {
 	out << "\n";
 }
 
+void Spectrum::scale(double scale) {
+	for(Band& b : bands)
+		b.scaledValue = b.value * scale;
+}
 
 void BandPropsReader::load(const std::string& filename) {
 	// Set the initial limits. These will be refined.
@@ -291,7 +296,7 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 
 void Convolver::run(ConvolverListener& listener,
 		const std::string& bandDef, const std::string& spectra, const std::string& output,
-		bool& running) {
+		double inputScale, bool& running) {
 
 	// Notify a listener.
 	listener.started(this);
@@ -306,6 +311,7 @@ void Convolver::run(ConvolverListener& listener,
 	// Load the spectrum.
 	Spectrum spec;
 	spec.load(spectra);
+	spec.scale(inputScale);
 
 	// Configure the output (convolved) spectrum.
 	Spectrum out;

@@ -5,8 +5,8 @@
  *      Author: rob
  */
 
-#ifndef SRC_UI_CONVOLVE_HPP_
-#define SRC_UI_CONVOLVE_HPP_
+#ifndef SRC_UI_CONVOLVE_UI_HPP_
+#define SRC_UI_CONVOLVE_UI_HPP_
 
 #include <thread>
 
@@ -23,6 +23,7 @@ private:
 	std::string m_bandDefFile;
 	std::string m_spectraFile;
 	std::string m_outputFile;
+	double m_inputScale;
 	Convolver* m_convolver;
 	QDialog* m_form;
 	QApplication* m_app;
@@ -51,6 +52,7 @@ public slots:
 	void txtBandDefChanged(QString);
 	void txtSpectraChanged(QString);
 	void txtOutputChanged(QString);
+	void spnInputScaleChanged(double);
 	void btnBandDefClicked();
 	void btnSpectraClicked();
 	void btnOutputClicked();
@@ -67,4 +69,4 @@ public slots:
 
 };
 
-#endif /* SRC_UI_CONVOLVE_HPP_ */
+#endif /* SRC_UI_CONVOLVE_UI_HPP_ */

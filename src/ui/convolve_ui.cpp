@@ -12,9 +12,10 @@
 #include <QtGui/QDesktopServices>
 #include <QtWidgets/QMessageBox>
 
-#include "convolve.hpp"
+#include "convolve_ui.hpp"
 
 ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
+	m_inputScale(1),
 	m_convolver(convolver),
 	m_form(nullptr),
 	m_app(app),
@@ -28,6 +29,7 @@ void ConvolveForm::setupUi(QDialog* form) {
 	connect(txtBandDef, SIGNAL(textChanged(QString)), this, SLOT(txtBandDefChanged(QString)));
 	connect(txtSpectra, SIGNAL(textChanged(QString)), this, SLOT(txtSpectraChanged(QString)));
 	connect(txtOutput, SIGNAL(textChanged(QString)), this, SLOT(txtOutputChanged(QString)));
+	connect(spnInputScale, SIGNAL(valueChanged(double)), this, SLOT(spnInputScaleChanged(double)));
 	connect(btnBandDef, SIGNAL(clicked()), this, SLOT(btnBandDefClicked()));
 	connect(btnSpectra, SIGNAL(clicked()), this, SLOT(btnSpectraClicked()));
 	connect(btnOutput, SIGNAL(clicked()), this, SLOT(btnOutputClicked()));
@@ -44,6 +46,7 @@ void ConvolveForm::setupUi(QDialog* form) {
 	txtBandDef->setText(m_settings.value("lastBandDef", "").toString());
 	txtSpectra->setText(m_settings.value("lastSpectra", "").toString());
 	txtOutput->setText(m_settings.value("lastOutput", "").toString());
+	spnInputScale->setValue(m_settings.value("lastInputScale", 1.0).toDouble());
 }
 
 void ConvolveForm::checkRun() {
@@ -56,17 +59,27 @@ void ConvolveForm::checkRun() {
 
 void ConvolveForm::txtBandDefChanged(QString filename) {
 	m_bandDefFile = filename.toStdString();
+	m_settings.setValue("lastBandDef", filename);
 	checkRun();
 }
 
 void ConvolveForm::txtSpectraChanged(QString filename) {
 	m_spectraFile = filename.toStdString();
+	m_settings.setValue("lastSpectra", filename);
 	checkRun();
 }
 
 void ConvolveForm::txtOutputChanged(QString filename) {
 	m_outputFile = filename.toStdString();
+	m_settings.setValue("lastOutput", filename);
 	checkRun();
+}
+
+void ConvolveForm::spnInputScaleChanged(double value) {
+	m_inputScale = value;
+	m_settings.setValue("lastInputScale", value);
+	checkRun();
+
 }
 
 void ConvolveForm::btnBandDefClicked() {
@@ -74,7 +87,6 @@ void ConvolveForm::btnBandDefClicked() {
 	QString filename = QFileDialog::getOpenFileName(this, "Band Definition File", lastDir);
 	QFileInfo dir(filename);
 	m_settings.setValue("lastDir", dir.dir().absolutePath());
-	m_settings.setValue("lastBandDef", filename);
 	txtBandDef->setText(filename);
 }
 
@@ -83,7 +95,6 @@ void ConvolveForm::btnSpectraClicked() {
 	QString filename = QFileDialog::getOpenFileName(this, "Spectra File", lastDir);
 	QFileInfo dir(filename);
 	m_settings.setValue("lastDir", dir.dir().absolutePath());
-	m_settings.setValue("lastSpectra", filename);
 	txtSpectra->setText(filename);
 }
 
@@ -92,12 +103,13 @@ void ConvolveForm::btnOutputClicked() {
 	QString filename = QFileDialog::getSaveFileName(this, "Output File", lastDir);
 	QFileInfo dir(filename);
 	m_settings.setValue("lastDir", dir.dir().absolutePath());
-	m_settings.setValue("lastOutput", filename);
 	txtOutput->setText(filename);
 }
 
-void _run(ConvolveForm* form, Convolver* conv, const std::string* bandDef, const std::string* spectra, const std::string* output, bool* running) {
-	conv->run(*form, *bandDef, *spectra, *output, *running);
+void _run(ConvolveForm* form, Convolver* conv,
+		const std::string* bandDef, const std::string* spectra, const std::string* output,
+		double inputScale, bool* running) {
+	conv->run(*form, *bandDef, *spectra, *output, inputScale, *running);
 }
 
 void ConvolveForm::runState() {
@@ -109,6 +121,7 @@ void ConvolveForm::runState() {
 	btnSpectra->setEnabled(false);
 	txtOutput->setEnabled(false);
 	btnOutput->setEnabled(false);
+	spnInputScale->setEnabled(false);
 }
 
 void ConvolveForm::stopState() {
@@ -120,13 +133,14 @@ void ConvolveForm::stopState() {
 	btnSpectra->setEnabled(true);
 	txtOutput->setEnabled(true);
 	btnOutput->setEnabled(true);
+	spnInputScale->setEnabled(true);
 }
 
 void ConvolveForm::run() {
 	runState();
 	if(!m_running) {
 		m_running = true;
-		m_thread = std::thread(_run, this, m_convolver, &m_bandDefFile, &m_spectraFile, &m_outputFile, &m_running);
+		m_thread = std::thread(_run, this, m_convolver, &m_bandDefFile, &m_spectraFile, &m_outputFile, m_inputScale, &m_running);
 	}
 	if(!m_thread.joinable())
 		stopState();
@@ -174,5 +188,8 @@ void ConvolveForm::convStopped(Convolver*) {
 }
 
 void ConvolveForm::convFinished(Convolver*) {
+	progressBar->setValue(100);
 	QMessageBox::information(this, "Finished", "Processing is finished.");
+	stopState();
+	checkRun();
 }

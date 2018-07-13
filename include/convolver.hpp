@@ -125,8 +125,9 @@ public:
  */
 class Band {
 public:
-	double wl;		///!< The wavelength.
-	double value;	///!< The value or intensity.
+	double wl;			///!< The wavelength.
+	double value;		///!< The value or intensity.
+	double scaledValue; ///!< The scaled value of the intensity. This is used for calculations. Is identical to value by default.
 
 	/**
 	 * Create a band.
@@ -190,6 +191,13 @@ public:
 	 * @param spec A Spectrume.
 	 */
 	void setup(Spectrum& spec);
+
+	/**
+	 * Apply this scaling factor to every band's intensity value.
+	 *
+	 * @param scale A scale factor.
+	 */
+	void scale(double scale);
 
 	/**
 	 * Convolve using the given Kernel, writing the output to the given
@@ -336,11 +344,12 @@ public:
 	 * @param bandDef The band definition file.
 	 * @param spectra The spectral data file.
 	 * @param output The output file.
+	 * @param inputScale Scale every input spectral value by this much.
 	 * @param running A reference to a boolean that is true so long as the processor should keep running.
 	 */
 	void run(ConvolverListener& listener,
 			const std::string& bandDef, const std::string& spectra, const std::string& output,
-			bool& running);
+			double inputScale, bool& running);
 
 	/**
 	 * Return the progress as a double between 0 and 1.
