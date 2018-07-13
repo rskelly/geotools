@@ -12,12 +12,16 @@
 
 #include "convolve.hpp"
 
-ConvolveForm::ConvolveForm(Convolver* convolver) :
-	m_convolver(convolver) {
+ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
+	m_convolver(convolver),
+	m_form(nullptr),
+	m_app(app) {
 }
 
 void ConvolveForm::setupUi(QDialog* form) {
 	Ui::ConvolveForm::setupUi(form);
+	m_form = form;
+	progressBar->setValue(0);
 	connect(txtBandDef, SIGNAL(textChanged(QString)), this, SLOT(txtBandDefChanged(QString)));
 	connect(txtSpectra, SIGNAL(textChanged(QString)), this, SLOT(txtSpectraChanged(QString)));
 	connect(txtOutput, SIGNAL(textChanged(QString)), this, SLOT(txtOutputChanged(QString)));
@@ -27,6 +31,7 @@ void ConvolveForm::setupUi(QDialog* form) {
 	connect(btnRun, SIGNAL(clicked()), this, SLOT(btnRunClicked()));
 	connect(btnCancel, SIGNAL(clicked()), this, SLOT(btnCancelClicked()));
 	connect(btnHelp, SIGNAL(clicked()), this, SLOT(btnHelpClicked()));
+	connect(btnClose, SIGNAL(clicked()), this, SLOT(btnCloseClicked()));
 	txtBandDef->setText(m_settings.value("lastBandDef", "").toString());
 	txtSpectra->setText(m_settings.value("lastSpectra", "").toString());
 	txtOutput->setText(m_settings.value("lastOutput", "").toString());
@@ -95,7 +100,8 @@ void ConvolveForm::btnHelpClicked() {
 }
 
 void ConvolveForm::btnCloseClicked() {
-
+	m_form->close();
+	m_app->quit();
 }
 
 void ConvolveForm::started(Convolver*) {

@@ -22,9 +22,11 @@ private:
 	std::string m_spectraFile;
 	std::string m_outputFile;
 	Convolver* m_convolver;
+	QDialog* m_form;
+	QApplication* m_app;
 
 public:
-	ConvolveForm(Convolver* convolver);
+	ConvolveForm(Convolver* convolver, QApplication* app);
 	void setupUi(QDialog* form);
 	void checkRun();
 
