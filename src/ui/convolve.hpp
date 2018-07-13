@@ -8,6 +8,8 @@
 #ifndef SRC_UI_CONVOLVE_HPP_
 #define SRC_UI_CONVOLVE_HPP_
 
+#include <thread>
+
 #include <QtWidgets/QDialog>
 #include <QtCore/QSettings>
 
@@ -25,14 +27,25 @@ private:
 	QDialog* m_form;
 	QApplication* m_app;
 
+	std::thread m_thread;
+	bool m_running;
+
 public:
 	ConvolveForm(Convolver* convolver, QApplication* app);
 	void setupUi(QDialog* form);
 	void checkRun();
 
+	void run();
+	void cancel();
+
+	void runState();
+	void stopState();
+
+signals:
 	void started(Convolver*);
 	void update(Convolver*);
 	void stopped(Convolver*);
+	void finished(Convolver*);
 
 public slots:
 	void txtBandDefChanged(QString);
@@ -45,6 +58,12 @@ public slots:
 	void btnCancelClicked();
 	void btnHelpClicked();
 	void btnCloseClicked();
+
+	void convStarted(Convolver*);
+	void convStopped(Convolver*);
+	void convUpdate(Convolver*);
+	void convFinished(Convolver*);
+
 
 };
 

@@ -9,13 +9,16 @@
 #include <QtCore/QString>
 #include <QtWidgets/QFileDialog>
 #include <QtCore/QDir>
+#include <QtGui/QDesktopServices>
+#include <QtWidgets/QMessageBox>
 
 #include "convolve.hpp"
 
 ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
 	m_convolver(convolver),
 	m_form(nullptr),
-	m_app(app) {
+	m_app(app),
+	m_running(false) {
 }
 
 void ConvolveForm::setupUi(QDialog* form) {
@@ -32,6 +35,12 @@ void ConvolveForm::setupUi(QDialog* form) {
 	connect(btnCancel, SIGNAL(clicked()), this, SLOT(btnCancelClicked()));
 	connect(btnHelp, SIGNAL(clicked()), this, SLOT(btnHelpClicked()));
 	connect(btnClose, SIGNAL(clicked()), this, SLOT(btnCloseClicked()));
+
+	connect(this, SIGNAL(started(Convolver*)), this, SLOT(convStarted(Convolver*)));
+	connect(this, SIGNAL(stopped(Convolver*)), this, SLOT(convStopped(Convolver*)));
+	connect(this, SIGNAL(update(Convolver*)), this, SLOT(convUpdate(Convolver*)));
+	connect(this, SIGNAL(finished(Convolver*)), this, SLOT(convFinished(Convolver*)));
+
 	txtBandDef->setText(m_settings.value("lastBandDef", "").toString());
 	txtSpectra->setText(m_settings.value("lastSpectra", "").toString());
 	txtOutput->setText(m_settings.value("lastOutput", "").toString());
@@ -87,35 +96,83 @@ void ConvolveForm::btnOutputClicked() {
 	txtOutput->setText(filename);
 }
 
+void _run(ConvolveForm* form, Convolver* conv, const std::string* bandDef, const std::string* spectra, const std::string* output, bool* running) {
+	conv->run(*form, *bandDef, *spectra, *output, *running);
+}
+
+void ConvolveForm::runState() {
+	btnRun->setEnabled(false);
+	btnCancel->setEnabled(true);
+	txtBandDef->setEnabled(false);
+	btnBandDef->setEnabled(false);
+	txtSpectra->setEnabled(false);
+	btnSpectra->setEnabled(false);
+	txtOutput->setEnabled(false);
+	btnOutput->setEnabled(false);
+}
+
+void ConvolveForm::stopState() {
+	btnRun->setEnabled(true);
+	btnCancel->setEnabled(false);
+	txtBandDef->setEnabled(true);
+	btnBandDef->setEnabled(true);
+	txtSpectra->setEnabled(true);
+	btnSpectra->setEnabled(true);
+	txtOutput->setEnabled(true);
+	btnOutput->setEnabled(true);
+}
+
+void ConvolveForm::run() {
+	runState();
+	if(!m_running) {
+		m_running = true;
+		m_thread = std::thread(_run, this, m_convolver, &m_bandDefFile, &m_spectraFile, &m_outputFile, &m_running);
+	}
+	if(!m_thread.joinable())
+		stopState();
+}
+
+void ConvolveForm::cancel() {
+	if(m_running) {
+		m_running = false;
+		if(m_thread.joinable())
+			m_thread.join();
+	}
+	stopState();
+}
+
 void ConvolveForm::btnRunClicked() {
-	m_convolver->run(this, m_bandDefFile, m_spectraFile, m_outputFile);
+	run();
 }
 
 void ConvolveForm::btnCancelClicked() {
-	m_convolver->cancel();
+	cancel();
 }
 
 void ConvolveForm::btnHelpClicked() {
-
+	QDesktopServices::openUrl(QUrl("https://github.com/rskelly/contrem/wiki", QUrl::TolerantMode));
 }
 
 void ConvolveForm::btnCloseClicked() {
+	cancel();
 	m_form->close();
 	m_app->quit();
 }
 
-void ConvolveForm::started(Convolver*) {
+void ConvolveForm::convStarted(Convolver*) {
 	progressBar->setValue(0);
-	btnRun->setEnabled(false);
-	btnCancel->setEnabled(true);
 }
 
-void ConvolveForm::update(Convolver* conv) {
+void ConvolveForm::convUpdate(Convolver* conv) {
 	progressBar->setValue(conv->progress() * 100);
 }
 
-void ConvolveForm::stopped(Convolver*) {
+void ConvolveForm::convStopped(Convolver*) {
 	progressBar->setValue(0);
-	btnCancel->setEnabled(false);
+	stopState();
 	checkRun();
+}
+
+void ConvolveForm::convFinished(Convolver*) {
+	QMessageBox::information(this, "Finished", "Processing is finished.");
 }

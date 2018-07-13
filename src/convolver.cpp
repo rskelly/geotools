@@ -343,8 +343,11 @@ public:
 	}
 };
 
-void Convolver::run(ConvolverListener* listener, const std::string& bandDef, const std::string& spectra, const std::string& output) {
-	listener->started(this);
+void Convolver::run(ConvolverListener& listener,
+		const std::string& bandDef, const std::string& spectra, const std::string& output,
+		bool& running) {
+
+	listener.started(this);
 
 	Kernel kernel;
 	BandPropsReader rdr;
@@ -359,13 +362,14 @@ void Convolver::run(ConvolverListener* listener, const std::string& bandDef, con
 	std::ofstream outstr(output, std::ios::out);
 	size_t complete = 0, count = spec.count();
 	bool header = false;
-	while(spec.next()) {
+	while(running && spec.next()) {
 		out.reset();
 		out.date = spec.date;
 		out.time = spec.time;
 		for(int b : rdr.bands()) {
 			rdr.configureKernel(kernel, b, 40, 0.001);
 			spec.convolve(kernel, out.bands[b - 1]);
+			if(!running) break;
 		}
 		if(!header) {
 			out.writeHeader(outstr, rdr.minWl, rdr.maxWl);
@@ -373,9 +377,10 @@ void Convolver::run(ConvolverListener* listener, const std::string& bandDef, con
 		}
 		out.write(outstr, rdr.minWl, rdr.maxWl);
 		m_progress = (double) complete++ / count;
-		listener->update(this);
+		listener.update(this);
+		if(!running) break;
 	}
-	listener->stopped(this);
+	listener.finished(this);
 }
 
 void Convolver::cancel() {

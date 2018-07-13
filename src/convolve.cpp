@@ -50,6 +50,9 @@ public:
 		std::cout << "Progress: " << (int) (conv->progress() * 100) << "%\n";
 	}
 	void stopped(Convolver* conv) {
+		std::cout << "Stopped.\n";
+	}
+	void finished(Convolver* conv) {
 		std::cout << "Finished.\n";
 	}
 };
@@ -72,7 +75,8 @@ int main(int argc, char** argv) {
 
 			Convolver conv;
 			DummyListener listener;
-			conv.run(&listener, bandDef, spectra, output);
+			bool running = true;
+			conv.run(listener, bandDef, spectra, output, running);
 		}
 	} else {
 		return runWithGui(argc, argv);
