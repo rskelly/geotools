@@ -27,7 +27,7 @@ constexpr double PI = 3.1415926535;
  * @param x0 The mean x.
  */
 double invGaussian(double sigma, double y, double x0) {
-	return sigma * std::sqrt(-2.0 * std::log(y * 2.0 * PI)) + x0;
+	return sigma * std::sqrt(-2.0 * sigma * std::log(y * 2.0 * PI)) + x0;
 }
 
 /**
@@ -36,10 +36,10 @@ double invGaussian(double sigma, double y, double x0) {
  *
  * @param sigma The standard deviation of the function.
  * @param x The current x.
- * @param x0 The mean x.
+ * @param x0 The mean (expected) x.
  */
 double gaussian(double sigma, double x, double x0) {
-	return  1.0 / std::sqrt(2.0 * PI) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
+	return  1.0 / (sigma * std::sqrt(2.0 * PI)) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
 }
 
 
@@ -69,8 +69,11 @@ double Kernel::fwhm() const {
 }
 
 void Kernel::init() {
-	m_sigma = ((0.5 * m_fwhm) / (2.0 * std::sqrt(2.0 * std::log(2.0))));
+	// Derive the std dev from the FWHM.
+	m_sigma = m_fwhm / (2.0 * std::sqrt(2.0 * std::log(2.0)));
+	// Get the distance of the threshold on x from threshold y.
 	double w = invGaussian(m_sigma, m_threshold, m_wl);
+	// The half-width of the curve at the threshold.
 	m_halfWidth = std::abs(m_wl - w);
 }
 
@@ -95,12 +98,39 @@ BandProp::BandProp(int band, double wl, double fwhm) :
 
 
 Band::Band(double wl, double value) :
-			wl(wl), value(value), scaledValue(value) {
+		m_wl(wl), m_value(value), m_scale(1) {
 }
 
 Band::Band() : Band(0, 0) {
 }
 
+void Band::setValue(double value) {
+	m_value = value;
+}
+
+double Band::value() const {
+	return m_value;
+}
+
+double Band::scaledValue() const {
+	return m_value * m_scale;
+}
+
+void Band::setScale(double scale) {
+	m_scale = scale;
+}
+
+double Band::scale() const {
+	return m_scale;
+}
+
+double Band::wl() const {
+	return m_wl;
+}
+
+void Band::setWl(double wl) {
+	m_wl = wl;
+}
 
 
 bool Spectrum::load(const std::string& filename) {
@@ -171,7 +201,7 @@ bool Spectrum::next() {
 	time = std::strtol(part.c_str(), nullptr, 10);
 	size_t i = 0;
 	while(std::getline(ss, part, '\t'))
-		bands[i++].value = std::strtod(part.c_str(), nullptr);
+		bands[i++].setValue(std::strtod(part.c_str(), nullptr));
 	// Read the next buffer. If it fails, we'll find out on the next call to next.
 	std::getline(m_input, m_buf);
 	return true;
@@ -180,45 +210,49 @@ bool Spectrum::next() {
 void Spectrum::setup(Spectrum& spec) {
 	// Instantiate the bands on the new spectrum.
 	for(const Band& b : bands)
-		spec.bands.emplace_back(b.wl, 0);
+		spec.bands.emplace_back(b.wl(), 0);
 }
 
 void Spectrum::convolve(Kernel& kernel, Band& band) {
-	double min = band.wl - kernel.halfWidth();
-	double max = band.wl + kernel.halfWidth();
+	double min = band.wl() - kernel.halfWidth();
+	double max = band.wl() + kernel.halfWidth();
 	// Find the index nearest the centre of the kernel.
 	size_t idx0 = 0;
 	size_t idx1 = bands.size();
 	for(size_t i = 0; i < bands.size(); ++i) {
-		if(min > bands[i].wl)
+		if(min > bands[i].wl()) {
 			idx0 = i;
-		else break;
+		} else {
+			break;
+		}
 	}
 	for(size_t i = idx0; i < bands.size(); ++i) {
-		if(max < bands[i].wl) {
+		if(max > bands[i].wl()) {
+			idx1 = i;
+		} else {
 			idx1 = i;
 			break;
 		}
 	}
 
 	// Convolve the bands.
-	for(size_t i = idx0; i < idx1; ++i) {
-		double v = kernel(bands[i].wl);
-		band.value += bands[i].scaledValue * v;
+	for(size_t i = idx0; i <= idx1; ++i) {
+		double v = kernel(bands[i].wl());
+		band.setValue(band.value() + bands[i].scaledValue() * v);
 	}
 }
 
 void Spectrum::reset() {
 	for(Band& b : bands)
-		b.scaledValue = b.value = 0;
+		b.setValue(0);
 
 }
 
 void Spectrum::writeHeader(std::ostream& out, double minWl, double maxWl) {
 	out << "date,timestamp";
 	for(const Band& b : bands) {
-		if(b.wl >= minWl && b.wl <= maxWl)
-			out << "," << b.wl;
+		if(b.wl() >= minWl && b.wl() <= maxWl)
+			out << "," << b.wl();
 	}
 	out << "\n";
 }
@@ -226,15 +260,15 @@ void Spectrum::writeHeader(std::ostream& out, double minWl, double maxWl) {
 void Spectrum::write(std::ostream& out, double minWl, double maxWl) {
 	out << date << "," << time;
 	for(const Band& b : bands) {
-		if(b.wl >= minWl && b.wl <= maxWl)
-			out << "," << b.value;
+		if(b.wl() >= minWl && b.wl() <= maxWl)
+			out << "," << b.value();
 	}
 	out << "\n";
 }
 
 void Spectrum::scale(double scale) {
 	for(Band& b : bands)
-		b.scaledValue = b.value * scale;
+		b.setScale(scale);
 }
 
 void BandPropsReader::load(const std::string& filename) {
@@ -289,7 +323,7 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 	// Set all the wavelengths on the bands.
 	size_t i = 0;
 	for(const auto& p : bandProps)
-		spec.bands[i++].wl = p.second.wl;
+		spec.bands[i++].setWl(p.second.wl);
 }
 
 

@@ -124,10 +124,11 @@ public:
  * Represents a single band in the input/output spectra.
  */
 class Band {
+private:
+	double m_wl;			///!< The wavelength.
+	double m_value;			///!< The value or intensity.
+	double m_scale;		 	///!< The scaled value of the intensity. This is used for calculations. Is identical to value by default.
 public:
-	double wl;			///!< The wavelength.
-	double value;		///!< The value or intensity.
-	double scaledValue; ///!< The scaled value of the intensity. This is used for calculations. Is identical to value by default.
 
 	/**
 	 * Create a band.
@@ -138,6 +139,21 @@ public:
 	Band(double wl, double value);
 
 	Band();
+
+	void setValue(double value);
+
+	double value() const;
+
+	double scaledValue() const;
+
+	void setScale(double scale);
+
+	double scale() const;
+
+	double wl() const;
+
+	void setWl(double wl);
+
 };
 
 
