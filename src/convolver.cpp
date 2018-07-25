@@ -18,30 +18,23 @@
 
 constexpr double PI = 3.1415926535;
 
-/**
- * Compute the inverse of the Gaussian: retrieve the x that would give
- * the given y. X is returned as an absolute distance from x0.
- *
- * @param sigma The standard deviation of the function.
- * @param y The value of y for which to find x.
- * @param x0 The mean x.
- */
 double invGaussian(double sigma, double y, double x0) {
-	return sigma * std::sqrt(-2.0 * sigma * std::log(y * 2.0 * PI)) + x0;
+	return sigma * std::sqrt(-2.0 * std::log(y * sigma * std::sqrt(2.0 * PI))) + x0;
 }
 
-/**
- * Compute the value of the Gaussian function for a given mean (x0) and
- * x, given sigma and magnitude 1.
- *
- * @param sigma The standard deviation of the function.
- * @param x The current x.
- * @param x0 The mean (expected) x.
- */
 double gaussian(double sigma, double x, double x0) {
 	return  1.0 / (sigma * std::sqrt(2.0 * PI)) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
 }
 
+/*
+double invGaussian(double sigma, double y, double x0) {
+	return sigma * std::sqrt(-2.0 * std::log(y)) + x0;
+}
+
+double gaussian(double sigma, double x, double x0) {
+	return  std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
+}
+*/
 
 Kernel::Kernel(double wl, double fwhm, double threshold) :
 	m_wl(wl),
@@ -98,7 +91,10 @@ BandProp::BandProp(int band, double wl, double fwhm) :
 
 
 Band::Band(double wl, double value) :
-		m_wl(wl), m_value(value), m_scale(1) {
+		m_wl(wl),
+		m_value(value),
+		m_scale(1),
+		m_count(0) {
 }
 
 Band::Band() : Band(0, 0) {
@@ -106,10 +102,15 @@ Band::Band() : Band(0, 0) {
 
 void Band::setValue(double value) {
 	m_value = value;
+	++m_count;
 }
 
 double Band::value() const {
 	return m_value;
+}
+
+double Band::normalizedValue() const {
+	return m_count > 0 ? m_value / m_count : std::numeric_limits<double>::quiet_NaN();
 }
 
 double Band::scaledValue() const {
@@ -131,6 +132,15 @@ double Band::wl() const {
 void Band::setWl(double wl) {
 	m_wl = wl;
 }
+
+void Band::reset() {
+	m_count = 0;
+}
+
+int Band::count() const {
+	return m_count;
+}
+
 
 
 bool Spectrum::load(const std::string& filename) {
@@ -214,9 +224,28 @@ void Spectrum::setup(Spectrum& spec) {
 }
 
 void Spectrum::convolve(Kernel& kernel, Band& band) {
+	/*
+	size_t idx = 0;
+	double d = std::numeric_limits<double>::max();
+	for(size_t i = 0; i < bands.size(); ++i) {
+		double d0 = std::abs(bands[i].wl() - band.wl());
+		if(d0 < d) {
+			idx = i;
+			d = d0;
+		} else {
+			break;
+		}
+	}
+	for(size_t i = 0; i < kernel.size(); ++i) {
+		double k = kernel[i];
+		double v = bands[idx - kernel.size() + i].scaledValue();
+		band.setValue(band.value() +  k * v);
+	}
+	*/
+	// First, figure out the start and end indices of the input, given
+	// the width of the kernel function out to the threshold.
 	double min = band.wl() - kernel.halfWidth();
 	double max = band.wl() + kernel.halfWidth();
-	// Find the index nearest the centre of the kernel.
 	size_t idx0 = 0;
 	size_t idx1 = bands.size();
 	for(size_t i = 0; i < bands.size(); ++i) {
@@ -234,18 +263,28 @@ void Spectrum::convolve(Kernel& kernel, Band& band) {
 			break;
 		}
 	}
-
-	// Convolve the bands.
+	// Build a temporary "kernel" to store the computed values from the
+	// kernel function.
+	std::vector<double> k(idx1 - idx0 + 1);
+	double sum = 0;
+	for(size_t i = idx0; i <= idx1; ++i)
+		sum += k[i - idx0] = kernel(bands[i].wl());
+	// Normalize the kernel values.
+	for(size_t i = idx0; i <= idx1; ++i)
+		k[i - idx0] /= sum;
+	// Convolve the bands using the temporary kernel.
 	for(size_t i = idx0; i <= idx1; ++i) {
-		double v = kernel(bands[i].wl());
-		band.setValue(band.value() + bands[i].scaledValue() * v);
+		double v = k[i - idx0];
+		double w = bands[i].scaledValue();
+		band.setValue(band.value() + v * w);
 	}
 }
 
 void Spectrum::reset() {
-	for(Band& b : bands)
+	for(Band& b : bands) {
 		b.setValue(0);
-
+		b.reset();
+	}
 }
 
 void Spectrum::writeHeader(std::ostream& out, double minWl, double maxWl) {
@@ -292,19 +331,19 @@ void BandPropsReader::load(const std::string& filename) {
 		std::getline(ss, buf, ',');
 		wl = std::strtod(buf.c_str(), nullptr);
 		std::getline(ss, buf);
-		count = (pos = buf.find(',')) == std::string::npos ? buf.size() : buf.size() - pos;
+		count = (pos = buf.find(',')) == std::string::npos ? buf.size() : pos;
 		fwhm = std::strtod(buf.substr(0, count).c_str(), nullptr); // May or may not be a comma at the end.
 		bandProps.emplace(std::piecewise_construct, std::forward_as_tuple(band), std::forward_as_tuple(band, wl, fwhm));
 		if(wl < minWl) minWl = wl;
 		if(wl > maxWl) maxWl = wl;
 	}
+	m_bands.clear();
+	for(const auto& it : bandProps)
+		m_bands.push_back(it.first);
 }
 
-std::vector<int> BandPropsReader::bands() const {
-	std::vector<int> bands;
-	for(const auto& p : bandProps)
-		bands.push_back(p.first);
-	return bands;
+const std::vector<int>& BandPropsReader::bands() const {
+	return m_bands;
 }
 
 void BandPropsReader::configureKernel(Kernel& kernel, int band) {
@@ -330,13 +369,13 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 
 void Convolver::run(ConvolverListener& listener,
 		const std::string& bandDef, const std::string& spectra, const std::string& output,
-		double inputScale, bool& running) {
+		double inputScale, double tolerance, bool& running) {
 
 	// Notify a listener.
 	listener.started(this);
 
-	// Configure the kernel; only the threshold value available at this time.
-	Kernel kernel(0, 0, 0.0001);
+	// Configure the kernel.
+	Kernel kernel(0, 0, tolerance);
 
 	// Load the band properties.
 	BandPropsReader rdr;
@@ -357,15 +396,16 @@ void Convolver::run(ConvolverListener& listener,
 	// Run the convolution record-by-record.
 	size_t complete = 0, count = spec.count(); // Status counters.
 	bool header = false;
+	const std::vector<int>& bands = rdr.bands();
 	while(running && spec.next()) {
 		out.reset();
 		out.date = spec.date;
 		out.time = spec.time;
-		for(int b : rdr.bands()) {
+		for(size_t i = 0; i < bands.size(); ++i) {
 			// For each band definition, configure the kernel.
-			rdr.configureKernel(kernel, b);
+			rdr.configureKernel(kernel, bands[i]);
 			// Convolve the spectrum onto the given band.
-			spec.convolve(kernel, out.bands[b - 1]);
+			spec.convolve(kernel, out.bands[i]);
 			if(!running) break;
 		}
 		if(!header) {

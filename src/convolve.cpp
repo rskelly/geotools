@@ -58,9 +58,11 @@ public:
 };
 
 void usage() {
-	std::cerr << "Usage: convolve [<band definition file> <spectra file> <output file> [input scale]]\n"
+	std::cerr << "Usage: convolve [<band definition file> <spectra file> <output file> [input scale] [threshold]]\n"
 			<< "    Run without arguments to use the gui.\n";
 }
+
+#include "convolver.hpp"
 
 int main(int argc, char** argv) {
 
@@ -73,13 +75,16 @@ int main(int argc, char** argv) {
 			std::string spectra = argv[2];
 			std::string output = argv[3];
 			double inputScale = 1.0;
+			double threshold = 0.0001;
 			if(argc > 4)
 				inputScale = std::strtod(argv[4], nullptr);
+			if(argc > 5)
+				threshold = std::strtod(argv[5], nullptr);
 
 			Convolver conv;
 			DummyListener listener;
 			bool running = true;
-			conv.run(listener, bandDef, spectra, output, inputScale, running);
+			conv.run(listener, bandDef, spectra, output, inputScale, threshold, running);
 		}
 	} else {
 		return runWithGui(argc, argv);

@@ -12,6 +12,27 @@
 #include <fstream>
 
 /**
+ * Compute the inverse of the Gaussian: retrieve the x that would give
+ * the given y. X is returned as an absolute distance from x0.
+ *
+ * @param sigma The standard deviation of the function.
+ * @param y The value of y for which to find x.
+ * @param x0 The mean x.
+ */
+inline double invGaussian(double sigma, double y, double x0);
+
+/**
+ * Compute the value of the Gaussian function for a given mean (x0) and
+ * x, given sigma and magnitude 1.
+ *
+ * @param sigma The standard deviation of the function.
+ * @param x The current x.
+ * @param x0 The mean (expected) x.
+ */
+inline double gaussian(double sigma, double x, double x0);
+
+
+/**
  * The kernel class holds the step values, plus the min
  * and max wavelengths for the range.
  */
@@ -30,6 +51,8 @@ public:
 	 * full width at half maximum. The threshold gives the value
 	 * of the Gaussian beyond which the kernel is not applied.
 	 *
+	 * @param size The number of kernel elements.
+	 * @param bandDist The distance between the input bands.
 	 * @param wl The centre wavelength.
 	 * @param fwhm The full width at half maximum.
 	 * @param threshold The minimum function value.
@@ -128,6 +151,7 @@ private:
 	double m_wl;			///!< The wavelength.
 	double m_value;			///!< The value or intensity.
 	double m_scale;		 	///!< The scaled value of the intensity. This is used for calculations. Is identical to value by default.
+	int m_count;			///!< Tracks the number of accumulations; divide the value by this number.
 public:
 
 	/**
@@ -140,18 +164,73 @@ public:
 
 	Band();
 
+	/**
+	 * Reset the counter.
+	 */
+	void reset();
+
+	/**
+	 * Return the count. The count is the number of times the value
+	 * of the band has been updated by setValue.
+	 *
+	 * @return The count.
+	 */
+	int count() const;
+
+	/**
+	 * Return the Band's value divided by the count.
+	 *
+	 * @return The Band's value divided by the count.
+	 */
+	double normalizedValue() const;
+
+	/**
+	 * Set the band's value. Implicitly implements the counter.
+	 *
+	 * @param value The new value.
+	 */
 	void setValue(double value);
 
+	/**
+	 * Return the band's value.
+	 *
+	 * @return The band's value.
+	 */
 	double value() const;
 
+	/**
+	 * Return the value times the scale factor.
+	 *
+	 * @return The value times the scale factor.
+	 */
 	double scaledValue() const;
 
+	/**
+	 * Set the scale factor.
+	 *
+	 * @param scale The scale factor.
+	 */
 	void setScale(double scale);
 
+	/**
+	 * Return the scale factor.
+	 *
+	 * @return The scale factor.
+	 */
 	double scale() const;
 
+	/**
+	 * Return the Band's central wavelength.
+	 *
+	 * @return The Band's wavelength.
+	 */
 	double wl() const;
 
+	/**
+	 * Set he Band's wavelength.
+	 *
+	 * @param wl The wavelength.
+	 */
 	void setWl(double wl);
 
 };
@@ -259,6 +338,9 @@ public:
  * Names are ignored; the order is important.
  */
 class BandPropsReader {
+private:
+	std::vector<int> m_bands;			///<! Contains band numbers (1-based)
+
 public:
 	std::map<int, BandProp> bandProps;	///<! The map of BandProp object.
 	double minWl;						///<! The minimum wavelength in the band definition file.
@@ -276,7 +358,7 @@ public:
 	 *
 	 * @return A vector containing the list of band numbers.
 	 */
-	std::vector<int> bands() const;
+	const std::vector<int>& bands() const;
 
 	/**
 	 * Configure the given kernel using information for the given 1-based
@@ -361,11 +443,12 @@ public:
 	 * @param spectra The spectral data file.
 	 * @param output The output file.
 	 * @param inputScale Scale every input spectral value by this much.
+	 * @param tolerance A value that dictates how wide the Gaussian will be by providing a minimum threshold for the y-value.
 	 * @param running A reference to a boolean that is true so long as the processor should keep running.
 	 */
 	void run(ConvolverListener& listener,
 			const std::string& bandDef, const std::string& spectra, const std::string& output,
-			double inputScale, bool& running);
+			double inputScale, double tolerance, bool& running);
 
 	/**
 	 * Return the progress as a double between 0 and 1.
