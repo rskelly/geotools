@@ -16,6 +16,7 @@
 
 ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
 	m_inputScale(1),
+	m_tolerance(0.0001),
 	m_convolver(convolver),
 	m_form(nullptr),
 	m_app(app),
@@ -30,6 +31,7 @@ void ConvolveForm::setupUi(QDialog* form) {
 	connect(txtSpectra, SIGNAL(textChanged(QString)), this, SLOT(txtSpectraChanged(QString)));
 	connect(txtOutput, SIGNAL(textChanged(QString)), this, SLOT(txtOutputChanged(QString)));
 	connect(spnInputScale, SIGNAL(valueChanged(double)), this, SLOT(spnInputScaleChanged(double)));
+	connect(spnTolerance, SIGNAL(valueChanged(double)), this, SLOT(spnToleranceChanged(double)));
 	connect(btnBandDef, SIGNAL(clicked()), this, SLOT(btnBandDefClicked()));
 	connect(btnSpectra, SIGNAL(clicked()), this, SLOT(btnSpectraClicked()));
 	connect(btnOutput, SIGNAL(clicked()), this, SLOT(btnOutputClicked()));
@@ -47,6 +49,7 @@ void ConvolveForm::setupUi(QDialog* form) {
 	txtSpectra->setText(m_settings.value("lastSpectra", "").toString());
 	txtOutput->setText(m_settings.value("lastOutput", "").toString());
 	spnInputScale->setValue(m_settings.value("lastInputScale", 1.0).toDouble());
+	spnTolerance->setValue(m_settings.value("lastTolerance", 0.0001).toDouble());
 }
 
 void ConvolveForm::checkRun() {
@@ -54,7 +57,8 @@ void ConvolveForm::checkRun() {
 	bool b = !m_spectraFile.empty() && QFile(m_spectraFile.c_str()).exists();
 	QFileInfo dir(m_outputFile.c_str());
 	bool c = !m_outputFile.empty() && dir.dir().exists();
-	btnRun->setEnabled(a && b && c);
+	bool d = m_tolerance > 0 && m_tolerance < 1.0;
+	btnRun->setEnabled(a && b && c && d);
 }
 
 void ConvolveForm::txtBandDefChanged(QString filename) {
@@ -79,7 +83,12 @@ void ConvolveForm::spnInputScaleChanged(double value) {
 	m_inputScale = value;
 	m_settings.setValue("lastInputScale", value);
 	checkRun();
+}
 
+void ConvolveForm::spnToleranceChanged(double value) {
+	m_tolerance = value;
+	m_settings.setValue("lastTolerance", value);
+	checkRun();
 }
 
 void ConvolveForm::btnBandDefClicked() {
@@ -108,8 +117,8 @@ void ConvolveForm::btnOutputClicked() {
 
 void _run(ConvolveForm* form, Convolver* conv,
 		const std::string* bandDef, const std::string* spectra, const std::string* output,
-		double inputScale, bool* running) {
-	conv->run(*form, *bandDef, *spectra, *output, inputScale, *running);
+		double inputScale, double tolerance, bool* running) {
+	conv->run(*form, *bandDef, *spectra, *output, inputScale, tolerance, *running);
 }
 
 void ConvolveForm::runState() {
@@ -122,6 +131,7 @@ void ConvolveForm::runState() {
 	txtOutput->setEnabled(false);
 	btnOutput->setEnabled(false);
 	spnInputScale->setEnabled(false);
+	spnTolerance->setEnabled(false);
 }
 
 void ConvolveForm::stopState() {
@@ -134,13 +144,14 @@ void ConvolveForm::stopState() {
 	txtOutput->setEnabled(true);
 	btnOutput->setEnabled(true);
 	spnInputScale->setEnabled(true);
+	spnTolerance->setEnabled(true);
 }
 
 void ConvolveForm::run() {
 	runState();
 	if(!m_running) {
 		m_running = true;
-		m_thread = std::thread(_run, this, m_convolver, &m_bandDefFile, &m_spectraFile, &m_outputFile, m_inputScale, &m_running);
+		m_thread = std::thread(_run, this, m_convolver, &m_bandDefFile, &m_spectraFile, &m_outputFile, m_inputScale, m_tolerance, &m_running);
 	}
 	if(!m_thread.joinable())
 		stopState();

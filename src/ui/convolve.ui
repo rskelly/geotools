@@ -7,14 +7,14 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>187</height>
+    <height>219</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Spectrum Convolution</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="6" column="1" colspan="4">
+   <item row="7" column="1" colspan="4">
     <widget class="QProgressBar" name="progressBar">
      <property name="value">
       <number>24</number>
@@ -63,7 +63,7 @@
      </property>
     </widget>
    </item>
-   <item row="9" column="1" colspan="4">
+   <item row="10" column="1" colspan="4">
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <widget class="QPushButton" name="btnRun">
@@ -114,14 +114,14 @@
      </item>
     </layout>
    </item>
-   <item row="7" column="1" colspan="4">
+   <item row="8" column="1" colspan="4">
     <widget class="Line" name="line">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>
-   <item row="5" column="1" colspan="4">
+   <item row="6" column="1" colspan="4">
     <widget class="Line" name="line_2">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -151,6 +151,26 @@
      </property>
      <property name="value">
       <double>1.000000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="1">
+    <widget class="QLabel" name="label_5">
+     <property name="text">
+      <string>Gaussian Tolerance</string>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="2" colspan="2">
+    <widget class="QDoubleSpinBox" name="spnTolerance">
+     <property name="decimals">
+      <number>6</number>
+     </property>
+     <property name="singleStep">
+      <double>0.001000000000000</double>
+     </property>
+     <property name="value">
+      <double>0.000100000000000</double>
      </property>
     </widget>
    </item>
