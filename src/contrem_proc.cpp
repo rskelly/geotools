@@ -22,7 +22,7 @@
 #include <geos/geom/LineString.h>
 #include <geos/geom/Point.h>
 
-#include "processor.hpp"
+#include "contrem.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
 
@@ -170,7 +170,7 @@ std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
 
 class QConfig {
 public:
-	ProcessorConfig pconfig;
+	Contrem* contrem;
 	std::list<input> inqueue;
 	std::list<output> outqueue;
 	std::mutex inmtx;
@@ -319,14 +319,25 @@ void processQueue(QConfig* config) {
  */
 void writeQueue(QConfig* config) {
 
-	const std::string& outfile = config->pconfig.outfile;
-	const std::string& driver = config->pconfig.driver;
-	const std::string& ext = config->pconfig.extension;
+	std::string outfile = config->contrem->outfile;
+	std::string driver = config->contrem->driver;
 	const std::vector<double>& wavelengths = config->wavelengths;
 	const std::vector<std::string>& bandNames = config->bandNames;
 	int cols = config->cols;
 	int rows = config->rows;
 	int bands = config->bands;
+
+	std::string ext;
+	if(driver == "ENVI") {
+		ext = "";
+	} else if(driver == "GTiff") {
+		ext = ".tif";
+	} else {
+		throw std::invalid_argument("Unknown driver: " + driver);
+	}
+
+	// Remove the extension if there is one.
+	outfile = outfile.substr(0, outfile.find_last_of("."));
 
 	GDALWriter writerss(outfile + "_ss" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 	GDALWriter writerch(outfile + "_ch" + ext, driver, cols, rows, bands, wavelengths, bandNames);
@@ -395,18 +406,16 @@ void writeQueue(QConfig* config) {
 	writerhull.writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count"});
 }
 
-void Processor::process(Reader* reader, const ProcessorConfig& config) {
+void Contrem::run(ContremListener* listener, Reader* reader) {
 
 	QConfig qconfig;
-	qconfig.pconfig = config;
+	qconfig.contrem = this;
 	qconfig.cols = reader->cols();
 	qconfig.rows = reader->rows();
 	qconfig.bands = reader->bands();
 
-	int bufSize = config.bufferSize;
-
 	// A buffer for input data.
-	std::vector<double> buf(bufSize * bufSize * reader->bands());
+	std::vector<double> buf(bufferSize * bufferSize * reader->bands());
 
 	// A list of wavelengths.
 	qconfig.wavelengths = reader->getWavelengths();
@@ -422,7 +431,7 @@ void Processor::process(Reader* reader, const ProcessorConfig& config) {
 
 	// Start the processing threads.
 	std::list<std::thread> t0;
-	for(int i = 0; i < config.threads; ++i)
+	for(int i = 0; i < threads; ++i)
 		t0.emplace_back(processQueue, &qconfig);
 
 	// Start the output thread.
@@ -441,7 +450,7 @@ void Processor::process(Reader* reader, const ProcessorConfig& config) {
 				for(int c = 0; c < cols; ++c) {
 					input in(c + col, r + row);
 					for(int b = 0; b < reader->bands(); ++b) {
-						double v = buf[b * bufSize * bufSize + r * bufSize + c];
+						double v = buf[b * bufferSize * bufferSize + r * bufferSize + c];
 						double w = qconfig.wavelengths[b];
 						in.data.emplace_back(w, v);
 					}
@@ -471,4 +480,7 @@ void Processor::process(Reader* reader, const ProcessorConfig& config) {
 	t1.join();
 }
 
+double Contrem::progress() const {
+	return 0;
+}
 

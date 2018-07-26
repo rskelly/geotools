@@ -9,9 +9,58 @@
 #include <iostream>
 #include <unistd.h>
 
+#include <QtCore/QObject>
+#include <QtWidgets/QApplication>
+#include <QtWidgets/QMessageBox>
+
+#include "contrem.hpp"
+#include "ui/contrem_ui.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
-#include "processor.hpp"
+
+int runWithGui(int argc, char **argv) {
+	class ContremApp : public QApplication {
+	public:
+		ContremApp(int &argc, char **argv) : QApplication(argc, argv) {}
+		bool notify(QObject *receiver, QEvent *e) {
+			try {
+				return QApplication::notify(receiver, e);
+			} catch(const std::exception &ex) {
+				QMessageBox err;
+				err.setText("Error");
+				err.setInformativeText(QString(ex.what()));
+				err.exec();
+				return false;
+			}
+		}
+	};
+
+	ContremApp q(argc, argv);
+	Contrem conv;
+	ContremForm form(&conv, &q);
+	QDialog qform;
+	form.setupUi(&qform);
+	qform.show();
+	return q.exec();
+}
+
+
+
+class DummyListener : public ContremListener {
+public:
+	void started(Contrem* conv) {
+		std::cout << "Started\n";
+	}
+	void update(Contrem* conv) {
+		std::cout << "Progress: " << (conv->progress() * 100) << "%\n";
+	}
+	void stopped(Contrem* conv) {
+		std::cout << "Stopped.\n";
+	}
+	void finished(Contrem* conv) {
+		std::cout << "Finished.\n";
+	}
+};
 
 void usage() {
 	std::cerr << "Usage: contrem [options]\n"
@@ -37,106 +86,95 @@ void usage() {
 
 int main(int argc, char** argv) {
 
-	ProcessorConfig config;
-	config.bufferSize = 256;
-	config.sampleStats = false;
-	config.driver = "ENVI";
-	config.extension = ".dat";
-	config.threads = 1;
+	if(argc > 1) {
 
-	int wlCol = -1;
-	int bandCol = -1;
-	bool bandHeader = false;
-	double minWl = 0;
-	double maxWl = 0;
-	std::string datafile;
-	std::string roifile;
-	std::string bandfile;
+		Contrem processor;
 
-	try {
-		int c;
-		while((c = getopt(argc, argv, "d:r:b:o:l:h:s:w:i:t:e:v:zp")) != -1) {
-			switch(c) {
-			case 'd': datafile = optarg; break;
-			case 'r': roifile = optarg; break;
-			case 'b': bandfile = optarg; break;
-			case 'l': minWl = atof(optarg); break;
-			case 'h': maxWl = atof(optarg); break;
-			case 'w': wlCol = atoi(optarg); break;
-			case 'i': bandCol = atoi(optarg); break;
-			case 'z': bandHeader = true; break;
-			case 'o': config.outfile = optarg; break;
-			case 's': config.bufferSize = atoi(optarg); break;
-			case 't': config.threads = atoi(optarg); break;
-			case 'p': config.sampleStats = false; break;
-			case 'v': config.driver = optarg; break;
-			case 'e': config.extension = optarg; break;
-			default: break;
+		processor.bufferSize = 256;
+		processor.sampleStats = false;
+		processor.driver = "ENVI";
+		processor.extension = ".dat";
+		processor.threads = 1;
+
+		int wlCol = -1;
+		int bandCol = -1;
+		bool bandHeader = false;
+		double minWl = 0;
+		double maxWl = 0;
+		std::string datafile;
+		std::string roifile;
+		std::string bandfile;
+
+		try {
+			int c;
+			while((c = getopt(argc, argv, "d:r:b:o:l:h:s:w:i:t:e:v:zp")) != -1) {
+				switch(c) {
+				case 'd': datafile = optarg; break;
+				case 'r': roifile = optarg; break;
+				case 'b': bandfile = optarg; break;
+				case 'l': minWl = atof(optarg); break;
+				case 'h': maxWl = atof(optarg); break;
+				case 'w': wlCol = atoi(optarg); break;
+				case 'i': bandCol = atoi(optarg); break;
+				case 'z': bandHeader = true; break;
+				case 'o': processor.outfile = optarg; break;
+				case 's': processor.bufferSize = atoi(optarg); break;
+				case 't': processor.threads = atoi(optarg); break;
+				case 'p': processor.sampleStats = false; break;
+				case 'v': processor.driver = optarg; break;
+				case 'e': processor.extension = optarg; break;
+				default: break;
+				}
 			}
+
+			if(processor.bufferSize <= 0)
+				throw std::invalid_argument("Buffer size must be larger than zero.");
+			if(datafile.empty() && roifile.empty())
+				throw std::invalid_argument("Data  or ROI file not given.");
+			if(processor.outfile.empty())
+				throw std::invalid_argument("Output file template not given.");
+			if(processor.threads < 1)
+				throw std::invalid_argument("At least one thread is required.");
+			if(!bandfile.empty() && (bandCol < 0 || wlCol < 0))
+				throw std::invalid_argument("If the band file is given, wavelength and band columns must also be given.");
+
+			Reader* reader;
+			if(!roifile.empty()) {
+				reader = new ROIReader(roifile);
+			} else if(!datafile.empty()) {
+				reader = new GDALReader(datafile);
+			} else {
+				throw std::invalid_argument("No input file (-r or -d) given.");
+			}
+
+			if(!bandfile.empty()) {
+				if(wlCol == -1 || bandCol == -1 || wlCol == bandCol)
+					throw std::invalid_argument("If a band file is given, the indices for "
+							"wavelength and band must be >=0 and different from each other.");
+				BandMapReader br(bandfile, wlCol, bandCol, bandHeader);
+				reader->setBandMap(br.bandMap());
+			}
+
+			if(minWl > 0 && maxWl > 0)
+				reader->setBandRange(minWl, maxWl);
+
+			reader->setBufSize(processor.bufferSize);
+
+			DummyListener dl;
+
+			processor.run(&dl, reader);
+
+		} catch(const std::exception& ex) {
+			std::cerr << ex.what() << "\n";
+			usage();
+			return 1;
 		}
 
-		if(config.bufferSize <= 0)
-			throw std::invalid_argument("Buffer size must be larger than zero.");
-		if(datafile.empty() && roifile.empty())
-			throw std::invalid_argument("Data  or ROI file not given.");
-		if(config.outfile.empty())
-			throw std::invalid_argument("Output file template not given.");
-		if(config.threads < 1)
-			throw std::invalid_argument("At least one thread is required.");
-		if(!bandfile.empty() && (bandCol < 0 || wlCol < 0))
-			throw std::invalid_argument("If the band file is given, wavelength and band columns must also be given.");
+	} else {
 
-		Reader* reader;
-		if(!roifile.empty()) {
-			reader = new ROIReader(roifile);
-		} else if(!datafile.empty()) {
-			reader = new GDALReader(datafile);
-		} else {
-			throw std::invalid_argument("No input file (-r or -d) given.");
-		}
+		return runWithGui(argc, argv);
 
-		if(!bandfile.empty()) {
-			if(wlCol == -1 || bandCol == -1 || wlCol == bandCol)
-				throw std::invalid_argument("If a band file is given, the indices for "
-						"wavelength and band must be >=0 and different from each other.");
-			BandMapReader br(bandfile, wlCol, bandCol, bandHeader);
-			reader->setBandMap(br.bandMap());
-		}
-
-		if(minWl > 0 && maxWl > 0)
-			reader->setBandRange(minWl, maxWl);
-
-		reader->setBufSize(config.bufferSize);
-
-		Processor processor;
-
-		processor.process(reader, config);
-
-	} catch(const std::exception& ex) {
-		std::cerr << ex.what() << "\n";
-		usage();
-		return 1;
 	}
 
 	return 0;
 }
-
-/*
-#include <iostream>
-#include "stats.hpp"
-
-int stats_test() {
-	std::vector<double> values;
-	for(int i = 1; i <= 1000; ++i)
-		values.push_back(i);
-	Stats s = Stats::computeStats(values, false);
-	for(double d : values)
-		std::cerr << d << " ";
-	std::cerr << "\n";
-	const std::vector<std::string>& names = s.getStatNames();
-	const std::vector<double> stats = s.getStats();
-	for(size_t i = 0; i < names.size(); ++i)
-		std::cerr << names[i] << ": " << stats[i] << "\n";
-	return 0;
-}
-*/
