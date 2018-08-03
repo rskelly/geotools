@@ -51,6 +51,9 @@ target_include_directories(convolve PUBLIC convolve_autogen/include
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS})
 target_link_libraries (convolve Qt5::Widgets)
 
+add_executable (edgereplace src/edgereplace.cpp)
+
+
 # Install ################################################################################################
 
 install(TARGETS contrem convolve RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
