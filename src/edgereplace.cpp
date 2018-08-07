@@ -13,17 +13,26 @@
 inline void replaceFloat(float* buf, int imgWidth, int edgeWidth, float replace) {
 	for(int i = 0; i < edgeWidth; ++i) {
 		buf[i] = replace;
-		buf[imgWidth - 1 - i] = replace;
+		buf[imgWidth - edgeWidth + i] = replace;
 	}
 }
 
 inline void replaceUInt16(unsigned short* buf, int imgWidth, int edgeWidth, unsigned short replace) {
 	for(int i = 0; i < edgeWidth; ++i) {
 		buf[i] = replace;
-		buf[imgWidth - 1 - i] = replace;
+		buf[imgWidth - edgeWidth + i] = replace;
 	}
 }
 
+inline void trimFloat(float* buf, int imgWidth, int edgeWidth) {
+	for(int i = edgeWidth; i < imgWidth - edgeWidth; ++i)
+		buf[i - edgeWidth] = buf[i];
+}
+
+inline void trimUInt16(unsigned short* buf, int imgWidth, int edgeWidth) {
+	for(int i = edgeWidth; i < imgWidth - edgeWidth; ++i)
+		buf[i - edgeWidth] = buf[i];
+}
 
 int main(int argc, char** argv) {
 
@@ -50,18 +59,18 @@ int main(int argc, char** argv) {
 
 	std::vector<char> buf(dataSize * imgWidth);
 
-	//input.read(buf.data(), dataSize * imgWidth);
-	//std::cerr << input.good() << ", " << input.eof() << ", " << input.fail() << "\n";
 	while(input.read(buf.data(), dataSize * imgWidth)) {
 		switch(dataType) {
 		case 4:
-			replaceFloat((float*) buf.data(), imgWidth, edgeWidth, (float) atof(replace.c_str()));
+			//replaceFloat((float*) buf.data(), imgWidth, edgeWidth, (float) atof(replace.c_str()));
+			trimFloat((float*) buf.data(), imgWidth, edgeWidth);
 			break;
 		case 12:
-			replaceUInt16((unsigned short*) buf.data(), imgWidth, edgeWidth, (unsigned short) atoi(replace.c_str()));
+			//replaceUInt16((unsigned short*) buf.data(), imgWidth, edgeWidth, (unsigned short) atoi(replace.c_str()));
+			trimUInt16((unsigned short*) buf.data(), imgWidth, edgeWidth);
 			break;
 		}
-		output.write(buf.data(), dataSize * imgWidth);
+		output.write(buf.data(), dataSize * (imgWidth - edgeWidth * 2));
 	}
 
 	std::cerr << "Done.\n";
