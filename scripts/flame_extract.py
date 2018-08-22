@@ -10,11 +10,13 @@ from uuid import _last_timestamp
 # Extracts rows from a spectral file given some user-specified criteria.
 
 def usage():
-    print('''Usage: flame_extract.py [options] <file>
+    print('''Usage: flame_extract.py <options>
+        -i <file>        The input file.
+        -o <file>        The output file.
         -b               The start time of extraction, in the format yyyy-mm-dd hh:mm:ss.
                          The argument is optional, and the date part is optional if the time is given. 
         -e               The end time of extraction, same format as -s0.
-        -i <interval>    The extraction interval in seconds.
+        -d <interval>    The extraction interval in seconds.
         ''')
     
 def parse_time(timestr):
@@ -39,14 +41,15 @@ def extract(infile, outfile, params):
     end_time = float('inf')
     interval = 1
     
-    print(params)
+    #print(params)
     if params.get('-b', False):
         start_time = parse_time(params['-b'])
     if params.get('-e', False):
         end_time = parse_time(params['-e'])
-    if params.get('-i', False):
-        interval = int(params['-i'])
+    if params.get('-d', False):
+        interval = int(params['-d'])
         
+    print(params)
     print(start_time, end_time, interval)
     
     header = False # false if the header has not been finished
@@ -80,7 +83,7 @@ def extract(infile, outfile, params):
                         if write:
                             output.write(line)
 
-                        print(line0[0], timestamp, timestamp_i, last_timestamp)
+                        #print(line0[0], timestamp, timestamp_i, last_timestamp)
                         last_timestamp = timestamp_i
                          
                 except Exception as e:
@@ -92,12 +95,11 @@ def extract(infile, outfile, params):
 if __name__ == '__main__':
     
     try:
-        infile = sys.argv[1]
-        outfile = sys.argv[2]
-        optlist, args = getopt(sys.argv[3:], 'b:e:i:')
+        optlist, args = getopt(sys.argv[1:], 'b:e:i:o:d:')
+        print(optlist)
         params = dict(optlist)
     
-        extract(infile, outfile, params)        
+        extract(params['-i'], params['-o'], params)        
     except Exception as e:
         print(e)
         usage()
