@@ -166,7 +166,9 @@ bool Spectrum::load(const std::string& filename) {
 	// Run over the rows.
 	while(std::getline(m_input, m_buf)) {
 		m_buf = _stripws(m_buf);
-		if(!header && m_buf.find(':') < std::string::npos) {
+		if(m_buf.size() == 0) {
+			continue;
+		} else if(!header && m_buf.find(':') < std::string::npos) {
 			// Process the colon-delimited headers for properties.
 			std::stringstream ss(m_buf);
 			std::getline(ss, buf, ':');
