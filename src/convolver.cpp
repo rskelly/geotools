@@ -94,6 +94,7 @@ Band::Band(double wl, double value) :
 		m_wl(wl),
 		m_value(value),
 		m_scale(1),
+		m_shift(0),
 		m_count(0) {
 }
 
@@ -107,6 +108,14 @@ void Band::setValue(double value) {
 
 double Band::value() const {
 	return m_value;
+}
+
+void Band::setShift(double shift) {
+	m_shift = shift;
+}
+
+double Band::shift() const {
+	return m_shift;
 }
 
 double Band::normalizedValue() const {
@@ -126,7 +135,7 @@ double Band::scale() const {
 }
 
 double Band::wl() const {
-	return m_wl;
+	return m_wl + m_shift;
 }
 
 void Band::setWl(double wl) {
@@ -165,8 +174,10 @@ bool Spectrum::load(const std::string& filename) {
 
 	// Run over the rows.
 	while(std::getline(m_input, m_buf)) {
+		// Strip whitespace (not tabs) from the input.
 		m_buf = _stripws(m_buf);
 		if(m_buf.size() == 0) {
+			// If the line contains no information, skip it.
 			continue;
 		} else if(!header && m_buf.find(':') < std::string::npos) {
 			// Process the colon-delimited headers for properties.
@@ -254,8 +265,8 @@ void Spectrum::convolve(Kernel& kernel, Band& band) {
 	*/
 	// First, figure out the start and end indices of the input, given
 	// the width of the kernel function out to the threshold.
-	double min = band.wl() - kernel.halfWidth();
-	double max = band.wl() + kernel.halfWidth();
+	double min = band.wl() - kernel.halfWidth() * 2;
+	double max = band.wl() + kernel.halfWidth() * 2;
 	size_t idx0 = 0;
 	size_t idx1 = bands.size();
 	for(size_t i = 0; i < bands.size(); ++i) {
@@ -266,9 +277,7 @@ void Spectrum::convolve(Kernel& kernel, Band& band) {
 		}
 	}
 	for(size_t i = idx0; i < bands.size(); ++i) {
-		if(max > bands[i].wl()) {
-			idx1 = i;
-		} else {
+		if(max < bands[i].wl()) {
 			idx1 = i;
 			break;
 		}
@@ -318,6 +327,11 @@ void Spectrum::write(std::ostream& out, double minWl, double maxWl) {
 void Spectrum::scale(double scale) {
 	for(Band& b : bands)
 		b.setScale(scale);
+}
+
+void Spectrum::shift(double shift) {
+	for(Band& b : bands)
+		b.setShift(shift);
 }
 
 void BandPropsReader::load(const std::string& filename) {
@@ -375,11 +389,9 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 		spec.bands[i++].setWl(p.second.wl);
 }
 
-
-
 void Convolver::run(ConvolverListener& listener,
 		const std::string& bandDef, const std::string& spectra, const std::string& output,
-		double inputScale, double tolerance, bool& running) {
+		double inputScale, double tolerance, double bandShift, bool& running) {
 
 	// Notify a listener.
 	listener.started(this);
@@ -394,6 +406,7 @@ void Convolver::run(ConvolverListener& listener,
 	// Load the spectrum.
 	Spectrum spec;
 	spec.load(spectra);
+	spec.shift(bandShift);
 	spec.scale(inputScale);
 
 	// Configure the output (convolved) spectrum.

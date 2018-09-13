@@ -25,6 +25,7 @@ private:
 	std::string m_outputFile;
 	double m_inputScale;
 	double m_tolerance;
+	double m_bandShift;
 
 	Convolver* m_convolver;
 	QDialog* m_form;
@@ -56,6 +57,7 @@ public slots:
 	void txtOutputChanged(QString);
 	void spnInputScaleChanged(double);
 	void spnToleranceChanged(double);
+	void spnBandShiftChanged(double);
 	void btnBandDefClicked();
 	void btnSpectraClicked();
 	void btnOutputClicked();

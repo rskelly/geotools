@@ -151,7 +151,9 @@ private:
 	double m_wl;			///!< The wavelength.
 	double m_value;			///!< The value or intensity.
 	double m_scale;		 	///!< The scaled value of the intensity. This is used for calculations. Is identical to value by default.
+	double m_shift;			///!< The amount to shift the band's wavelength designation by.
 	int m_count;			///!< Tracks the number of accumulations; divide the value by this number.
+
 public:
 
 	/**
@@ -218,6 +220,20 @@ public:
 	 * @return The scale factor.
 	 */
 	double scale() const;
+
+	/**
+	 * Set the shift amount.
+	 *
+	 * @param shift The shift amount.
+	 */
+	void setShift(double shift);
+
+	/**
+	 * Get the shift amount.
+	 *
+	 * @return The shift amount.
+	 */
+	double shift() const;
 
 	/**
 	 * Return the Band's central wavelength.
@@ -293,6 +309,14 @@ public:
 	 * @param scale A scale factor.
 	 */
 	void scale(double scale);
+
+	/**
+	 * Shift the band designations by this amount. This will be done
+	 * before any other transformations.
+	 *
+	 * @param shift The amount to shift by, in wavelength units.
+	 */
+	void shift(double shift);
 
 	/**
 	 * Convolve using the given Kernel, writing the output to the given
@@ -444,11 +468,12 @@ public:
 	 * @param output The output file.
 	 * @param inputScale Scale every input spectral value by this much.
 	 * @param tolerance A value that dictates how wide the Gaussian will be by providing a minimum threshold for the y-value.
+	 * @param bandShift If given and non-zero, will cause the input band designations to be shifted by the given amount.
 	 * @param running A reference to a boolean that is true so long as the processor should keep running.
 	 */
 	void run(ConvolverListener& listener,
 			const std::string& bandDef, const std::string& spectra, const std::string& output,
-			double inputScale, double tolerance, bool& running);
+			double inputScale, double tolerance, double bandShift, bool& running);
 
 	/**
 	 * Return the progress as a double between 0 and 1.

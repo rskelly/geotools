@@ -76,6 +76,7 @@ int main(int argc, char** argv) {
 			std::string output = argv[3];
 			double inputScale = 1.0;
 			double threshold = 0.0001;
+			double shift = 0;
 			if(argc > 4)
 				inputScale = std::strtod(argv[4], nullptr);
 			if(argc > 5)
@@ -84,7 +85,7 @@ int main(int argc, char** argv) {
 			Convolver conv;
 			DummyListener listener;
 			bool running = true;
-			conv.run(listener, bandDef, spectra, output, inputScale, threshold, running);
+			conv.run(listener, bandDef, spectra, output, inputScale, threshold, shift, running);
 		}
 	} else {
 		return runWithGui(argc, argv);
