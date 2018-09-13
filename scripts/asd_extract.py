@@ -69,8 +69,8 @@ def read_asd_file(filename):
 			elif line:
 				header.append(line)
 		for line in f:
-			spectrum.append(map(float, map(str.strip, line.strip().split(delim))))
-	header = map(lambda x: x.replace('\x00', ''), header)
+			spectrum.append(list(map(float, list(map(str.strip, line.strip().split(delim))))))
+	header = list(map(lambda x: x.replace('\x00', ''), header))
 	return num, header, spectrum
 
 def process_phase1(dirname):
@@ -106,14 +106,17 @@ def process_phase2(filename):
 		for line in f:
 			if not header:
 				# Get the header. Will be used for locating elements in the data rows.
-				header = map(str.strip, line.split(','))
+				header = list(map(str.strip, line.split(',')))
 			else:
-				row = map(str.strip, line.split(','))
+				row = list(map(str.strip, line.split(',')))
 				note = row[header.index('note')]
 				if note == 'discard':
 					continue
 				label = row[header.index('label')]
-				setid = int(row[header.index('set')])
+				try:
+					setid = int(row[header.index('set')])
+				except:
+					setid = 0
 				curset = sets.get(setid, False)
 				if not curset:
 					curset = sets[setid] = {'label': '', 'note': '', 'setid': setid, 'rows': []}
@@ -135,13 +138,13 @@ def process_phase2(filename):
 	print(','.join(outhead))
 
 	# Get the column index of the first wavelength (the first integer field)
-	for setid, obj in sets.iteritems():
+	for setid, obj in sets.items():
 		outrow = [setid, obj['label'], obj['note'], obj['rows'][0][header.index('date')], obj['rows'][0][header.index('time')]]
 
 		# Create a multi-dimensional array of the values.
 		vals = []
 		for row in obj['rows']:
-			vals.append(map(float, row[firstwl:]))
+			vals.append(list(map(float, row[firstwl:])))
 		vals = np.array(vals)
 
 		# Calculate the mean of the set, columnwise, then take the mean and stddev of the 
@@ -168,9 +171,9 @@ def process_web(filename, outdir):
 		for line in f:
 			if not header:
 				# Get the header. Will be used for locating elements in the data rows.
-				header = map(str.strip, line.split(','))
+				header = list(map(str.strip, line.split(',')))
 			else:
-				row = map(str.strip, line.split(','))
+				row = list(map(str.strip, line.split(',')))
 				note = row[header.index('note')]
 				if note == 'discard':
 					continue
@@ -213,7 +216,7 @@ def process_web(filename, outdir):
 
 		vals = [] # Multi-dimensional array of the values.
 		for row in obj['rows']:
-			vals.append(map(float, row[firstwl:]))
+			vals.append(list(map(float, row[firstwl:])))
 		vals = np.array(vals)
 
 		# Calculate the mean of the set, columnwise, then take the mean and stddev of the resulting row.
@@ -312,24 +315,29 @@ def gen_plot(outfile, data, width, height):
 
 if __name__ == '__main__':
 
-	phase = sys.argv[1]
+	try:
+		phase = sys.argv[1]
 
-	if phase == 'phase1':
-		dirname = sys.argv[2]
-		process_phase1(dirname)
-	elif phase == 'phase2':
-		filename = sys.argv[2]
-		process_phase2(filename)
-	elif phase == 'web':
-		filename = sys.argv[2]
-		outdir = sys.argv[3]
-		process_web(filename, outdir)
-	elif phase == 'db':
-		name, filename, dbname, user = sys.argv[2:6]
-		password = None
-		try:
-			password = sys.argv[6]
-		except: pass
-		process_db(name, filename, dbname, user, password)
-	else:
+		if phase == 'phase1':
+			dirname = sys.argv[2]
+			process_phase1(dirname)
+		elif phase == 'phase2':
+			filename = sys.argv[2]
+			process_phase2(filename)
+		elif phase == 'web':
+			filename = sys.argv[2]
+			outdir = sys.argv[3]
+			process_web(filename, outdir)
+		elif phase == 'db':
+			name, filename, dbname, user = sys.argv[2:6]
+			password = None
+			try:
+				password = sys.argv[6]
+			except: pass
+			process_db(name, filename, dbname, user, password)
+		else:
+			usage()
+	except Exception as e:
+		import traceback
+		print(traceback.format_exc())
 		usage()
