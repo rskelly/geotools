@@ -5,29 +5,7 @@ import os
 import sys
 import csv
 
-# def load(csvfile):
-# 	result = {}
-# 	with open(csvfile, 'rU') as f:
-# 		db = csv.reader(f)
-# 		first = True
-# 		for row in db:
-# 			if first:
-# 				for i in range(len(row)):
-# 					result[i] = []
-# 				first = False
-# 			for i in range(0, len(row), 2):
-# 				try:
-# 					a = float(row[i])
-# 					b = float(row[i + 1])
-# 					result[i].append(a)
-# 					result[i + 1].append(b)
-# 				except Exception as e:
-# 					#print(e) 
-# 					#print(row)
-# 					pass
-# 	return result
-
-def transpose(label, csvfile, headrow, datarow, col, delim, scale, xoffset):
+def transpose(params):
 	'''
 	Transpose a head and data row from a csv file so that they become two columns.
 	csvfile -- The csv file.
@@ -35,11 +13,13 @@ def transpose(label, csvfile, headrow, datarow, col, delim, scale, xoffset):
 	datarow -- The row index of the data (0-based)
 	col -- The column start index (0-based)
 	'''
-	headrow = int(headrow)
-	datarow = int(datarow)
-	col = int(col)
-	scale = float(scale)
+	headrow = int(params.head_offset)
+	datarow = int(params.data_offset)
+	col = int(params.col_offset)
+	scale = float(params.scale)
+	shift = float(params.shift)
 
+	delim = params.delim
 	if delim == 't':
 		delim = '\t'
 	elif delim == 's':
@@ -47,13 +27,13 @@ def transpose(label, csvfile, headrow, datarow, col, delim, scale, xoffset):
 
 	a = []
 	b = []
-	with open(csvfile, 'rU') as f:
+	with open(params.file, 'rU') as f:
 		db = csv.reader(f, delimiter = delim)
 		r = 0
 		for row in db:
 			if r == headrow:
 				r += 1
-				a.extend(list(map(lambda x: float(x) + xoffset, row[col:])))
+				a.extend(list(map(lambda x: float(x) + shift, row[col:])))
 				break
 			r += 1
 		for row in db:
@@ -61,21 +41,23 @@ def transpose(label, csvfile, headrow, datarow, col, delim, scale, xoffset):
 				b.extend(list(map(lambda x: scale * float(x), row[col:])))
 				break
 			r += 1
-	return (label, csvfile, a, b)
+	return (params.label, params.file, a, b)
 
 
-def load(label, csvfile, headrow, datarow, col, delim, scale, xoffset):
+def load(params):
 	'''
 	csvfile -- The csv file.
 	headrow -- The row index of the header (0-based)
 	datarow -- The row index of the data (0-based)
 	col -- The column start index (0-based)
 	'''
-	headrow = int(headrow)
-	datarow = int(datarow)
-	col = int(col)
-	scale = float(scale)
+	headrow = int(params.head_offset)
+	datarow = int(params.data_offset)
+	col = int(params.col_offset)
+	scale = float(params.scale)
+	shift = float(params.shift)
 
+	delim = params.delim
 	if delim == 't':
 		delim = '\t'
 	elif delim == 's':
@@ -83,7 +65,7 @@ def load(label, csvfile, headrow, datarow, col, delim, scale, xoffset):
 
 	a = []
 	b = []
-	with open(csvfile, 'rU') as f:
+	with open(params.file, 'rU') as f:
 		db = csv.reader(f, delimiter = delim)
 		r = 0
 		for row in db:
@@ -91,7 +73,7 @@ def load(label, csvfile, headrow, datarow, col, delim, scale, xoffset):
 				r += 1
 				continue
 			try:
-				av = float(row[headrow]) + xoffset
+				av = float(row[headrow]) + shift
 				bv = float(row[datarow]) * scale
 				a.append(av)
 				b.append(bv)
@@ -99,7 +81,7 @@ def load(label, csvfile, headrow, datarow, col, delim, scale, xoffset):
 				print(e)
 				pass
 
-	return (label, csvfile, a, b)
+	return (params.label, params.file, a, b)
 
 def smooth(x, y):
 	'''
@@ -124,32 +106,31 @@ def graph(params):
 
 	columns = []
 
-	for i in range(0, len(params), 9):
-		t, label, csvfile, headrow, datarow, col, delim, scale, xoffset = params[i:i + 9]
-		if t == 't':
-			columns.append(transpose(label, csvfile, headrow, datarow, col, delim, scale, xoffset))
-		elif t == 'tl':
-			label, csvfile, a, b = transpose(label, csvfile, headrow, datarow, col, delim, scale, xoffset)
+	for param in params:
+		if param.type == 't':
+			columns.append(transpose(param))
+		elif param.type == 'tl':
+			label, csvfile, a, b = transpose(param)
 			a, b = smooth(a, b)
 			columns.append((label, csvfile, a, b))
-		elif t == 'tln':
-			label, csvfile, a, b = transpose(label, csvfile, headrow, datarow, col, delim, scale, xoffset)
+		elif param.type == 'tln':
+			label, csvfile, a, b = transpose(param)
 			a0, b0 = smooth(a, b)
 			b1 = normalize(b0, b)
 			columns.append((label, csvfile, a, b1))
-		elif t == 'll':
-			label, csvfile, a, b = load(label, csvfile, headrow, datarow, col, delim, scale, xoffset)
+		elif param.type == 'll':
+			label, csvfile, a, b = load(param)
 			a, b = smooth(a, b)
 			columns.append((label, csvfile, a, b))
-		elif t == 'tlne':
-			label, csvfile, a, b = transpose(label, csvfile, headrow, datarow, col, delim, scale, xoffset)
+		elif param.type == 'tlne':
+			label, csvfile, a, b = transpose(param)
 			a0, b0 = smooth(a, b)
 			b1 = normalize(b0, b)
 			a2, b2, a3, b3 = find_extrema(25., a0, b1)
 			columns.append((label + '_min', csvfile, a2, b2))
 			columns.append((label + '_max', csvfile, a3, b3))
 		else:
-			columns.append(load(label, csvfile, headrow, datarow, col, delim, scale, xoffset))
+			columns.append(load(param))
 
 	minx = 99999999999.
 	maxx = -99999999999.
@@ -185,8 +166,6 @@ def find_extrema(window_size, x, y):
 		while (j < len(x) - 1) and (x[j] <= x[i] + window_size):
 			j += 1
 
-		print(i, j, len(x))
-		print(x[i], x[j])
 		maxy = -99999999.
 		maxx = 0
 		miny = 99999999.
@@ -211,27 +190,70 @@ def find_extrema(window_size, x, y):
 
 	return (minx0, miny0, maxx0, maxy0)
 
+class Params:
+
+	def __init__(self, type, label, file, head_offset, data_offset, col_offset, delim = ',', scale = 1., shift = 0.):
+		self.type = type
+		self.label = label
+		self.file = file
+		self.head_offset = head_offset
+		self.data_offset = data_offset
+		self.col_offset = col_offset
+		self.delim = delim
+		self.scale = scale
+		self.shift = shift
+
 
 if __name__ == '__main__':
 	'''
 	Call in the form:
-	graph_transposed.py <t/n> <data file> <head row> <data row> <col> <delimiter> <mult> [<t/n> <data file> <head row> <data row> <col> <delimiter> <mult>]
+	graph_transposed.py <t/n> <data file> <head row> <data row> <col> <delimiter> <mult> <shift> [<t/n> <data file> <head row> <data row> <col> <delimiter> <mult>]
 	'''
 	if len(sys.argv) == 1:
 		args = []
-		#args.extend(['t', 'irr', 'roof6_AbsoluteIrradiance_09-47-30-406_60s.txt', 13, 37, 2, 't', 1, 0.])
-		#args.extend(['tl', 'irr_loess', 'roof6_AbsoluteIrradiance_09-47-30-406_60s.txt', 13, 37, 2, 't', 1, 0.])
-		#args.extend(['tln', 'irr_norm_-8', 'roof6_AbsoluteIrradiance_09-47-30-406_60s.txt', 13, 37, 2, 't', 1, -8.])
-		#args.extend(['tln', 'irr_norm_-8.5.', 'roof6_AbsoluteIrradiance_09-47-30-406_60s.txt', 13, 37, 2, 't', 1, -8.5])
-		args.extend(['tln', 'irr_norm_-9', 'roof6_AbsoluteIrradiance_09-47-30-406_60s.txt', 13, 37, 2, 't', 1, -9.])
-		#args.extend(['tlne', 'irr_extrema', 'roof6_AbsoluteIrradiance_09-47-30-406_60s.txt', 13, 37, 2, 't', 1, 0.])
-		#args.extend(['t', 'convolved/roo6_convolved_nano_bands.csv', 0, 1, 2, ',', 1, 0.])
-		args.extend(['tln', 'conv', 'convolved/roo6_convolved_nano_bands2.csv', 0, 1, 2, ',', 1, 0.])
-		#args.extend(['t', 'nano', 'nano1.csv', 0, 1, 0, ',', 1, 0.])
-		#args.extend(['tl', 'nano_loess', 'nano1.csv', 0, 1, 0, ',', 1, 0.])
-		args.extend(['tln', 'nano_norm', 'nano1.csv', 0, 1, 0, ',', 3, 0.])
-		#args.extend(['tlne', 'nano_extrema', 'nano1.csv', 0, 1, 0, ',', 10, 0.])
-		#args.extend(['n', 'ASTMG173.csv', 0, 2, 2, ',', 15, 0.])
+		#args.append(['t', 'irr_norm', 'roof6_AbsoluteIrradiance_09-47-30-406_60s.txt', 13, 37, 2, 't', 1, -9.])
+		#args.append(['t', 'irr_raw', 'roof6_AbsoluteIrradiance_09-47-30-406.txt', 14, 15, 2, 't', 1, 0.])
+		#args.append(['t', 'shift_test', 'shift_AbsoluteIrradiance_09-44-34-037.txt', 14, 15, 2, 't', 100., 0.])
+		#args.append(['t', 'shift_test', 'shift2_FLMS128791_10-14-01-727.txt', 14, 15, 2, 't', .01, 0.])
+
+		#args.append(['t', 'conv', 'convolved/roo6_convolved_nano_bands2.csv', 0, 1, 2, ',', 1, 0.])
+
+		# Sample NANO spectrum.
+		#args.append(['t', 'nano', 'roof_irradiance_convolved/nano1.csv', 0, 1, 0, ',', 3, 0.])
+
+		# ASTM Reference spectrum scaled by 15.
+		args.append(Params('n', 'ASTMG173', 'roof_irradiance_convolved/ASTMG173.csv', 0, 2, 2, ',', 15, 0.))
+
+		# Bartier 1, with shift applied.
+		#args.append(Params('t', 'bartier_1_1', '/home/rob/Documents/field/2018_sept/flame/bartier1_AbsoluteIrradiance_10-09-26-788.txt', 14, 15, 2, 't', 1., -7.97))
+
+		# Bartier 1, shifted and convolved.
+		#args.append(Params('t', 'bartier_1_c_1', '/home/rob/Documents/field/2018_sept/flame/bartier1_AbsoluteIrradiance_10-09-26-788_conv_nano.csv', 0, 1, 2, ',', 1., 0.))
+
+		# Bartier 2, with shift applied.
+		#args.append(Params('t', 'bartier_2_1', '/home/rob/Documents/field/2018_sept/flame/bartier2_AbsoluteIrradiance_11-20-47-135.txt', 14, 15, 2, 't', 1., -7.97))
+
+		# Bartier 2, shifted and convolved.
+		#args.append(Params('t', 'bartier_2_c_1', '/home/rob/Documents/field/2018_sept/flame/bartier2_AbsoluteIrradiance_11-20-47-135_conv_nano.txt', 0, 1, 2, ',', 1., 0.))
+
+		# Bartier 3, with shift applied.
+		#args.append(Params('t', 'bartier_3_1', '/home/rob/Documents/field/2018_sept/flame/bartier3_AbsoluteIrradiance_13-05-18-419.txt', 14, 15, 2, 't', 1., -7.97))
+
+		# Bartier 3, shifted and convolved.
+		#args.append(Params('t', 'bartier_3_c_1', '/home/rob/Documents/field/2018_sept/flame/bartier3_AbsoluteIrradiance_13-05-18-419_conv_nano.txt', 0, 1, 2, ',', 1., 0.))
+
+		# SF 1, with shift applied.
+		args.append(Params('t', 'sf_1', '/home/rob/Documents/field/2018_sept/flame/sf10_1_AbsoluteIrradiance_10-40-58-450.txt', 14, 1015, 2, 't', 1., -7.97))
+
+		# SF 1, shifted and convolved.
+		args.append(Params('t', 'sf_c_1', '/home/rob/Documents/field/2018_sept/flame/sf10_1_AbsoluteIrradiance_10-40-58-450_conv_nano.txt', 0, 1001, 2, ',', 1., 0.))
+
+		# SF, with shift applied.
+		args.append(Params('t', 'sf', '/home/rob/Documents/field/2018_sept/flame/sf10_AbsoluteIrradiance_13-02-17-800.txt', 14, 1015, 2, 't', 1., -7.97))
+
+		# SF, shifted and convolved.
+		args.append(Params('t', 'sf_c', '/home/rob/Documents/field/2018_sept/flame/sf10_AbsoluteIrradiance_13-02-17-800_conv_nano.txt', 0, 1000, 2, ',', 1., 0.))
+
 		graph(args)
 	else:
 		graph(sys.argv[1:])
