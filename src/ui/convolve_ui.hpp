@@ -21,8 +21,11 @@ class ConvolveForm : public QDialog, public Ui::ConvolveForm, public ConvolverLi
 private:
 	QSettings m_settings;
 	std::string m_bandDefFile;
+	std::string m_bandDefDelim;
 	std::string m_spectraFile;
+	std::string m_spectraDelim;
 	std::string m_outputFile;
+	std::string m_outputDelim;
 	double m_inputScale;
 	double m_tolerance;
 	double m_bandShift;
@@ -53,8 +56,11 @@ signals:
 
 public slots:
 	void txtBandDefChanged(QString);
+	void cboBandDefDelimChanged(QString);
 	void txtSpectraChanged(QString);
+	void cboSpectraDelimChanged(QString);
 	void txtOutputChanged(QString);
+	void cboOutputDelimChanged(QString);
 	void spnInputScaleChanged(double);
 	void spnToleranceChanged(double);
 	void spnBandShiftChanged(double);

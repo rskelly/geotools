@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
 			Convolver conv;
 			DummyListener listener;
 			bool running = true;
-			conv.run(listener, bandDef, spectra, output, inputScale, threshold, shift, running);
+			conv.run(listener, bandDef, ",", spectra, ",", output, ",", inputScale, threshold, shift, running);
 		}
 	} else {
 		return runWithGui(argc, argv);

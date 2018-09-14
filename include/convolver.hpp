@@ -264,6 +264,7 @@ class Spectrum {
 private:
 	std::ifstream m_input;							///<! The input stream.
 	std::string m_buf;								///<! The current file buffer.
+	char m_delim;									///<! The column delimiter.
 	size_t m_count;									///<! The number of records in the file.
 
 public:
@@ -278,9 +279,10 @@ public:
 	 * called to populate the bands list with data.
 	 *
 	 * @param filename A data file.
+	 * @param delimiter The column delimiter.
 	 * @return True if the file is loaded and has information in it.
 	 */
-	bool load(const std::string& filename);
+	bool load(const std::string& filename, const std::string& delimiter);
 
 	/**
 	 * Return the number of spectra.
@@ -340,8 +342,9 @@ public:
 	 * @param out An output stream.
 	 * @param minWl The minimum wavelength to print.
 	 * @param maxWl The maximum wavelength to print.
+	 * @param delim The column delimiter.
 	 */
-	void writeHeader(std::ostream& out, double minWl, double maxWl);
+	void writeHeader(std::ostream& out, double minWl, double maxWl, char delim);
 
 	/**
 	 * Write the bands of an output spectrum, between the given
@@ -350,8 +353,9 @@ public:
 	 * @param out An output stream.
 	 * @param minWl The minimum wavelength to print.
 	 * @param maxWl The maximum wavelength to print.
+	 * @param delim The column delimiter.
 	 */
-	void write(std::ostream& out, double minWl, double maxWl);
+	void write(std::ostream& out, double minWl, double maxWl, char delim);
 
 };
 
@@ -374,8 +378,9 @@ public:
 	 * Load the band definition file.
 	 *
 	 * @param filename The filename.
+	 * @param delimiter The column delimiter.
 	 */
-	void load(const std::string& filename);
+	void load(const std::string& filename, const std::string& delimiter);
 
 	/**
 	 * Returns a vector containing the list of band numbers.
@@ -464,15 +469,20 @@ public:
 	 *
 	 * @param listener A ConvolverListener to receive updates.
 	 * @param bandDef The band definition file.
+	 * @param bandDefDelim The delimiter for the data file.
 	 * @param spectra The spectral data file.
+	 * @param spectraDelim The delimiter for the data file.
 	 * @param output The output file.
+	 * @param outputDelim The delimiter for the data file.
 	 * @param inputScale Scale every input spectral value by this much.
 	 * @param tolerance A value that dictates how wide the Gaussian will be by providing a minimum threshold for the y-value.
 	 * @param bandShift If given and non-zero, will cause the input band designations to be shifted by the given amount.
 	 * @param running A reference to a boolean that is true so long as the processor should keep running.
 	 */
 	void run(ConvolverListener& listener,
-			const std::string& bandDef, const std::string& spectra, const std::string& output,
+			const std::string& bandDef, const std::string& bandDefDelim,
+			const std::string& spectra, const std::string& spectraDelim,
+			const std::string& output, const std::string& outputDelim,
 			double inputScale, double tolerance, double bandShift, bool& running);
 
 	/**

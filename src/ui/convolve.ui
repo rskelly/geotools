@@ -14,21 +14,21 @@
    <string>Spectrum Convolution</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="8" column="1" colspan="4">
+   <item row="8" column="1" colspan="5">
     <widget class="QProgressBar" name="progressBar">
      <property name="value">
       <number>24</number>
      </property>
     </widget>
    </item>
-   <item row="0" column="4">
+   <item row="0" column="5">
     <widget class="QToolButton" name="btnBandDef">
      <property name="text">
       <string>...</string>
      </property>
     </widget>
    </item>
-   <item row="3" column="4">
+   <item row="3" column="5">
     <widget class="QToolButton" name="btnOutput">
      <property name="text">
       <string>...</string>
@@ -42,7 +42,7 @@
      </property>
     </widget>
    </item>
-   <item row="1" column="4">
+   <item row="1" column="5">
     <widget class="QToolButton" name="btnSpectra">
      <property name="text">
       <string>...</string>
@@ -63,7 +63,7 @@
      </property>
     </widget>
    </item>
-   <item row="11" column="1" colspan="4">
+   <item row="11" column="1" colspan="5">
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <widget class="QPushButton" name="btnRun">
@@ -114,14 +114,14 @@
      </item>
     </layout>
    </item>
-   <item row="9" column="1" colspan="4">
+   <item row="9" column="1" colspan="5">
     <widget class="Line" name="line">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>
-   <item row="7" column="1" colspan="4">
+   <item row="7" column="1" colspan="5">
     <widget class="Line" name="line_2">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -144,7 +144,30 @@
    <item row="0" column="2" colspan="2">
     <widget class="QLineEdit" name="txtBandDef"/>
    </item>
-   <item row="4" column="2" colspan="2">
+   <item row="5" column="1">
+    <widget class="QLabel" name="label_5">
+     <property name="text">
+      <string>Gaussian Tolerance</string>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="1">
+    <widget class="QLabel" name="label_6">
+     <property name="text">
+      <string>Band Pre-Shift</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="4">
+    <widget class="QComboBox" name="cboSpectraDelim"/>
+   </item>
+   <item row="0" column="4">
+    <widget class="QComboBox" name="cboBandDefDelim"/>
+   </item>
+   <item row="3" column="4">
+    <widget class="QComboBox" name="cboOutputDelim"/>
+   </item>
+   <item row="4" column="2" colspan="3">
     <widget class="QDoubleSpinBox" name="spnInputScale">
      <property name="decimals">
       <number>5</number>
@@ -154,14 +177,7 @@
      </property>
     </widget>
    </item>
-   <item row="5" column="1">
-    <widget class="QLabel" name="label_5">
-     <property name="text">
-      <string>Gaussian Tolerance</string>
-     </property>
-    </widget>
-   </item>
-   <item row="5" column="2" colspan="2">
+   <item row="5" column="2" colspan="3">
     <widget class="QDoubleSpinBox" name="spnTolerance">
      <property name="decimals">
       <number>6</number>
@@ -174,14 +190,7 @@
      </property>
     </widget>
    </item>
-   <item row="6" column="1">
-    <widget class="QLabel" name="label_6">
-     <property name="text">
-      <string>Band Pre-Shift</string>
-     </property>
-    </widget>
-   </item>
-   <item row="6" column="2" colspan="2">
+   <item row="6" column="2" colspan="3">
     <widget class="QDoubleSpinBox" name="spnBandShift">
      <property name="minimum">
       <double>-99999.000000000000000</double>

@@ -14,7 +14,31 @@
 
 #include "convolve_ui.hpp"
 
+std::string _parseDelim(const std::string& delim) {
+	if(delim == "[tab]") {
+		return "\t";
+	} else if(delim == "[space]") {
+		return " ";
+	} else {
+		return delim;
+	}
+}
+
+std::string _formatDelim(const std::string& delim) {
+	if(delim == "\t") {
+		return "[tab]";
+	} else if(delim == " ") {
+		return "[space]";
+	} else {
+		return delim;
+	}
+}
+
+
 ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
+	m_bandDefDelim(","),
+	m_spectraDelim(","),
+	m_outputDelim(","),
 	m_inputScale(1),
 	m_tolerance(0.0001),
 	m_bandShift(0),
@@ -29,8 +53,11 @@ void ConvolveForm::setupUi(QDialog* form) {
 	m_form = form;
 	progressBar->setValue(0);
 	connect(txtBandDef, SIGNAL(textChanged(QString)), this, SLOT(txtBandDefChanged(QString)));
+	connect(cboBandDefDelim, SIGNAL(currentTextChanged(QString)), this, SLOT(cboBandDefDelimChanged(QString)));
 	connect(txtSpectra, SIGNAL(textChanged(QString)), this, SLOT(txtSpectraChanged(QString)));
+	connect(cboSpectraDelim, SIGNAL(currentTextChanged(QString)), this, SLOT(cboSpectraDelimChanged(QString)));
 	connect(txtOutput, SIGNAL(textChanged(QString)), this, SLOT(txtOutputChanged(QString)));
+	connect(cboOutputDelim, SIGNAL(currentTextChanged(QString)), this, SLOT(cboOutputDelimChanged(QString)));
 	connect(spnInputScale, SIGNAL(valueChanged(double)), this, SLOT(spnInputScaleChanged(double)));
 	connect(spnTolerance, SIGNAL(valueChanged(double)), this, SLOT(spnToleranceChanged(double)));
 	connect(spnBandShift, SIGNAL(valueChanged(double)), this, SLOT(spnBandShiftChanged(double)));
@@ -47,11 +74,19 @@ void ConvolveForm::setupUi(QDialog* form) {
 	connect(this, SIGNAL(update(Convolver*)), this, SLOT(convUpdate(Convolver*)));
 	connect(this, SIGNAL(finished(Convolver*)), this, SLOT(convFinished(Convolver*)));
 
+	cboBandDefDelim->addItems({",", "[tab]", "[space]"});
+	cboSpectraDelim->addItems({",", "[tab]", "[space]"});
+	cboOutputDelim->addItems({",", "[tab]", "[space]"});
+
 	txtBandDef->setText(m_settings.value("lastBandDef", "").toString());
+	cboBandDefDelim->setCurrentText(_formatDelim(m_settings.value("lastBandDefDelim", ",").toString().toStdString()).c_str());
 	txtSpectra->setText(m_settings.value("lastSpectra", "").toString());
+	cboSpectraDelim->setCurrentText(_formatDelim(m_settings.value("lastSpectraDelim", ",").toString().toStdString()).c_str());
 	txtOutput->setText(m_settings.value("lastOutput", "").toString());
+	cboOutputDelim->setCurrentText(_formatDelim(m_settings.value("lastOutputDelim", ",").toString().toStdString()).c_str());
 	spnInputScale->setValue(m_settings.value("lastInputScale", 1.0).toDouble());
 	spnTolerance->setValue(m_settings.value("lastTolerance", 0.0001).toDouble());
+	spnBandShift->setValue(m_settings.value("lastBandShift", 0).toDouble());
 }
 
 void ConvolveForm::checkRun() {
@@ -69,15 +104,33 @@ void ConvolveForm::txtBandDefChanged(QString filename) {
 	checkRun();
 }
 
+void ConvolveForm::cboBandDefDelimChanged(QString delim) {
+	m_bandDefDelim = _parseDelim(delim.toStdString());
+	m_settings.setValue("lastBandDefDelim", delim);
+	checkRun();
+}
+
 void ConvolveForm::txtSpectraChanged(QString filename) {
 	m_spectraFile = filename.toStdString();
 	m_settings.setValue("lastSpectra", filename);
 	checkRun();
 }
 
+void ConvolveForm::cboSpectraDelimChanged(QString delim) {
+	m_spectraDelim = _parseDelim(delim.toStdString());
+	m_settings.setValue("lastSpectraDelim", delim);
+	checkRun();
+}
+
 void ConvolveForm::txtOutputChanged(QString filename) {
-	m_outputFile = filename.toStdString();
+	m_outputFile = _parseDelim(filename.toStdString());
 	m_settings.setValue("lastOutput", filename);
+	checkRun();
+}
+
+void ConvolveForm::cboOutputDelimChanged(QString delim) {
+	m_outputDelim = delim.toStdString();
+	m_settings.setValue("lastOutputDelim", delim);
 	checkRun();
 }
 
@@ -95,7 +148,7 @@ void ConvolveForm::spnToleranceChanged(double value) {
 
 void ConvolveForm::spnBandShiftChanged(double value) {
 	m_bandShift = value;
-	m_settings.setValue("bandShift", value);
+	m_settings.setValue("lastBandShift", value);
 	checkRun();
 }
 
@@ -124,9 +177,12 @@ void ConvolveForm::btnOutputClicked() {
 }
 
 void _run(ConvolveForm* form, Convolver* conv,
-		const std::string* bandDef, const std::string* spectra, const std::string* output,
+		const std::string* bandDef, std::string* bandDefDelim,
+		const std::string* spectra, std::string* spectraDelim,
+		const std::string* output, std::string* outputDelim,
 		double inputScale, double tolerance, double bandShift, bool* running) {
-	conv->run(*form, *bandDef, *spectra, *output, inputScale, tolerance, bandShift, *running);
+	conv->run(*form, *bandDef, *bandDefDelim, *spectra, *spectraDelim,
+			*output, *outputDelim, inputScale, tolerance, bandShift, *running);
 }
 
 void ConvolveForm::runState() {
@@ -141,6 +197,9 @@ void ConvolveForm::runState() {
 	spnInputScale->setEnabled(false);
 	spnTolerance->setEnabled(false);
 	spnBandShift->setEnabled(false);
+	cboBandDefDelim->setEnabled(false);
+	cboSpectraDelim->setEnabled(false);
+	cboOutputDelim->setEnabled(false);
 }
 
 void ConvolveForm::stopState() {
@@ -155,13 +214,20 @@ void ConvolveForm::stopState() {
 	spnInputScale->setEnabled(true);
 	spnTolerance->setEnabled(true);
 	spnBandShift->setEnabled(true);
+	cboBandDefDelim->setEnabled(true);
+	cboSpectraDelim->setEnabled(true);
+	cboOutputDelim->setEnabled(true);
 }
 
 void ConvolveForm::run() {
 	runState();
 	if(!m_running) {
 		m_running = true;
-		m_thread = std::thread(_run, this, m_convolver, &m_bandDefFile, &m_spectraFile, &m_outputFile, m_inputScale, m_tolerance, m_bandShift, &m_running);
+		m_thread = std::thread(_run, this, m_convolver,
+				&m_bandDefFile, &m_bandDefDelim,
+				&m_spectraFile, &m_spectraDelim,
+				&m_outputFile, &m_outputDelim,
+				m_inputScale, m_tolerance, m_bandShift, &m_running);
 	}
 	if(!m_thread.joinable())
 		stopState();

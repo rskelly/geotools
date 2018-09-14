@@ -150,32 +150,42 @@ int Band::count() const {
 	return m_count;
 }
 
-std::string _stripws(const std::string& buf) {
-	std::stringstream ss;
+void _stripws(std::string& buf) {
+	size_t j = 0;
 	for(size_t i = 0; i < buf.size(); ++i) {
-		if(buf[i] != '\n' && buf[i] != ' ')
-			ss << buf[i];
+		char c = buf[i];
+		if(c != '\n' && c != '\r' && c != ' ')
+			buf[j++] = c;
 	}
-	return ss.str();
+	buf.resize(j);
 }
 
-bool Spectrum::load(const std::string& filename) {
+void _stripcr(std::string& buf) {
+	size_t j = 0;
+	for(size_t i = 0; i < buf.size(); ++i) {
+		char c = buf[i];
+		if(c != '\r') buf[j++] = c;
+	}
+	buf.resize(j);
+}
+
+bool Spectrum::load(const std::string& filename, const std::string& delimiter) {
 	// Clear any existing bands list.
 	bands.clear();
 	// Open the input file for reading.
 	m_input.open(filename, std::ios::in);
-
+	// Set the delimiter
+	m_delim = delimiter[0];
 	// Try to skip the header. If it doesn't work quit.
+	// TODO: This is only relevant to Flame output. Should be configurable. In fact, the input should be in the form of an abstract table model.
 	if(!std::getline(m_input, m_buf))
 		return false;
 
 	std::string buf;		// A temporary buffer.
 	bool header = false; 	// False when the band wl header hasn't been read yet.
-
 	// Run over the rows.
 	while(std::getline(m_input, m_buf)) {
-		// Strip whitespace (not tabs) from the input.
-		m_buf = _stripws(m_buf);
+		_stripcr(m_buf); // Strip carriage return.
 		if(m_buf.size() == 0) {
 			// If the line contains no information, skip it.
 			continue;
@@ -184,16 +194,17 @@ bool Spectrum::load(const std::string& filename) {
 			std::stringstream ss(m_buf);
 			std::getline(ss, buf, ':');
 			std::getline(ss, m_buf);
-			properties[buf] = m_buf;
+			properties[buf] = m_buf; // The carriage return is at the beginning of the line
 		} else if(m_buf.find(">>>") < std::string::npos) {
 			// Skip the divider.
 			continue;
 		} else if(!header) {
 			// Parse the wavelengths out of the header section. The first two columns (date, time) are empty.
+			_stripws(m_buf);
 			std::stringstream ss(m_buf);
-			std::getline(ss, buf, '\t');
-			std::getline(ss, buf, '\t');
-			while(std::getline(ss, buf, '\t'))
+			std::getline(ss, buf, m_delim);
+			std::getline(ss, buf, m_delim);
+			while(std::getline(ss, buf, m_delim))
 				bands.emplace_back(atof(buf.c_str()), 0);
 			header = true;
 		} else {
@@ -227,11 +238,11 @@ bool Spectrum::next() {
 	// Read the date, timestamp and values out of the line.
 	std::stringstream ss(m_buf);
 	std::string part;
-	std::getline(ss, date, '\t');
-	std::getline(ss, part, '\t');
+	std::getline(ss, date, m_delim);
+	std::getline(ss, part, m_delim);
 	time = std::strtol(part.c_str(), nullptr, 10);
 	size_t i = 0;
-	while(std::getline(ss, part, '\t'))
+	while(std::getline(ss, part, m_delim))
 		bands[i++].setValue(std::strtod(part.c_str(), nullptr));
 	// Read the next buffer. If it fails, we'll find out on the next call to next.
 	std::getline(m_input, m_buf);
@@ -306,20 +317,20 @@ void Spectrum::reset() {
 	}
 }
 
-void Spectrum::writeHeader(std::ostream& out, double minWl, double maxWl) {
+void Spectrum::writeHeader(std::ostream& out, double minWl, double maxWl, char delim) {
 	out << "date,timestamp";
 	for(const Band& b : bands) {
 		if(b.wl() >= minWl && b.wl() <= maxWl)
-			out << "," << b.wl();
+			out << delim << b.wl();
 	}
 	out << "\n";
 }
 
-void Spectrum::write(std::ostream& out, double minWl, double maxWl) {
-	out << date << "," << time;
+void Spectrum::write(std::ostream& out, double minWl, double maxWl, char delim) {
+	out << date << delim << time;
 	for(const Band& b : bands) {
 		if(b.wl() >= minWl && b.wl() <= maxWl)
-			out << "," << b.value();
+			out << delim << b.value();
 	}
 	out << "\n";
 }
@@ -334,7 +345,7 @@ void Spectrum::shift(double shift) {
 		b.setShift(shift);
 }
 
-void BandPropsReader::load(const std::string& filename) {
+void BandPropsReader::load(const std::string& filename, const std::string& delimiter) {
 	// Set the initial limits. These will be refined.
 	minWl = std::numeric_limits<double>::max();
 	maxWl = std::numeric_limits<double>::lowest();
@@ -347,15 +358,16 @@ void BandPropsReader::load(const std::string& filename) {
 	// Run over the rows.
 	int band;
 	double wl, fwhm;
+	char delim = delimiter[0];
 	size_t pos, count;
 	while(std::getline(input, buf)) {
 		std::stringstream ss(buf);
-		std::getline(ss, buf, ',');
+		std::getline(ss, buf, delim);
 		band = std::strtol(buf.c_str(), nullptr, 10);
-		std::getline(ss, buf, ',');
+		std::getline(ss, buf, delim);
 		wl = std::strtod(buf.c_str(), nullptr);
 		std::getline(ss, buf);
-		count = (pos = buf.find(',')) == std::string::npos ? buf.size() : pos;
+		count = (pos = buf.find(delim)) == std::string::npos ? buf.size() : pos;
 		fwhm = std::strtod(buf.substr(0, count).c_str(), nullptr); // May or may not be a comma at the end.
 		bandProps.emplace(std::piecewise_construct, std::forward_as_tuple(band), std::forward_as_tuple(band, wl, fwhm));
 		if(wl < minWl) minWl = wl;
@@ -390,7 +402,12 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 }
 
 void Convolver::run(ConvolverListener& listener,
-		const std::string& bandDef, const std::string& spectra, const std::string& output,
+		const std::string& bandDef,
+		const std::string& bandDefDelim,
+		const std::string& spectra,
+		const std::string& spectraDelim,
+		const std::string& output,
+		const std::string& outputDelim,
 		double inputScale, double tolerance, double bandShift, bool& running) {
 
 	// Notify a listener.
@@ -401,11 +418,11 @@ void Convolver::run(ConvolverListener& listener,
 
 	// Load the band properties.
 	BandPropsReader rdr;
-	rdr.load(bandDef);
+	rdr.load(bandDef, bandDefDelim);
 
 	// Load the spectrum.
 	Spectrum spec;
-	spec.load(spectra);
+	spec.load(spectra, spectraDelim);
 	spec.shift(bandShift);
 	spec.scale(inputScale);
 
@@ -414,11 +431,12 @@ void Convolver::run(ConvolverListener& listener,
 	rdr.configureSpectrum(out);
 
 	// Open the output file.
-	std::ofstream outstr(output, std::ios::out);
+	std::ofstream outstr(output, std::ios::out|std::ios::trunc);
 
 	// Run the convolution record-by-record.
 	size_t complete = 0, count = spec.count(); // Status counters.
 	bool header = false;
+	char delim = outputDelim[0];
 	const std::vector<int>& bands = rdr.bands();
 	while(running && spec.next()) {
 		out.reset();
@@ -433,11 +451,11 @@ void Convolver::run(ConvolverListener& listener,
 		}
 		if(!header) {
 			// Write the header if this is the first iteration.
-			out.writeHeader(outstr, rdr.minWl, rdr.maxWl);
+			out.writeHeader(outstr, rdr.minWl, rdr.maxWl, delim);
 			header = true;
 		}
 		// Write the record.
-		out.write(outstr, rdr.minWl, rdr.maxWl);
+		out.write(outstr, rdr.minWl, rdr.maxWl, delim);
 		// Update progress.
 		m_progress = (double) complete++ / count;
 		listener.update(this);
