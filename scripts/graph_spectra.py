@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 
+'''
+This script is primarly for graphing spectra from delimited text files. It can
+load column-based files, and load and transpose row-based files.
+
+Each method takes a Params object with properties that may or may not be used
+by that method. In some cases the properties may be interpreted differently by
+the method, so pay attention to the doc comments.
+'''
+
 import matplotlib.pyplot as plt
 import os
 import sys
@@ -8,10 +17,13 @@ import csv
 def transpose(params):
 	'''
 	Transpose a head and data row from a csv file so that they become two columns.
+	
 	csvfile -- The csv file.
 	headrow -- The row index of the header (0-based)
 	datarow -- The row index of the data (0-based)
 	col -- The column start index (0-based)
+
+	Return the label, the filename, the header column and data column.
 	'''
 	headrow = int(params.head_offset)
 	datarow = int(params.data_offset)
@@ -46,10 +58,14 @@ def transpose(params):
 
 def load(params):
 	'''
+	Load a head and data row from a csv file so that they become two columns.
+	
 	csvfile -- The csv file.
 	headrow -- The row index of the header (0-based)
 	datarow -- The row index of the data (0-based)
 	col -- The column start index (0-based)
+
+	Return the label, the filename, the header column and data column.
 	'''
 	headrow = int(params.head_offset)
 	datarow = int(params.data_offset)
@@ -86,6 +102,9 @@ def load(params):
 def smooth(x, y):
 	'''
 	Use local linear regression to produce a smoothed plot which can be used for normalization.
+
+	x - The column containing x values.
+	y - The column containing y values.
 	'''
 	from scipy.interpolate import interp1d
 	import statsmodels.api as sm
@@ -98,12 +117,28 @@ def smooth(x, y):
 
 def normalize(y, ybase):
 	'''
-	Just subtracts ybase from y, element-wise.
+	Just subtracts ybase from y, element-wise. The ybase
+	argument must correspond element-wise to the y argument.
+
+	y - The y values to be normalized.
+	ybase - The y values to normalize against.
 	'''
 	return [y0 - ybase0 for y0, ybase0 in zip(y, ybase)]
 
 def graph(params):
+	'''
+	Produce a graph using the spectra loaded using the params given in the list.
 
+	The type property of each param object determines how the data are loaded
+	and processed. The following types are available.
+
+	[none; default] - Load the dataset.
+	t - Load and transpose the dataset.
+	tl - Load, transpose and smooth the dataset using loess.
+	tln - Load, transpose, smooth and normalize.
+	ll - Load and smooth the dataset.
+	tlne - Load, transpose, smooth, normalize and graph the extrema.
+	'''
 	columns = []
 
 	for param in params:
@@ -151,6 +186,8 @@ def graph(params):
 
 def find_extrema(window_size, x, y):
 	'''
+	Find the extrema within a given window along the
+	x and y data. Not really useful now.
 	'''
 	minx0 = []
 	miny0 = []
@@ -191,6 +228,9 @@ def find_extrema(window_size, x, y):
 	return (minx0, miny0, maxx0, maxy0)
 
 class Params:
+	''' 
+	A parameter container for the methods in this script.
+	'''
 
 	def __init__(self, type, label, file, head_offset, data_offset, col_offset, delim = ',', scale = 1., shift = 0.):
 		self.type = type
@@ -207,53 +247,22 @@ class Params:
 if __name__ == '__main__':
 	'''
 	Call in the form:
-	graph_transposed.py <t/n> <data file> <head row> <data row> <col> <delimiter> <mult> <shift> [<t/n> <data file> <head row> <data row> <col> <delimiter> <mult>]
+	graph_transposed.py <config file>
+
+	The configuration file is a text file. Each line contains a space-delimited list of arguments. This
+	program is terribly naive, so none of the arguments can have spaces. The arguments are, 
+
+	<type> <data file> <head row> <data row> <col> <delimiter> <mult> <shift>
+
+	Any row that begins with a space or # is ignored.
 	'''
-	if len(sys.argv) == 1:
-		args = []
-		#args.append(['t', 'irr_norm', 'roof6_AbsoluteIrradiance_09-47-30-406_60s.txt', 13, 37, 2, 't', 1, -9.])
-		#args.append(['t', 'irr_raw', 'roof6_AbsoluteIrradiance_09-47-30-406.txt', 14, 15, 2, 't', 1, 0.])
-		#args.append(['t', 'shift_test', 'shift_AbsoluteIrradiance_09-44-34-037.txt', 14, 15, 2, 't', 100., 0.])
-		#args.append(['t', 'shift_test', 'shift2_FLMS128791_10-14-01-727.txt', 14, 15, 2, 't', .01, 0.])
-
-		#args.append(['t', 'conv', 'convolved/roo6_convolved_nano_bands2.csv', 0, 1, 2, ',', 1, 0.])
-
-		# Sample NANO spectrum.
-		#args.append(['t', 'nano', 'roof_irradiance_convolved/nano1.csv', 0, 1, 0, ',', 3, 0.])
-
-		# ASTM Reference spectrum scaled by 15.
-		args.append(Params('n', 'ASTMG173', 'roof_irradiance_convolved/ASTMG173.csv', 0, 2, 2, ',', 15, 0.))
-
-		# Bartier 1, with shift applied.
-		#args.append(Params('t', 'bartier_1_1', '/home/rob/Documents/field/2018_sept/flame/bartier1_AbsoluteIrradiance_10-09-26-788.txt', 14, 15, 2, 't', 1., -7.97))
-
-		# Bartier 1, shifted and convolved.
-		#args.append(Params('t', 'bartier_1_c_1', '/home/rob/Documents/field/2018_sept/flame/bartier1_AbsoluteIrradiance_10-09-26-788_conv_nano.csv', 0, 1, 2, ',', 1., 0.))
-
-		# Bartier 2, with shift applied.
-		#args.append(Params('t', 'bartier_2_1', '/home/rob/Documents/field/2018_sept/flame/bartier2_AbsoluteIrradiance_11-20-47-135.txt', 14, 15, 2, 't', 1., -7.97))
-
-		# Bartier 2, shifted and convolved.
-		#args.append(Params('t', 'bartier_2_c_1', '/home/rob/Documents/field/2018_sept/flame/bartier2_AbsoluteIrradiance_11-20-47-135_conv_nano.txt', 0, 1, 2, ',', 1., 0.))
-
-		# Bartier 3, with shift applied.
-		#args.append(Params('t', 'bartier_3_1', '/home/rob/Documents/field/2018_sept/flame/bartier3_AbsoluteIrradiance_13-05-18-419.txt', 14, 15, 2, 't', 1., -7.97))
-
-		# Bartier 3, shifted and convolved.
-		#args.append(Params('t', 'bartier_3_c_1', '/home/rob/Documents/field/2018_sept/flame/bartier3_AbsoluteIrradiance_13-05-18-419_conv_nano.txt', 0, 1, 2, ',', 1., 0.))
-
-		# SF 1, with shift applied.
-		args.append(Params('t', 'sf_1', '/home/rob/Documents/field/2018_sept/flame/sf10_1_AbsoluteIrradiance_10-40-58-450.txt', 14, 1015, 2, 't', 1., -7.97))
-
-		# SF 1, shifted and convolved.
-		args.append(Params('t', 'sf_c_1', '/home/rob/Documents/field/2018_sept/flame/sf10_1_AbsoluteIrradiance_10-40-58-450_conv_nano.txt', 0, 1001, 2, ',', 1., 0.))
-
-		# SF, with shift applied.
-		args.append(Params('t', 'sf', '/home/rob/Documents/field/2018_sept/flame/sf10_AbsoluteIrradiance_13-02-17-800.txt', 14, 1015, 2, 't', 1., -7.97))
-
-		# SF, shifted and convolved.
-		args.append(Params('t', 'sf_c', '/home/rob/Documents/field/2018_sept/flame/sf10_AbsoluteIrradiance_13-02-17-800_conv_nano.txt', 0, 1000, 2, ',', 1., 0.))
-
-		graph(args)
-	else:
-		graph(sys.argv[1:])
+	params = []
+	with open(sys.argv[1], 'r') as f:
+		for line in f:
+			line = line.strip()
+			if line == '\n' or line == '' or line.startswith(' ') or line.startswith('#'):
+				continue
+			args = line.split(' ')
+			print(args)
+			params.append(Params(*args))
+	graph(params)
