@@ -51,6 +51,11 @@ target_include_directories(convolve PUBLIC convolve_autogen/include
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS})
 target_link_libraries (convolve Qt5::Widgets)
 
+add_executable (nano_apx_timesync src/nano_apx_timesync.cpp src/reader.cpp)
+#target_include_directories(nano_apx_timesync PUBLIC convolve_autogen/include  
+#	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS})
+target_link_libraries (nano_apx_timesync gdal)
+
 add_executable (edgereplace src/edgereplace.cpp)
 
 

@@ -8,6 +8,9 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <ctime>
+#include <chrono>
+#include <list>
 
 #include <gdal_priv.h>
 
@@ -271,3 +274,320 @@ BandMapReader::BandMapReader(const std::string& filename, int wlCol, int idxCol,
 const std::map<int, int>& BandMapReader::bandMap() const {
 	return m_bandMap;
 }
+
+
+Raster::Raster(const std::string& filename) :
+	m_ds(nullptr),
+	m_bands(0),
+	m_cols(0),
+	m_rows(0),
+	m_row(-1) {
+
+	GDALAllRegister();
+
+	if(!(m_ds = (GDALDataset*) GDALOpen(filename.c_str(), GA_ReadOnly)))
+		throw std::invalid_argument("Failed to open dataset.");
+
+	m_bands = m_ds->GetRasterCount();
+	m_cols = m_ds->GetRasterXSize();
+	m_rows = m_ds->GetRasterYSize();
+}
+
+int Raster::bands() const {
+	return m_bands;
+}
+
+int Raster::cols() const {
+	return m_cols;
+}
+
+int Raster::rows() const {
+	return m_rows;
+}
+
+bool Raster::next(std::vector<double>& buf) {
+	buf.resize(m_bands * m_cols);
+	std::fill(buf.begin(), buf.end(), 0);
+	if(++m_row < m_rows) {
+		for(int i = 1; i <= m_bands; ++i) {
+			GDALRasterBand* band = m_ds->GetRasterBand(i);
+			if(!band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (buf.data() + (i - 1) * m_cols * sizeof(double)), m_cols, 1, GDT_Float64, 0, 0, nullptr))
+				throw std::runtime_error("Failed to read from raster.");
+		}
+		return true;
+	}
+	return false;
+}
+
+
+bool Raster::get(std::vector<uint16_t>& buf, int row) {
+	buf.resize(m_bands * m_cols);
+	std::fill(buf.begin(), buf.end(), 0);
+	if(row < 0 || row >= m_rows)
+		return false;
+	char* data = (char*) buf.data();
+	for(int i = 1; i <= m_bands; ++i) {
+		GDALRasterBand* band = m_ds->GetRasterBand(i);
+		if(CPLE_None != band->RasterIO(GF_Read, 0, row, m_cols, 1, (char*) (data + (i - 1) * m_cols * sizeof(uint16_t)), m_cols, 1, GDT_UInt16, 0, 0, nullptr))
+			return false;
+	}
+	return true;
+}
+
+void Raster::reset() {
+	m_row = -1;
+}
+
+Raster::~Raster() {
+	GDALClose(m_ds);
+}
+
+
+
+FrameIndexReader::FrameIndexReader(const std::string& filename) {
+	std::ifstream in(filename, std::ios::in);
+	std::string frame, time;
+	size_t rpos;
+	// Skip the header.
+	if(in.good())
+		std::getline(in, frame, '\n');
+	// Read the data.
+	std::list<std::pair<int, long> > items;
+	while(in.good()) {
+		std::getline(in, frame, '\t');
+		std::getline(in, time, '\n');
+		if(time.empty() || frame.empty())
+			continue;
+		if((rpos = time.find('\r')) != std::string::npos)
+			time.replace(rpos, 1, 0, 'x');
+		items.push_back(std::make_pair(std::stoi(frame), std::stol(time)));
+	}
+
+	{
+		auto it = items.begin();
+		std::advance(it, items.size() / 2);
+		int mframe = it->first;
+		int mtime = it->second;
+		m_frames = new BinTree<long, int>(mtime, mframe);
+		m_times = new BinTree<int, long>(mframe, mtime);
+	}
+
+	for(auto p : items) {
+		m_frames->add(p.second, p.first);
+		m_times->add(p.first, p.second);
+	}
+};
+
+bool FrameIndexReader::getTime(int frame, long& time) const {
+	long t;
+	if(m_times->get(frame, t)) {
+		time = t;
+		return true;
+	}
+	return false;
+}
+
+bool FrameIndexReader::getNearestTime(int frame, int& actualFrame, long& time) const {
+	long t;
+	int f;
+	if(m_times->findNearest(frame, f, t)) {
+		actualFrame = f;
+		time = t;
+		return true;
+	}
+	return false;
+}
+
+bool FrameIndexReader::getFrame(long time, int& frame) const {
+	int f;
+	if(m_frames->get(time, f)) {
+		frame = f;
+		return true;
+	}
+	return false;
+}
+
+bool FrameIndexReader::getNearestFrame(long time, long& actualTime, int& frame) const {
+	long t;
+	int f;
+	if(m_frames->findNearest(time, t, f)) {
+		actualTime = t;
+		frame = f;
+		return true;
+	}
+	return false;
+}
+
+FrameIndexReader::~FrameIndexReader() {
+	delete m_frames;
+	delete m_times;
+}
+
+long _getUTCMilSec(const std::string& input, const std::string& fmt) {
+	std::tm t = {};
+	strptime(input.c_str(), fmt.c_str(), &t);
+	double a = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::from_time_t(std::mktime(&t)).time_since_epoch()).count();
+	std::string sfrac = input.substr(input.find('.'), 6);
+	double b = std::stod(sfrac) * 1000;
+	return a + b;
+}
+
+IMUGPSRow::IMUGPSRow(std::ifstream& in, double msOffset) :
+	index(0) {
+	std::string buf;
+	std::getline(in, buf, '\t');
+	roll = std::stod(buf);
+	std::getline(in, buf, '\t');
+	pitch = std::stod(buf);
+	std::getline(in, buf, '\t');
+	yaw = std::stod(buf);
+	std::getline(in, buf, '\t');
+	lat = std::stod(buf);
+	std::getline(in, buf, '\t');
+	lon = std::stod(buf);
+	std::getline(in, buf, '\t');
+	alt = std::stod(buf);
+	std::getline(in, buf, '\t');
+	timestamp = std::stol(buf);
+	std::getline(in, buf, '\t');
+	date = _getUTCMilSec(buf, "%Y/%m/%d %H:%M:%S") + msOffset;
+	std::getline(in, buf, '\t');
+	status = std::stod(buf);
+	std::getline(in, buf);
+	heading = std::stod(buf);
+}
+
+
+IMUGPSReader::IMUGPSReader(const std::string& filename, double msOffset) :
+	m_lastIndex(0) {
+	m_in.open(filename, std::ios::in);
+	// Skip the header.
+	std::string buf;
+	std::getline(m_in, buf, '\n');
+	std::list<IMUGPSRow*> rows;
+	while(std::getline(m_in, buf, '\n')) {
+		try {
+			rows.push_back(new IMUGPSRow(m_in, msOffset));
+		} catch(...) {
+			continue;
+		}
+	}
+	{
+		auto it = rows.begin();
+		std::advance(it, rows.size() / 2);
+		IMUGPSRow* tmp = *it;
+		m_gpsTimesT = new BinTree<long, IMUGPSRow*>(tmp->timestamp, tmp);
+		m_utcTimesT = new BinTree<long, IMUGPSRow*>(tmp->date, tmp);
+	}
+	size_t i = 0;
+	m_rows.resize(rows.size());
+	for(IMUGPSRow* row : rows) {
+		row->index = i++;
+		m_rows[row->index] = row;
+		m_gpsTimesT->add(row->timestamp, row);
+		m_utcTimesT->add(row->date, row);
+	}
+}
+
+bool IMUGPSReader::getUTCTime(long timestamp, long& utcTime) {
+	long timestamp0;
+	IMUGPSRow* row;
+	if(m_gpsTimesT->findNearest(timestamp, timestamp0, row)) {
+		if(timestamp == timestamp0) {
+			utcTime = row->date;
+			return true;
+		} else if(timestamp > timestamp0) {
+			if(row->index >= m_rows.size()) {
+				utcTime = row->date;
+			} else {
+				IMUGPSRow* row0 = m_rows[row->index];
+				IMUGPSRow* row1 = m_rows[row->index + 1];
+				utcTime = row0->date + (row1->date - row0->date) * timestamp / (row1->timestamp - row0->timestamp);
+			}
+			return true;
+		} else if(timestamp < timestamp0) {
+			if(row->index == 0) {
+				utcTime = row->date;
+			} else {
+				IMUGPSRow* row0 = m_rows[row->index - 1];
+				IMUGPSRow* row1 = m_rows[row->index];
+				utcTime = row0->date + (row1->date - row0->date) * timestamp / (row1->timestamp - row0->timestamp);
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+bool IMUGPSReader::getGPSTime(long date, long& gpsTime) {
+	long date0;
+	IMUGPSRow* row;
+	if(m_utcTimesT->findNearest(date, date0, row)) {
+		if(date == date0) {
+			gpsTime = row->timestamp;
+			return true;
+		} else if(date > date0) {
+			if(row->index >= m_rows.size() - 1) {
+				gpsTime = row->timestamp;
+			} else {
+				IMUGPSRow* row0 = m_rows[row->index];
+				IMUGPSRow* row1 = m_rows[row->index + 1];
+				gpsTime = row0->timestamp + (row1->timestamp - row0->timestamp) * (date - row0->date) / (row1->date - row0->date);
+			}
+			return true;
+		} else if(date < date0) {
+			if(row->index == 0) {
+				gpsTime = row->timestamp;
+			} else {
+				IMUGPSRow* row0 = m_rows[row->index - 1];
+				IMUGPSRow* row1 = m_rows[row->index];
+				gpsTime = row0->timestamp + (row1->timestamp - row0->timestamp) * (date - row0->date) / (row1->date - row0->date);
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+IMUGPSReader::~IMUGPSReader() {
+	delete m_gpsTimesT;
+	delete m_utcTimesT;
+}
+
+bool FlameRow::read(std::ifstream& in, double msOffset) {
+	std::string buf;
+	if(!std::getline(in, buf, ','))
+		return false;
+	date = _getUTCMilSec(buf, "%Y-%m-%d %H:%M:%S") + msOffset;
+	if(!std::getline(in, buf, ','))
+		return false;
+	timestamp = std::stol(buf) + msOffset;
+	if(!std::getline(in, buf, '\n'))
+		return false;
+	size_t i = 0;
+	std::stringstream cols(buf);
+	while(std::getline(cols, buf, ','))
+		bands[i++] = std::stod(buf);
+	return in.good();
+}
+
+FlameReader::FlameReader(const std::string& filename, double msOffset) :
+	m_msOffset(msOffset) {
+	m_in.open(filename, std::ios::in);
+	std::string buf;
+	std::getline(m_in, buf, ',');
+	std::getline(m_in, buf, ',');
+	std::getline(m_in, buf, '\n');
+	std::stringstream cols(buf);
+	while(std::getline(cols, buf, ','))
+		wavelengths.push_back(std::stod(buf));
+}
+
+bool FlameReader::next(FlameRow& row) {
+	if(row.wavelengths.empty()) {
+		row.wavelengths.assign(wavelengths.begin(), wavelengths.end());
+		row.bands.resize(row.wavelengths.size());
+	}
+	return row.read(m_in, m_msOffset);
+}
+
