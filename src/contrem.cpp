@@ -18,6 +18,8 @@
 #include "reader.hpp"
 #include "writer.hpp"
 
+using namespace hlrg;
+
 int runWithGui(int argc, char **argv) {
 	class ContremApp : public QApplication {
 	public:

@@ -14,6 +14,7 @@
 #include "convolver.hpp"
 #include "ui/convolve_ui.hpp"
 
+using namespace hlrg;
 
 int runWithGui(int argc, char **argv) {
 	class ConvolveApp : public QApplication {

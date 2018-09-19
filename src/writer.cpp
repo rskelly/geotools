@@ -20,6 +20,8 @@
 #include "writer.hpp"
 #include "stats.hpp"
 
+using namespace hlrg;
+
 bool __isnonzero(const double& v) {
 	return v > 0;
 }

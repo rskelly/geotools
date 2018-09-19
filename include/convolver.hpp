@@ -11,26 +11,7 @@
 #include <string>
 #include <fstream>
 
-/**
- * Compute the inverse of the Gaussian: retrieve the x that would give
- * the given y. X is returned as an absolute distance from x0.
- *
- * @param sigma The standard deviation of the function.
- * @param y The value of y for which to find x.
- * @param x0 The mean x.
- */
-inline double invGaussian(double sigma, double y, double x0);
-
-/**
- * Compute the value of the Gaussian function for a given mean (x0) and
- * x, given sigma and magnitude 1.
- *
- * @param sigma The standard deviation of the function.
- * @param x The current x.
- * @param x0 The mean (expected) x.
- */
-inline double gaussian(double sigma, double x, double x0);
-
+namespace hlrg {
 
 /**
  * The kernel class holds the step values, plus the min
@@ -493,6 +474,6 @@ public:
 	double progress() const;
 };
 
-
+} // hlrg
 
 #endif /* INCLUDE_CONVOLVER_HPP_ */

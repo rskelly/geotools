@@ -16,6 +16,8 @@
 
 #include "reader.hpp"
 
+using namespace hlrg;
+
 Reader::Reader() :
 	m_cols(0), m_rows(0), m_bands(0),
 	m_col(0), m_row(0),
@@ -432,7 +434,7 @@ long _getUTCMilSec(const std::string& input, const std::string& fmt) {
 	return a + b;
 }
 
-IMUGPSRow::IMUGPSRow(std::ifstream& in, double msOffset) :
+IMUGPSRow::IMUGPSRow(std::istream& in, double msOffset) :
 	index(0) {
 	std::string buf;
 	std::getline(in, buf, '\t');
@@ -554,7 +556,7 @@ IMUGPSReader::~IMUGPSReader() {
 	delete m_utcTimesT;
 }
 
-bool FlameRow::read(std::ifstream& in, double msOffset) {
+bool FlameRow::read(std::istream& in, double msOffset) {
 	std::string buf;
 	if(!std::getline(in, buf, ','))
 		return false;

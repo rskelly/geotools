@@ -16,6 +16,8 @@
 #include "ui_convolve.h"
 #include "convolver.hpp"
 
+using namespace hlrg;
+
 class ConvolveForm : public QDialog, public Ui::ConvolveForm, public ConvolverListener {
 	Q_OBJECT
 private:

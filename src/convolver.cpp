@@ -16,13 +16,31 @@
 
 #include "convolver.hpp"
 
+using namespace hlrg;
+
 constexpr double PI = 3.1415926535;
 
-double invGaussian(double sigma, double y, double x0) {
+/**
+ * Compute the inverse of the Gaussian: retrieve the x that would give
+ * the given y. X is returned as an absolute distance from x0.
+ *
+ * @param sigma The standard deviation of the function.
+ * @param y The value of y for which to find x.
+ * @param x0 The mean x.
+ */
+inline double invGaussian(double sigma, double y, double x0) {
 	return sigma * std::sqrt(-2.0 * std::log(y * sigma * std::sqrt(2.0 * PI))) + x0;
 }
 
-double gaussian(double sigma, double x, double x0) {
+/**
+ * Compute the value of the Gaussian function for a given mean (x0) and
+ * x, given sigma and magnitude 1.
+ *
+ * @param sigma The standard deviation of the function.
+ * @param x The current x.
+ * @param x0 The mean (expected) x.
+ */
+inline double gaussian(double sigma, double x, double x0) {
 	return  1.0 / (sigma * std::sqrt(2.0 * PI)) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
 }
 
@@ -256,24 +274,6 @@ void Spectrum::setup(Spectrum& spec) {
 }
 
 void Spectrum::convolve(Kernel& kernel, Band& band) {
-	/*
-	size_t idx = 0;
-	double d = std::numeric_limits<double>::max();
-	for(size_t i = 0; i < bands.size(); ++i) {
-		double d0 = std::abs(bands[i].wl() - band.wl());
-		if(d0 < d) {
-			idx = i;
-			d = d0;
-		} else {
-			break;
-		}
-	}
-	for(size_t i = 0; i < kernel.size(); ++i) {
-		double k = kernel[i];
-		double v = bands[idx - kernel.size() + i].scaledValue();
-		band.setValue(band.value() +  k * v);
-	}
-	*/
 	// First, figure out the start and end indices of the input, given
 	// the width of the kernel function out to the threshold.
 	double min = band.wl() - kernel.halfWidth() * 2;

@@ -20,6 +20,9 @@
 #define p3(x) ((x)*(x)*(x))
 #define p4(x) ((x)*(x)*(x)*(x))
 
+using namespace hlrg;
+
+
 // TODO: Should I ignore zeroes?
 inline void stats1(const std::vector<double>& v, Stats& stats) {
 	stats.min = SMAX;

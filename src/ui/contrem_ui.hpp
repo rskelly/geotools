@@ -16,6 +16,8 @@
 #include "ui_contrem.h"
 #include "contrem.hpp"
 
+using namespace hlrg;
+
 class ContremForm : public QDialog, public Ui::ContremForm, public ContremListener {
 	Q_OBJECT
 private:

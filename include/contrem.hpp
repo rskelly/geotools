@@ -10,6 +10,8 @@
 
 #include "reader.hpp"
 
+namespace hlrg {
+
 /**
  * Forward declaration.
  */
@@ -83,5 +85,7 @@ public:
 	double progress() const;
 
 };
+
+} // hlrg
 
 #endif /* PROCESSOR_HPP_ */

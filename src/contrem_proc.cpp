@@ -28,6 +28,7 @@
 
 using namespace geos::geom;
 using namespace geos::algorithm;
+using namespace hlrg;
 
 /**
  * A line, representing a segment from a convex hull.

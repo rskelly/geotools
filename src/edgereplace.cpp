@@ -1,6 +1,8 @@
 /*
  * edgereplace.cpp
  *
+ * This program removes the edges of a raw raster file up to a given width.
+ *
  *  Created on: Aug 3, 2018
  *      Author: rob
  */

@@ -11,6 +11,11 @@
 
 #include "reader.hpp"
 
+using namespace hlrg;
+
+/**
+ * Average the values in the given vector.
+ */
 double _avg(std::vector<uint16_t>& buf) {
 	uint32_t sum = 0;
 	for(uint16_t v : buf)
@@ -18,6 +23,9 @@ double _avg(std::vector<uint16_t>& buf) {
 	return (double) sum / buf.size();
 }
 
+/**
+ * Average the values in the given vector.
+ */
 double _avg(std::vector<double>& buf) {
 	double sum = 0;
 	for(double v : buf)

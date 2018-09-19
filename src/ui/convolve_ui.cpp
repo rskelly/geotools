@@ -14,6 +14,8 @@
 
 #include "convolve_ui.hpp"
 
+using namespace hlrg;
+
 std::string _parseDelim(const std::string& delim) {
 	if(delim == "[tab]") {
 		return "\t";
