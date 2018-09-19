@@ -137,6 +137,7 @@ def graph(params):
 	tl - Load, transpose and smooth the dataset using loess.
 	tln - Load, transpose, smooth and normalize.
 	ll - Load and smooth the dataset.
+	lln - Load, smooth and normalize.
 	tlne - Load, transpose, smooth, normalize and graph the extrema.
 	'''
 	columns = []
@@ -153,6 +154,10 @@ def graph(params):
 			a0, b0 = smooth(a, b)
 			b1 = normalize(b0, b)
 			columns.append((label, csvfile, a, b1))
+		elif param.type == 'lln':
+			label, csvfile, a, b = load(param)
+			a0, b0 = smooth(a, b)
+			columns.append((label, csvfile, a, b0))
 		elif param.type == 'll':
 			label, csvfile, a, b = load(param)
 			a, b = smooth(a, b)
@@ -174,7 +179,7 @@ def graph(params):
 		maxx = max(max(a), maxx)
 
 	# Plot the x axis.
-	plt.plot([minx, maxx], [0, 0])
+	#plt.plot([minx, maxx], [0, 0])
 
 	for label, file, a, b in columns:
 		print(label, len(a), len(b))
