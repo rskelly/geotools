@@ -450,9 +450,9 @@ IMUGPSRow::IMUGPSRow(std::istream& in, double msOffset) :
 	std::getline(in, buf, '\t');
 	alt = std::stod(buf);
 	std::getline(in, buf, '\t');
-	timestamp = std::stol(buf);
+	gpsTime = std::stol(buf);
 	std::getline(in, buf, '\t');
-	date = _getUTCMilSec(buf, "%Y/%m/%d %H:%M:%S") + msOffset;
+	utcTime = _getUTCMilSec(buf, "%Y/%m/%d %H:%M:%S") + msOffset;
 	std::getline(in, buf, '\t');
 	status = std::stod(buf);
 	std::getline(in, buf);
@@ -478,42 +478,50 @@ IMUGPSReader::IMUGPSReader(const std::string& filename, double msOffset) :
 		auto it = rows.begin();
 		std::advance(it, rows.size() / 2);
 		IMUGPSRow* tmp = *it;
-		m_gpsTimesT = new BinTree<long, IMUGPSRow*>(tmp->timestamp, tmp);
-		m_utcTimesT = new BinTree<long, IMUGPSRow*>(tmp->date, tmp);
+		m_gpsTimesT = new BinTree<long, IMUGPSRow*>(tmp->gpsTime, tmp);
+		m_utcTimesT = new BinTree<long, IMUGPSRow*>(tmp->utcTime, tmp);
 	}
 	size_t i = 0;
+	long mint = std::numeric_limits<long>::max(), maxt = std::numeric_limits<long>::lowest();
 	m_rows.resize(rows.size());
 	for(IMUGPSRow* row : rows) {
 		row->index = i++;
 		m_rows[row->index] = row;
-		m_gpsTimesT->add(row->timestamp, row);
-		m_utcTimesT->add(row->date, row);
+		m_gpsTimesT->add(row->gpsTime, row);
+		m_utcTimesT->add(row->utcTime, row);
+		if(row->utcTime < mint) mint = row->utcTime;
+		if(row->utcTime > maxt) maxt = row->utcTime;
 	}
+	std::cerr << "IMUGPS min date: " << mint << ", max date: " << maxt << "\n";
 }
 
-bool IMUGPSReader::getUTCTime(long timestamp, long& utcTime) {
-	long timestamp0;
+bool IMUGPSReader::getUTCTime(long gpsTime, long& utcTime) {
+	long gpsTime0;
 	IMUGPSRow* row;
-	if(m_gpsTimesT->findNearest(timestamp, timestamp0, row)) {
-		if(timestamp == timestamp0) {
-			utcTime = row->date;
+	if(m_gpsTimesT->findNearest(gpsTime, gpsTime0, row)) {
+		if(gpsTime == gpsTime0) {
+			utcTime = row->utcTime;
 			return true;
-		} else if(timestamp > timestamp0) {
+		} else if(gpsTime > gpsTime0) {
 			if(row->index >= m_rows.size()) {
-				utcTime = row->date;
+				// Past the last row, return the last value.
+				utcTime = row->utcTime;
 			} else {
 				IMUGPSRow* row0 = m_rows[row->index];
 				IMUGPSRow* row1 = m_rows[row->index + 1];
-				utcTime = row0->date + (row1->date - row0->date) * timestamp / (row1->timestamp - row0->timestamp);
+				// Interpolate the utc time, linearly.
+				utcTime = row0->utcTime + (row1->utcTime - row0->utcTime) * gpsTime / (row1->gpsTime - row0->gpsTime);
 			}
 			return true;
-		} else if(timestamp < timestamp0) {
+		} else if(gpsTime < gpsTime0) {
 			if(row->index == 0) {
-				utcTime = row->date;
+				// At or before the first row, return the first value.
+				utcTime = row->utcTime;
 			} else {
 				IMUGPSRow* row0 = m_rows[row->index - 1];
 				IMUGPSRow* row1 = m_rows[row->index];
-				utcTime = row0->date + (row1->date - row0->date) * timestamp / (row1->timestamp - row0->timestamp);
+				// Interpolate the utc time, linearly.
+				utcTime = row0->utcTime + (row1->utcTime - row0->utcTime) * gpsTime / (row1->gpsTime - row0->gpsTime);
 			}
 			return true;
 		}
@@ -521,29 +529,29 @@ bool IMUGPSReader::getUTCTime(long timestamp, long& utcTime) {
 	return false;
 }
 
-bool IMUGPSReader::getGPSTime(long date, long& gpsTime) {
-	long date0;
+bool IMUGPSReader::getGPSTime(long utcTime, long& gpsTime) {
+	long utcTime0;
 	IMUGPSRow* row;
-	if(m_utcTimesT->findNearest(date, date0, row)) {
-		if(date == date0) {
-			gpsTime = row->timestamp;
+	if(m_utcTimesT->findNearest(utcTime, utcTime0, row)) {
+		if(utcTime == utcTime0) {
+			gpsTime = row->gpsTime;
 			return true;
-		} else if(date > date0) {
+		} else if(utcTime > utcTime0) {
 			if(row->index >= m_rows.size() - 1) {
-				gpsTime = row->timestamp;
+				gpsTime = row->gpsTime;
 			} else {
 				IMUGPSRow* row0 = m_rows[row->index];
 				IMUGPSRow* row1 = m_rows[row->index + 1];
-				gpsTime = row0->timestamp + (row1->timestamp - row0->timestamp) * (date - row0->date) / (row1->date - row0->date);
+				gpsTime = row0->gpsTime + (row1->gpsTime - row0->gpsTime) * (utcTime - row0->utcTime) / (row1->utcTime - row0->utcTime);
 			}
 			return true;
-		} else if(date < date0) {
+		} else if(utcTime < utcTime0) {
 			if(row->index == 0) {
-				gpsTime = row->timestamp;
+				gpsTime = row->gpsTime;
 			} else {
 				IMUGPSRow* row0 = m_rows[row->index - 1];
 				IMUGPSRow* row1 = m_rows[row->index];
-				gpsTime = row0->timestamp + (row1->timestamp - row0->timestamp) * (date - row0->date) / (row1->date - row0->date);
+				gpsTime = row0->gpsTime + (row1->gpsTime - row0->gpsTime) * (utcTime - row0->utcTime) / (row1->utcTime - row0->utcTime);
 			}
 			return true;
 		}
@@ -560,10 +568,10 @@ bool FlameRow::read(std::istream& in, double msOffset) {
 	std::string buf;
 	if(!std::getline(in, buf, ','))
 		return false;
-	date = _getUTCMilSec(buf, "%Y-%m-%d %H:%M:%S") + msOffset;
+	dateTime = _getUTCMilSec(buf, "%Y-%m-%d %H:%M:%S") + msOffset;
 	if(!std::getline(in, buf, ','))
 		return false;
-	timestamp = std::stol(buf) + msOffset;
+	utcTime = std::stol(buf) + msOffset;
 	if(!std::getline(in, buf, '\n'))
 		return false;
 	size_t i = 0;

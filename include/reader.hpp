@@ -325,32 +325,32 @@ public:
 	 * Get the frame corresponding to the given timestamp.
 	 * Returns true if the frame was found.
 	 *
-	 * @param time The timestamp to search for.
+	 * @param utcTime The timestamp to search for.
 	 * @param frame A value that will be updated with the index of the frame.
 	 * @return True if the frame is found, false otherwise.
 	 */
-	bool getFrame(long time, int& frame) const;
+	bool getFrame(long utcTime, int& frame) const;
 
 	/**
 	 * Get the frame nearest to the given timestamp.
 	 * Returns true if a frame was found.
 	 *
-	 * @param time The timestamp to search for.
-	 * @param actualTime A value that will be updated with the nearest timestamp to the one given.
+	 * @param utcTime The timestamp to search for.
+	 * @param actualUtcTime A value that will be updated with the nearest timestamp to the one given.
 	 * @param frame A value that will be updated with the index of the frame.
 	 * @return True if a frame is found, false otherwise.
 	 */
-	bool getNearestFrame(long time, long& actualTime, int& frame) const;
+	bool getNearestFrame(long utcTime, long& actualUtcTime, int& frame) const;
 
 	/**
 	 * Get the timestamp corresponding to the given frame.
 	 * Returns true if the timestamp was found.
 	 *
 	 * @param frame The frame to search for.
-	 * @param times A value that will be updated with the timestamp.
+	 * @param utcTime A value that will be updated with the timestamp.
 	 * @return True if the timestamp is found, false otherwise.
 	 */
-	bool getTime(int frame, long& time) const;
+	bool getTime(int frame, long& utcTime) const;
 
 	/**
 	 * Get the timestamp nearest to the given frame.
@@ -358,10 +358,10 @@ public:
 	 *
 	 * @param frame The frame to search for.
 	 * @param actualFrame A value that will be updated with the nearest frame to the one given.
-	 * @param time A value that will be updated with the index of the timestamp.
+	 * @param utcTime A value that will be updated with the index of the timestamp.
 	 * @return True if a timestmap is found, false otherwise.
 	 */
-	bool getNearestTime(int frame, int& actualFrame, long& time) const;
+	bool getNearestTime(int frame, int& actualFrame, long& utcTime) const;
 
 	~FrameIndexReader();
 };
@@ -377,8 +377,8 @@ public:
 	double lat;		///<! The platform latitude.
 	double lon;		///<! The platform longitude.
 	double alt;		///<! The platform altitude.
-	long timestamp;	///<! The timestamp in UTC milliseconds.
-	long date; 		///<! Storeda as a UTC timestamp
+	long gpsTime;	///<! The GPS timestamp.
+	long utcTime;	///<! The UTC timestamp (since epoch, ms).
 	int status;		///<! The status.
 	double heading;	///<! The platform heading.
 
@@ -418,21 +418,21 @@ public:
 	/**
 	 * Compute and return the interpolated UTC timestamp since the epoch (Jan 1, 1970) in miliseconds.
 	 *
-	 * @param timestamp The timestamp as emitted by the APX.
+	 * @param gpsTime The timestamp as emitted by the APX.
 	 * @param utcTime A value that will be update with the UTC timestamp.
 	 * @return True if the utcTime value has been set successfully.
 	 */
-	bool getUTCTime(long timestamp, long& utcTime);
+	bool getUTCTime(long gpsTime, long& utcTime);
 
 	/**
 	 * Compute and return the interpolated GPS timestamp corresponding to the given
 	 * UTC timestamp.
 	 *
-	 * @param date The UTC timestamp.
+	 * @param utcTime The UTC timestamp.
 	 * @param gpsTime A value that will be updated with the GPS timestamp.
 	 * @return True if the gpsTime is updated successfully.
 	 */
-	bool getGPSTime(long date, long& gpsTime);
+	bool getGPSTime(long utcTime, long& gpsTime);
 
 	~IMUGPSReader();
 
@@ -444,8 +444,8 @@ public:
  */
 class FlameRow {
 public:
-	long date;							///<! A timestamp (ms) derived from the date field.
-	long timestamp;						///<! The UTC timestamp (ms) as output.
+	long dateTime;						///<! A timestamp (ms) derived from the date field.
+	long utcTime;						///<! The UTC timestamp (ms) as output.
 	std::vector<double> bands;			///<! A vector containing the band values.
 	std::vector<double> wavelengths;	///<! A vector containing the wavelengths. TODO: This should be stored as ints.
 

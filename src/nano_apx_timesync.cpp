@@ -8,6 +8,7 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 #include "reader.hpp"
 
@@ -33,6 +34,16 @@ double _avg(std::vector<double>& buf) {
 	return (double) sum / buf.size();
 }
 
+std::string _ts2str(long ts) {
+	ts /= 1000;
+	char buf[32];
+	struct tm* dt = localtime(&ts);
+	strftime(buf, 32, "%Y/%m/%d %H:%M:%S", dt);
+	std::stringstream ss;
+	ss << buf << "." << ts % 1000;
+	return ss.str();
+}
+
 int main() {
 
 	// Proposed algorithm: Since the flame is the largest dataset, we iterate over the rows, using the frame index
@@ -43,12 +54,20 @@ int main() {
 	// frames and the second time to the others.
 
 
-	std::string apx = "/home/rob/Documents/field/2018_sept/hyper_lidar/100128_2018_08_28_19_34_25/imu_gps.txt";
-	std::string rast = "/home/rob/Documents/field/2018_sept/hyper_lidar/100128_2018_08_28_19_34_25/raw_7361";
+	//std::string apx = "/home/rob/Documents/field/2018_sept/hyper_lidar/100128_2018_08_28_19_34_25/imu_gps.txt";
+	std::string apx = "/home/rob/Documents/flame/strobe/2/100154_2018_09_19_18_24_49/imu_gps.txt";
+	//std::string rast = "/home/rob/Documents/field/2018_sept/hyper_lidar/100128_2018_08_28_19_34_25/raw_7361";
 	//std::string rast = "/home/rob/Documents/field/2018_sept/hyper_lidar/100128_2018_08_28_19_34_25/raw_0";
-	std::string frameIdx = "/home/rob/Documents/field/2018_sept/hyper_lidar/100128_2018_08_28_19_34_25/frameIndex_7361.txt";
+	std::string rast = "/home/rob/Documents/flame/strobe/2/100154_2018_09_19_18_24_49/raw_0";
+	///std::string frameIdx = "/home/rob/Documents/field/2018_sept/hyper_lidar/100128_2018_08_28_19_34_25/frameIndex_7361.txt";
+	std::string frameIdx = "/home/rob/Documents/flame/strobe/2/100154_2018_09_19_18_24_49/frameIndex_0.txt";
 	//std::string frameIdx = "/home/rob/Documents/field/2018_sept/hyper_lidar/100128_2018_08_28_19_34_25/frameIndex_0.txt";
-	std::string flame = "/home/rob/Documents/field/2018_sept/flame/bartier3_AbsoluteIrradiance_13-05-18-419_conv_nano.csv";
+	//std::string flame = "/home/rob/Documents/field/2018_sept/flame/bartier3_AbsoluteIrradiance_13-05-18-419_conv_nano.csv";
+	std::string flame = "/home/rob/Documents/flame/strobe/2/strobe2_AbsoluteIrradiance_11-22-08-459_conv_nano.txt";
+
+	int bufCol = 240; // The column in the buffer to use for comparison.
+	int cols = 640; // The number of cols in the raster.
+	int flameCol = 100; // The flame column to use.
 
 	FrameIndexReader fi(frameIdx);
 	IMUGPSReader ir(apx, -7 * 3600 * 1000); // 7 hours DST offset from UTC
@@ -68,15 +87,17 @@ int main() {
 
 	if(fr.next(frow0)) {
 
-		ir.getGPSTime(frow0.timestamp, gpsTime);
+		ir.getGPSTime(frow0.utcTime, gpsTime);
 		fi.getNearestFrame(gpsTime, actualGpsTime0, frame0);
 
 		while(fr.next(frow1)) {
 
-			ir.getGPSTime(frow1.timestamp, gpsTime);
+			ir.getGPSTime(frow1.utcTime, gpsTime);
 			fi.getNearestFrame(gpsTime, actualGpsTime1, frame1);
 
-			if(frame1 > 0) {
+			std::cerr << _ts2str(frow0.utcTime) << ", " << _ts2str(frow1.utcTime) << ", " << _ts2str(actualGpsTime0) << ", " << _ts2str(actualGpsTime1) << "\n";
+
+			if(frame1 > frame0) {
 				int half = frame0 + (frame1 - frame0) / 2;
 				for(int row = frame0; row < frame1; ++row) {
 
@@ -86,8 +107,9 @@ int main() {
 					// Read the pixels.
 					raster.get(buffer, row - firstIdx);
 
+
 					// Print a selection of bands from the middle of the row.
-					out << actualGpsTime1 << "," << _avg(buffer) << "," << _avg(frow.bands) << "\n";
+					out << actualGpsTime1 << "," << buffer[bufCol] << "," << frow.bands[flameCol] << ", " << _ts2str(actualGpsTime1) << "\n";
 
 					// divide by irrad
 
