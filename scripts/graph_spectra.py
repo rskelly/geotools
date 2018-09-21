@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import csv
+from optparse import OptionParser
 
 def transpose(params):
 	'''
@@ -99,7 +100,51 @@ def load(params):
 
 	return (params.label, params.file, a, b)
 
-def smooth(x, y):
+def raster(params):
+	'''
+	Load a column of values from one column of a raster. Requires
+	a column to represent times, bands or whatever; or, a start value and interval.
+	
+	file -- The raster file.
+	col -- The column index (0-based)
+
+	Return the label, the filename, the header column and data column.
+	'''
+	headrow = int(params.head_offset)
+	datarow = int(params.data_offset)
+	col = int(params.col_offset)
+	scale = float(params.scale)
+	shift = float(params.shift)
+
+	delim = params.delim
+	if delim == 't':
+		delim = '\t'
+	elif delim == 's':
+		delim = ' '
+
+	a = []
+	b = []
+	with open(params.file, 'rU') as f:
+		db = csv.reader(f, delimiter = delim)
+		r = 0
+		for row in db:
+			if r < col:
+				r += 1
+				continue
+			try:
+				av = float(row[headrow]) + shift
+				bv = float(row[datarow]) * scale
+				a.append(av)
+				b.append(bv)
+			except Exception as e: 
+				print(e)
+				pass
+
+	return (params.label, params.file, a, b)
+
+
+
+def smooth(x, y, frac = 0.3):
 	'''
 	Use local linear regression to produce a smoothed plot which can be used for normalization.
 
@@ -109,7 +154,8 @@ def smooth(x, y):
 	from scipy.interpolate import interp1d
 	import statsmodels.api as sm
 
-	lowess = sm.nonparametric.lowess(y, x, frac = .3)
+	print('Smoothing with fraction: {f}'.format(f=frac))
+	lowess = sm.nonparametric.lowess(y, x, frac = frac)
 	lx = list(zip(*lowess))[0]
 	ly = list(zip(*lowess))[1]
 
@@ -147,24 +193,24 @@ def graph(params):
 			columns.append(transpose(param))
 		elif param.type == 'tl':
 			label, csvfile, a, b = transpose(param)
-			a, b = smooth(a, b)
+			a, b = smooth(a, b, param.frac)
 			columns.append((label, csvfile, a, b))
 		elif param.type == 'tln':
 			label, csvfile, a, b = transpose(param)
-			a0, b0 = smooth(a, b)
+			a0, b0 = smooth(a, b, param.frac)
 			b1 = normalize(b0, b)
 			columns.append((label, csvfile, a, b1))
 		elif param.type == 'lln':
 			label, csvfile, a, b = load(param)
-			a0, b0 = smooth(a, b)
+			a0, b0 = smooth(a, b, param.frac)
 			columns.append((label, csvfile, a, b0))
 		elif param.type == 'll':
 			label, csvfile, a, b = load(param)
-			a, b = smooth(a, b)
+			a, b = smooth(a, b, param.frac)
 			columns.append((label, csvfile, a, b))
 		elif param.type == 'tlne':
 			label, csvfile, a, b = transpose(param)
-			a0, b0 = smooth(a, b)
+			a0, b0 = smooth(a, b, param.frac)
 			b1 = normalize(b0, b)
 			a2, b2, a3, b3 = find_extrema(25., a0, b1)
 			columns.append((label + '_min', csvfile, a2, b2))
@@ -237,30 +283,47 @@ class Params:
 	A parameter container for the methods in this script.
 	'''
 
-	def __init__(self, type, label, file, head_offset, data_offset, col_offset, delim = ',', scale = 1., shift = 0.):
+	def __init__(self, type, label, file, head_offset, data_offset, col_offset, delim = ',', scale = 1., shift = 0., frac = 0.3):
 		self.type = type
 		self.label = label
 		self.file = file
-		self.head_offset = head_offset
-		self.data_offset = data_offset
-		self.col_offset = col_offset
+		self.head_offset = int(head_offset)
+		self.data_offset = int(data_offset)
+		self.col_offset = int(col_offset)
 		self.delim = delim
-		self.scale = scale
-		self.shift = shift
-
+		self.scale = float(scale)
+		self.shift = float(shift)
+		self.frac = float(frac)
 
 if __name__ == '__main__':
 	'''
 	Call in the form:
+	
 	graph_transposed.py <config file>
+	
+	or, 
+	
+	graph_transposed.py -h 
+	
+	for help.
 
-	The configuration file is a text file. Each line contains a space-delimited list of arguments. This
-	program is terribly naive, so none of the arguments can have spaces. The arguments are, 
-
-	<type> <data file> <head row> <data row> <col> <delimiter> <mult> <shift>
-
-	Any row that begins with a space or # is ignored.
+	The configuration file is a text file. Each line contains a list of arguments. Any row that begins with a space or # is ignored.
 	'''
+	op = OptionParser()
+	op.add_option('-f', '--file',  dest = 'file', help = 'The input file name. Delimited text or raster.')
+	op.add_option('-k', '--label', dest = 'label', help = 'A label for the legend')
+	op.add_option('-t', '--type', dest = 'type', help = 'The type of processing to perform.')
+	#op.add_option('-h', '--help', help = 'Print help and exit.')
+	op.add_option('-r', '--header', dest = 'head_offset', help = 'The zero-based index of the head row (column, if transposed.)', default = '0')
+	op.add_option('-d', '--data', dest = 'data_offset', help = 'The zero-based index of the first data row (column, if transposed.)', default = '1')
+	op.add_option('-c', '--col', dest = 'col_offset', help = 'The data column (row, if transposed.)', default = '0')
+	op.add_option('-l', '--delim', dest = 'delim', help = 'The delimiter.', default = ',')
+	op.add_option('-m', '--mult', dest = 'scale', help = 'A scale factor to apply to every value.', default = '1.')
+	op.add_option('-s', '--shift', dest = 'shift', help = 'A shift factor for the wavelengths.', default = '0.')
+	op.add_option('-a', '--frac', dest = 'frac', help = 'The fraction of data set to be used for lowess smoothing.', default = '0.3')
+
+	(opts, args) = op.parse_args(sys.argv[1:])
+	
 	params = []
 	with open(sys.argv[1], 'r') as f:
 		for line in f:
@@ -268,6 +331,9 @@ if __name__ == '__main__':
 			if line == '\n' or line == '' or line.startswith(' ') or line.startswith('#'):
 				continue
 			args = line.split(' ')
-			print(args)
-			params.append(Params(*args))
+			(opts, args) = op.parse_args(args)
+			print(opts)
+			p = Params(opts.type, opts.label, opts.file, opts.head_offset, opts.data_offset, opts.col_offset, opts.delim, opts.scale, opts.shift, opts.frac)
+			params.append(p)
+
 	graph(params)
