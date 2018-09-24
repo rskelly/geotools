@@ -10,10 +10,12 @@ the method, so pay attention to the doc comments.
 '''
 
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import sys
 import csv
 from optparse import OptionParser
+from numpy import uint16
 
 def transpose(params):
 	'''
@@ -110,36 +112,39 @@ def raster(params):
 
 	Return the label, the filename, the header column and data column.
 	'''
-	headrow = int(params.head_offset)
-	datarow = int(params.data_offset)
-	col = int(params.col_offset)
+	
+	from osgeo import gdal
+	
+	band = params.col_offset # band
+	col = params.data_offset
+	
 	scale = float(params.scale)
 	shift = float(params.shift)
 
-	delim = params.delim
-	if delim == 't':
-		delim = '\t'
-	elif delim == 's':
-		delim = ' '
+	ds = gdal.Open(params.file, gdal.GA_ReadOnly)
+	cols = ds.RasterXSize
+	rows = ds.RasterYSize
+	bands = ds.RasterCount
+	band = ds.GetRasterBand(band + 1)
 
-	a = []
-	b = []
-	with open(params.file, 'rU') as f:
-		db = csv.reader(f, delimiter = delim)
-		r = 0
-		for row in db:
-			if r < col:
-				r += 1
-				continue
-			try:
-				av = float(row[headrow]) + shift
-				bv = float(row[datarow]) * scale
-				a.append(av)
-				b.append(bv)
-			except Exception as e: 
-				print(e)
-				pass
-
+	if params.rast_bands:
+		try:
+			a = params.rast_bands[:rows]
+		except:
+			raise Exception('Too few rows in param bands.')
+	else:
+		start, step = params.rast_range
+		a = []
+		while True:
+			a.append(start)
+			start += step
+			if len(a) >= rows:
+				break
+		
+	b = np.zeros(rows, dtype = np.uint16).reshape(rows, 1)
+	band.ReadAsArray(col, 0, 1, rows, 1, rows, gdal.GDT_UInt16, b)
+	b = list(map(lambda x: x * scale, map(lambda x: x + shift, list(b[...,0]))))
+	
 	return (params.label, params.file, a, b)
 
 
@@ -154,7 +159,7 @@ def smooth(x, y, frac = 0.3):
 	from scipy.interpolate import interp1d
 	import statsmodels.api as sm
 
-	print('Smoothing with fraction: {f}'.format(f=frac))
+	print('Smoothing with fraction: {f}'.format(f = frac))
 	lowess = sm.nonparametric.lowess(y, x, frac = frac)
 	lx = list(zip(*lowess))[0]
 	ly = list(zip(*lowess))[1]
@@ -191,8 +196,14 @@ def graph(params):
 	for param in params:
 		if param.type == 't':
 			columns.append(transpose(param))
+		elif param.type == 'r':
+			columns.append(raster(param))
 		elif param.type == 'tl':
 			label, csvfile, a, b = transpose(param)
+			a, b = smooth(a, b, param.frac)
+			columns.append((label, csvfile, a, b))
+		elif param.type == 'rl':
+			label, csvfile, a, b = raster(param)
 			a, b = smooth(a, b, param.frac)
 			columns.append((label, csvfile, a, b))
 		elif param.type == 'tln':
@@ -202,6 +213,10 @@ def graph(params):
 			columns.append((label, csvfile, a, b1))
 		elif param.type == 'lln':
 			label, csvfile, a, b = load(param)
+			a0, b0 = smooth(a, b, param.frac)
+			columns.append((label, csvfile, a, b0))
+		elif param.type == 'rln':
+			label, csvfile, a, b = raster(param)
 			a0, b0 = smooth(a, b, param.frac)
 			columns.append((label, csvfile, a, b0))
 		elif param.type == 'll':
@@ -228,7 +243,6 @@ def graph(params):
 	#plt.plot([minx, maxx], [0, 0])
 
 	for label, file, a, b in columns:
-		print(label, len(a), len(b))
 		plt.plot(a, b, label = label)
 
 	plt.legend()
@@ -278,6 +292,20 @@ def find_extrema(window_size, x, y):
 
 	return (minx0, miny0, maxx0, maxy0)
 
+def load_bands(filename):
+	'''
+	Loads the bands/times/whatever for the raster processing.
+	'''
+	print('Loading bands', filename)
+	bands = []
+	with open(filename, 'rU') as f:
+		for line in f:
+			try:
+				v = int(line.strip().split()[1])
+				bands.append(v)
+			except: pass
+	return bands
+
 class Params:
 	''' 
 	A parameter container for the methods in this script.
@@ -294,6 +322,8 @@ class Params:
 		self.scale = float(scale)
 		self.shift = float(shift)
 		self.frac = float(frac)
+		self.rast_range = None
+		self.rast_bands = None
 
 if __name__ == '__main__':
 	'''
@@ -313,7 +343,6 @@ if __name__ == '__main__':
 	op.add_option('-f', '--file',  dest = 'file', help = 'The input file name. Delimited text or raster.')
 	op.add_option('-k', '--label', dest = 'label', help = 'A label for the legend')
 	op.add_option('-t', '--type', dest = 'type', help = 'The type of processing to perform.')
-	#op.add_option('-h', '--help', help = 'Print help and exit.')
 	op.add_option('-r', '--header', dest = 'head_offset', help = 'The zero-based index of the head row (column, if transposed.)', default = '0')
 	op.add_option('-d', '--data', dest = 'data_offset', help = 'The zero-based index of the first data row (column, if transposed.)', default = '1')
 	op.add_option('-c', '--col', dest = 'col_offset', help = 'The data column (row, if transposed.)', default = '0')
@@ -321,19 +350,29 @@ if __name__ == '__main__':
 	op.add_option('-m', '--mult', dest = 'scale', help = 'A scale factor to apply to every value.', default = '1.')
 	op.add_option('-s', '--shift', dest = 'shift', help = 'A shift factor for the wavelengths.', default = '0.')
 	op.add_option('-a', '--frac', dest = 'frac', help = 'The fraction of data set to be used for lowess smoothing.', default = '0.3')
-
+	op.add_option('-q', '--rast_range', dest = 'rast_range', help = 'A comma-delimited pair of floats: the first giving the start band/time/etc.; the second giving the per-frame step.')
+	op.add_option('-n', '--rast_bands', dest = 'rast_bands', help = 'The filename of a text file containing, on each line, a number representing the band/time/etc. of each row of the raster. The count must correspond to the number of rows in the raster.')
 	(opts, args) = op.parse_args(sys.argv[1:])
 	
 	params = []
 	with open(sys.argv[1], 'r') as f:
 		for line in f:
+
 			line = line.strip()
 			if line == '\n' or line == '' or line.startswith(' ') or line.startswith('#'):
 				continue
+
 			args = line.split(' ')
 			(opts, args) = op.parse_args(args)
-			print(opts)
+
 			p = Params(opts.type, opts.label, opts.file, opts.head_offset, opts.data_offset, opts.col_offset, opts.delim, opts.scale, opts.shift, opts.frac)
+
+			if opts.rast_range:
+				p.rast_range = list(map(float, opts.rast_range.split(',')))
+
+			if opts.rast_bands:
+				p.rast_bands = load_bands(opts.rast_bands)
+
 			params.append(p)
 
 	graph(params)
