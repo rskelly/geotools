@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "reader.hpp"
+#include "raster.hpp"
 
 using namespace hlrg;
 
@@ -73,11 +74,13 @@ int main() {
 	IMUGPSReader ir(apx, -7 * 3600 * 1000); // 7 hours DST offset from UTC
 	FlameReader fr(flame, 105.7915494 * 1000); // Flame clock offset: +105.7915494s
 	Raster raster(rast);
+	Raster output("./refl.tif", raster.cols(), raster.rows(), raster.bands(), 0, Float32);
 
 	FlameRow frow0, frow1;
 	long gpsTime, actualGpsTime0 = 0, actualGpsTime1 = 0;
 	int frame0 = 0, frame1 = 0;
 	std::vector<uint16_t> buffer;
+	std::vector<double> refl(raster.cols() * raster.bands());
 
 	// Get the first frame index.
 	int firstIdx;
@@ -107,13 +110,20 @@ int main() {
 					// Read the pixels.
 					raster.get(buffer, row - firstIdx);
 
-
 					// Print a selection of bands from the middle of the row.
 					out << actualGpsTime1 << "," << buffer[bufCol] << "," << frow.bands[flameCol] << ", " << _ts2str(actualGpsTime1) << "\n";
 
-					// divide by irrad
+					// For every band and every cell int he buffer, comute the reflectance
+					// using the irradiance values.
+					for(int b = 0; b < raster.bands(); ++b) {
+						for(int c = 0; c < raster.cols(); ++c) {
+							size_t i = b * raster.cols() + c;
+							refl[i] = buffer[i] / frow.bands[i];
+						}
+					}
 
 					// write to new raster
+					output.write(refl, row);
 				}
 			}
 

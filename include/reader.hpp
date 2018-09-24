@@ -243,69 +243,6 @@ public:
 
 
 /**
- * Provides methods for reading rows out of a raster.
- * One might think this should be a Reader implementation, but its purpose
- * is just to read rows, not fit into spaces where a Reader would be appropriate.
- */
-class Raster {
-private:
-	GDALDataset* m_ds;
-	int m_bands;
-	int m_cols;
-	int m_rows;
-	int m_row;
-
-public:
-	/**
-	 * Construct a raster object using the given filename.
-	 */
-	Raster(const std::string& filename);
-
-	/**
-	 * Return the number of bands.
-	 *
-	 * @return The number of bands.
-	 */
-	int bands() const;
-
-	/**
-	 * Return the number of columns.
-	 *
-	 * @return The number of columns.
-	 */
-	int cols() const;
-
-
-	int rows() const;
-
-	/**
-	 * Read all bands of the next row. This will write the pixel rows for each band
-	 * end-to-end into the given buffer.
-	 *
-	 * @param buf A vector which contains the pixel row for each band, end to end.
-	 * @return True if there is another row to be read. False otherwise.
-	 */
-	bool next(std::vector<double>& buf);
-
-	/**
-	 * Get the row by zero-based index.
-	 *
-	 * @param buf A vector which contains the pixel row for each band, end to end.
-	 * @param row The zero-based row index.
-	 * @return True if the read was successful.
-	 */
-	bool get(std::vector<uint16_t>& buf, int row);
-
-	/**
-	 * Reset the file pointer to the beginning.
-	 */
-	void reset();
-
-	~Raster();
-};
-
-
-/**
  * Reads the frame index time files from the Hyperspect Nano instrument.
  */
 class FrameIndexReader {
