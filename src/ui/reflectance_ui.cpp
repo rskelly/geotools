@@ -5,6 +5,8 @@
  *      Author: rob
  */
 
+#include "reflectance_ui.hpp"
+
 #include <QtWidgets/QDialog>
 #include <QtCore/QString>
 #include <QtWidgets/QFileDialog>
@@ -12,12 +14,12 @@
 #include <QtGui/QDesktopServices>
 #include <QtWidgets/QMessageBox>
 
-#include "nano_timesync_ui.hpp"
-#include "nano_timesync.hpp"
+#include "../../include/reflectance.hpp"
+#include "reflectance_ui.hpp"
 
 using namespace hlrg;
 
-NanoTimesyncForm::NanoTimesyncForm(NanoTimesync* ts, QApplication* app) :
+ReflectanceForm::ReflectanceForm(Reflectance* ts, QApplication* app) :
 		m_imuUTCOffset(0),
 		m_irradUTCOffset(0),
 		m_ts(ts),
@@ -27,8 +29,8 @@ NanoTimesyncForm::NanoTimesyncForm(NanoTimesync* ts, QApplication* app) :
 
 }
 
-void NanoTimesyncForm::setupUi(QDialog* form) {
-	Ui::NanoTimesyncForm::setupUi(form);
+void ReflectanceForm::setupUi(QDialog* form) {
+	Ui::ReflectanceForm::setupUi(form);
 	m_form = form;
 	progressBar->setValue(0);
 	connect(btnIMUGPS, SIGNAL(clicked()), this, SLOT(btnIMUGPSClicked()));
@@ -62,28 +64,28 @@ void NanoTimesyncForm::setupUi(QDialog* form) {
 	txtReflOutput->setText(m_settings.value("lastReflOut", "").toString());
 }
 
-void NanoTimesyncForm::checkRun() {
+void ReflectanceForm::checkRun() {
 
 }
 
-void _sync(NanoTimesync* ts, const std::string* imuGps, double imuUTCOffset,
+void _process(Reflectance* ts, const std::string* imuGps, double imuUTCOffset,
 		const std::string* rawRad,
 		const std::string* frameIdx,
 		const std::string* irradConv, double irradUTCOffset,
 		const std::string* reflOut,
 		bool* running) {
 
-	ts->sync(*imuGps, imuUTCOffset, *rawRad, *frameIdx, *irradConv, irradUTCOffset, *reflOut, running);
+	ts->process(*imuGps, imuUTCOffset, *rawRad, *frameIdx, *irradConv, irradUTCOffset, *reflOut, running);
 }
 
-void NanoTimesyncForm::run() {
+void ReflectanceForm::run() {
 	if(!m_running) {
 		m_running = true;
-		m_thread = std::thread(_sync, m_ts, &m_imuGps, m_imuUTCOffset, &m_rawRad, &m_frameIdx, &m_irradConv, m_irradUTCOffset, &m_reflOut, &m_running);
+		m_thread = std::thread(_process, m_ts, &m_imuGps, m_imuUTCOffset, &m_rawRad, &m_frameIdx, &m_irradConv, m_irradUTCOffset, &m_reflOut, &m_running);
 	}
 }
 
-void NanoTimesyncForm::cancel() {
+void ReflectanceForm::cancel() {
 	if(m_running) {
 		m_running = false;
 		if(m_thread.joinable())
@@ -92,11 +94,11 @@ void NanoTimesyncForm::cancel() {
 
 }
 
-void NanoTimesyncForm::runState() {
+void ReflectanceForm::runState() {
 
 }
 
-void NanoTimesyncForm::stopState() {
+void ReflectanceForm::stopState() {
 
 }
 
@@ -105,13 +107,13 @@ void NanoTimesyncForm::stopState() {
 	//void stopped(Convolver*);
 	//void finished(Convolver*);
 
-void NanoTimesyncForm::txtIMUGPSChanged(QString v) {
+void ReflectanceForm::txtIMUGPSChanged(QString v) {
 	m_imuGps = v.toStdString();
 	m_settings.setValue("lastIMUGPS", v);
 	checkRun();
 }
 
-void NanoTimesyncForm::btnIMUGPSClicked() {
+void ReflectanceForm::btnIMUGPSClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "IMU GPS File", lastDir);
 	QFileInfo dir(filename);
@@ -119,19 +121,19 @@ void NanoTimesyncForm::btnIMUGPSClicked() {
 	txtIMUGPS->setText(filename);
 }
 
-void NanoTimesyncForm::spnIMUUTCOffsetChanged(double v) {
+void ReflectanceForm::spnIMUUTCOffsetChanged(double v) {
 	m_imuUTCOffset = v;
 	m_settings.setValue("lastIMUUTCOffset", v);
 	checkRun();
 }
 
-void NanoTimesyncForm::txtFrameIndexChanged(QString v) {
+void ReflectanceForm::txtFrameIndexChanged(QString v) {
 	m_frameIdx = v.toStdString();
 	m_settings.setValue("lastFrameIndex", v);
 	checkRun();
 }
 
-void NanoTimesyncForm::btnFrameIndexClicked() {
+void ReflectanceForm::btnFrameIndexClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "Frame Index File", lastDir);
 	QFileInfo dir(filename);
@@ -139,13 +141,13 @@ void NanoTimesyncForm::btnFrameIndexClicked() {
 	txtFrameIndex->setText(filename);
 }
 
-void NanoTimesyncForm::txtRadRastChanged(QString v) {
+void ReflectanceForm::txtRadRastChanged(QString v) {
 	m_rawRad = v.toStdString();
 	m_settings.setValue("lastRadRast", v);
 	checkRun();
 }
 
-void NanoTimesyncForm::btnRadRastClicked() {
+void ReflectanceForm::btnRadRastClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "Raw Radiance File", lastDir);
 	QFileInfo dir(filename);
@@ -153,13 +155,13 @@ void NanoTimesyncForm::btnRadRastClicked() {
 	txtRadRast->setText(filename);
 }
 
-void NanoTimesyncForm::txtConvIrradChanged(QString v) {
+void ReflectanceForm::txtConvIrradChanged(QString v) {
 	m_irradConv = v.toStdString();
 	m_settings.setValue("lastIrradConv", v);
 	checkRun();
 }
 
-void NanoTimesyncForm::btnConvIrradClicked() {
+void ReflectanceForm::btnConvIrradClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "Convolved Irradiance File", lastDir);
 	QFileInfo dir(filename);
@@ -167,19 +169,19 @@ void NanoTimesyncForm::btnConvIrradClicked() {
 	txtConvIrrad->setText(filename);
 }
 
-void NanoTimesyncForm::spnIrradUTCOffsetChanged(double v) {
+void ReflectanceForm::spnIrradUTCOffsetChanged(double v) {
 	m_irradUTCOffset = v;
 	m_settings.setValue("lastIrradUTCOffset", v);
 	checkRun();
 }
 
-void NanoTimesyncForm::txtReflOutputChanged(QString v) {
+void ReflectanceForm::txtReflOutputChanged(QString v) {
 	m_reflOut = v.toStdString();
 	m_settings.setValue("lastReflOut", v);
 	checkRun();
 }
 
-void NanoTimesyncForm::btnReflOutputClicked() {
+void ReflectanceForm::btnReflOutputClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "Reflectance output File", lastDir);
 	QFileInfo dir(filename);
@@ -187,19 +189,19 @@ void NanoTimesyncForm::btnReflOutputClicked() {
 	txtReflOutput->setText(filename);
 }
 
-void NanoTimesyncForm::btnRunClicked() {
+void ReflectanceForm::btnRunClicked() {
 	run();
 }
 
-void NanoTimesyncForm::btnCancelClicked() {
+void ReflectanceForm::btnCancelClicked() {
 	cancel();
 }
 
-void NanoTimesyncForm::btnHelpClicked() {
-	QDesktopServices::openUrl(QUrl("https://github.com/rskelly/contrem/wiki/nano_timesync", QUrl::TolerantMode));
+void ReflectanceForm::btnHelpClicked() {
+	QDesktopServices::openUrl(QUrl("https://github.com/rskelly/contrem/wiki/reflectance", QUrl::TolerantMode));
 }
 
-void NanoTimesyncForm::btnCloseClicked() {
+void ReflectanceForm::btnCloseClicked() {
 	cancel();
 	m_form->close();
 	m_app->quit();

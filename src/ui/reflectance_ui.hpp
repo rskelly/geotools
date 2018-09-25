@@ -5,21 +5,21 @@
  *      Author: rob
  */
 
-#ifndef SRC_UI_NANO_TIMESYNC_UI_HPP_
-#define SRC_UI_NANO_TIMESYNC_UI_HPP_
+#ifndef SRC_UI_REFLECTANCE_UI_HPP_
+#define SRC_UI_REFLECTANCE_UI_HPP_
 
 #include <thread>
 
 #include <QtWidgets/QDialog>
 #include <QtCore/QSettings>
 
-#include "nano_timesync.hpp"
-#include "ui_nano_timesync.h"
+#include "../../include/reflectance.hpp"
+#include "ui_reflectance.h"
 
 
 namespace hlrg {
 
-class NanoTimesyncForm : public QDialog, public Ui::NanoTimesyncForm {
+class ReflectanceForm : public QDialog, public Ui::ReflectanceForm {
 	Q_OBJECT
 private:
 	QSettings m_settings;
@@ -32,7 +32,7 @@ private:
 	double m_irradUTCOffset;
 	std::string m_reflOut;
 
-	NanoTimesync* m_ts;
+	Reflectance* m_ts;
 	QDialog* m_form;
 	QApplication* m_app;
 
@@ -40,7 +40,7 @@ private:
 	bool m_running;
 
 public:
-	NanoTimesyncForm(NanoTimesync* convolver, QApplication* app);
+	ReflectanceForm(Reflectance* convolver, QApplication* app);
 	void setupUi(QDialog* form);
 	void checkRun();
 
@@ -83,4 +83,4 @@ public slots:
 
 } // hlrg
 
-#endif /* SRC_UI_NANO_TIMESYNC_UI_HPP_ */
+#endif /* SRC_UI_REFLECTANCE_UI_HPP_ */

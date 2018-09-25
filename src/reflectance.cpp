@@ -5,6 +5,8 @@
  *      Author: rob
  */
 
+#include "../include/reflectance.hpp"
+
 #include <string>
 #include <iostream>
 #include <iomanip>
@@ -17,8 +19,7 @@
 
 #include "reader.hpp"
 #include "raster.hpp"
-#include "nano_timesync.hpp"
-#include "ui/nano_timesync_ui.hpp"
+#include "ui/reflectance_ui.hpp"
 
 
 namespace hlrg {
@@ -53,7 +54,7 @@ std::string _ts2str(long ts) {
 	return ss.str();
 }
 
-void NanoTimesync::sync(const std::string& imuGps, double imuUTCOffset,
+void Reflectance::process(const std::string& imuGps, double imuUTCOffset,
 		const std::string& rawRad,
 		const std::string& frameIdx,
 		const std::string& irradConv, double irradUTCOffset,
@@ -149,9 +150,9 @@ void NanoTimesync::sync(const std::string& imuGps, double imuUTCOffset,
 
 
 int runWithGui(int argc, char **argv) {
-	class NanoTimesyncApp : public QApplication {
+	class ReflectanceApp : public QApplication {
 	public:
-		NanoTimesyncApp(int& argc, char** argv) : QApplication(argc, argv) {}
+		ReflectanceApp(int& argc, char** argv) : QApplication(argc, argv) {}
 		bool notify(QObject *receiver, QEvent *e) {
 			try {
 				return QApplication::notify(receiver, e);
@@ -165,9 +166,9 @@ int runWithGui(int argc, char **argv) {
 		}
 	};
 
-	NanoTimesyncApp q(argc, argv);
-	NanoTimesync nt;
-	NanoTimesyncForm form(&nt, &q);
+	ReflectanceApp q(argc, argv);
+	Reflectance nt;
+	ReflectanceForm form(&nt, &q);
 	QDialog qform;
 	form.setupUi(&qform);
 	qform.show();
