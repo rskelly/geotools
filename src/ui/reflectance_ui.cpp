@@ -5,7 +5,7 @@
  *      Author: rob
  */
 
-#include "reflectance_ui.hpp"
+#include <fstream>
 
 #include <QtWidgets/QDialog>
 #include <QtCore/QString>
@@ -50,10 +50,10 @@ void ReflectanceForm::setupUi(QDialog* form) {
 	connect(btnHelp, SIGNAL(clicked()), this, SLOT(btnHelpClicked()));
 	connect(btnClose, SIGNAL(clicked()), this, SLOT(btnCloseClicked()));
 
-	//connect(this, SIGNAL(started(Convolver*)), this, SLOT(convStarted(Convolver*)));
-	//connect(this, SIGNAL(stopped(Convolver*)), this, SLOT(convStopped(Convolver*)));
-	//connect(this, SIGNAL(update(Convolver*)), this, SLOT(convUpdate(Convolver*)));
-	//connect(this, SIGNAL(finished(Convolver*)), this, SLOT(convFinished(Convolver*)));
+	connect(this, SIGNAL(started(Reflectance*)), this, SLOT(reflStarted(Reflectance*)));
+	connect(this, SIGNAL(stopped(Reflectance*)), this, SLOT(reflStopped(Reflectance*)));
+	connect(this, SIGNAL(update(Reflectance*)), this, SLOT(reflUpdate(Reflectance*)));
+	connect(this, SIGNAL(finished(Reflectance*)), this, SLOT(reflFinished(Reflectance*)));
 
 	txtIMUGPS->setText(m_settings.value("lastIMUGPS", "").toString());
 	spnIMUUTCOffset->setValue(m_settings.value("lastIMUUTCOffset", 0).toDouble());
@@ -62,26 +62,51 @@ void ReflectanceForm::setupUi(QDialog* form) {
 	txtConvIrrad->setText(m_settings.value("lastIrradConv", "").toString());
 	spnIrradUTCOffset->setValue(m_settings.value("lastIrradUTCOffset", 0).toDouble());
 	txtReflOutput->setText(m_settings.value("lastReflOut", "").toString());
+
+	checkRun();
+}
+
+bool _fexists(const std::string& filename) {
+	if(filename.empty())
+		return false;
+	std::ifstream f(filename);
+	return f.good();
+}
+
+void _popup(const std::string& title, const std::string& message) {
+
 }
 
 void ReflectanceForm::checkRun() {
-
+	bool a = _fexists(m_imuGps);
+	bool b = _fexists(m_frameIdx);
+	bool c = _fexists(m_rawRad);
+	bool d = _fexists(m_irradConv);
+	btnRun->setEnabled(a && b && c && d);
 }
 
-void _process(Reflectance* ts, const std::string* imuGps, double imuUTCOffset,
+void _process(ReflectanceListener* listener,
+		const std::string* imuGps, double imuUTCOffset,
 		const std::string* rawRad,
 		const std::string* frameIdx,
 		const std::string* irradConv, double irradUTCOffset,
 		const std::string* reflOut,
 		bool* running) {
 
-	ts->process(*imuGps, imuUTCOffset, *rawRad, *frameIdx, *irradConv, irradUTCOffset, *reflOut, running);
+	Reflectance refl;
+	refl.run(*listener, *imuGps, imuUTCOffset, *rawRad, *frameIdx, *irradConv, irradUTCOffset, *reflOut, *running);
 }
 
 void ReflectanceForm::run() {
 	if(!m_running) {
 		m_running = true;
-		m_thread = std::thread(_process, m_ts, &m_imuGps, m_imuUTCOffset, &m_rawRad, &m_frameIdx, &m_irradConv, m_irradUTCOffset, &m_reflOut, &m_running);
+		runState();
+		m_thread = std::thread(_process, static_cast<ReflectanceListener*>(this),
+				&m_imuGps, m_imuUTCOffset,
+				&m_rawRad,
+				&m_frameIdx,
+				&m_irradConv, m_irradUTCOffset,
+				&m_reflOut, &m_running);
 	}
 }
 
@@ -91,21 +116,38 @@ void ReflectanceForm::cancel() {
 		if(m_thread.joinable())
 			m_thread.join();
 	}
-
 }
 
 void ReflectanceForm::runState() {
-
+	btnRun->setEnabled(false);
+	btnCancel->setEnabled(true);
 }
 
 void ReflectanceForm::stopState() {
-
+	btnRun->setEnabled(true);
+	btnCancel->setEnabled(false);
 }
 
-	//void started(Convolver*);
-	//void update(Convolver*);
-	//void stopped(Convolver*);
-	//void finished(Convolver*);
+void ReflectanceForm::reflStarted(Reflectance* refl) {
+	runState();
+	progressBar->setValue(0);
+}
+
+void ReflectanceForm::reflUpdate(Reflectance* refl) {
+	runState();
+	int p = (int) (refl->progress() * 100.0);
+	progressBar->setValue(p);
+}
+
+void ReflectanceForm::reflStopped(Reflectance* refl) {
+	m_running = false;
+	stopState();
+}
+
+void ReflectanceForm::reflFinished(Reflectance* refl) {
+	m_running = false;
+	stopState();
+}
 
 void ReflectanceForm::txtIMUGPSChanged(QString v) {
 	m_imuGps = v.toStdString();
@@ -205,6 +247,10 @@ void ReflectanceForm::btnCloseClicked() {
 	cancel();
 	m_form->close();
 	m_app->quit();
+}
+
+ReflectanceForm::~ReflectanceForm() {
+
 }
 
 

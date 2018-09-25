@@ -11,6 +11,7 @@
 #include <ctime>
 #include <chrono>
 #include <list>
+#include <iomanip>
 
 #include <gdal_priv.h>
 
@@ -290,7 +291,7 @@ FrameIndexReader::FrameIndexReader(const std::string& filename) {
 	// Read the data.
 	std::list<std::pair<int, long> > items;
 	while(in.good()) {
-		std::getline(in, frame, ' '); // TODO: Configurable delimiter.
+		std::getline(in, frame, '\t'); // TODO: Configurable delimiter.
 		std::getline(in, time, '\n');
 		if(time.empty() || frame.empty())
 			continue;
@@ -360,12 +361,15 @@ FrameIndexReader::~FrameIndexReader() {
 }
 
 long _getUTCMilSec(const std::string& input, const std::string& fmt) {
+	// hack: https://stackoverflow.com/questions/14504870/convert-stdchronotime-point-to-unix-timestamp#14505248
 	std::tm t = {};
-	strptime(input.c_str(), fmt.c_str(), &t);
-	double a = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::from_time_t(std::mktime(&t)).time_since_epoch()).count();
-	std::string sfrac = input.substr(input.find('.'), 6);
-	double b = std::stod(sfrac) * 1000;
-	return a + b;
+	std::stringstream ss(input);
+	ss >> std::get_time(&t, fmt.c_str());
+	time_t t1 = std::mktime(&t);
+	t = *std::gmtime(&t1);
+	time_t t2 = std::mktime(&t);
+	double a = (t1 - (t2 - t1) + std::stod(input.substr(input.find('.'), 6))) * 1000;
+	return a;
 }
 
 IMUGPSRow::IMUGPSRow(std::istream& in, double msOffset) :
@@ -409,12 +413,14 @@ IMUGPSReader::IMUGPSReader(const std::string& filename, double msOffset) :
 		}
 	}
 	{
+		// Get the mid point of the list and create the bin trees using the mid values as root.
 		auto it = rows.begin();
 		std::advance(it, rows.size() / 2);
 		IMUGPSRow* tmp = *it;
 		m_gpsTimesT = new BinTree<long, IMUGPSRow*>(tmp->gpsTime, tmp);
 		m_utcTimesT = new BinTree<long, IMUGPSRow*>(tmp->utcTime, tmp);
 	}
+	// Iterate over the rows, adding to the trees. The root values will just update.
 	size_t i = 0;
 	long mint = std::numeric_limits<long>::max(), maxt = std::numeric_limits<long>::lowest();
 	m_rows.resize(rows.size());
@@ -505,7 +511,7 @@ bool FlameRow::read(std::istream& in, double msOffset) {
 	dateTime = _getUTCMilSec(buf, "%Y-%m-%d %H:%M:%S") + msOffset;
 	if(!std::getline(in, buf, ','))
 		return false;
-	utcTime = std::stol(buf) + msOffset;
+	utcTime = std::stol(buf);
 	if(!std::getline(in, buf, '\n'))
 		return false;
 	size_t i = 0;
@@ -516,7 +522,8 @@ bool FlameRow::read(std::istream& in, double msOffset) {
 }
 
 FlameReader::FlameReader(const std::string& filename, double msOffset) :
-	m_msOffset(msOffset) {
+	m_msOffset(msOffset),
+	m_filename(filename) {
 	m_in.open(filename, std::ios::in);
 	std::string buf;
 	std::getline(m_in, buf, ',');
@@ -525,6 +532,15 @@ FlameReader::FlameReader(const std::string& filename, double msOffset) :
 	std::stringstream cols(buf);
 	while(std::getline(cols, buf, ','))
 		wavelengths.push_back(std::stod(buf));
+}
+
+int FlameReader::rows() {
+	std::ifstream in(m_filename, std::ios::in);
+	std::string buf;
+	int count = 0;
+	while(std::getline(in, buf, '\n'))
+		++count;
+	return count - 1; // -1 for the header row.
 }
 
 bool FlameReader::next(FlameRow& row) {

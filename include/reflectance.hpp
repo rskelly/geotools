@@ -12,7 +12,22 @@
 
 namespace hlrg {
 
+class Reflectance;
+
+class ReflectanceListener {
+public:
+	virtual void started(Reflectance*) = 0;
+	virtual void update(Reflectance*) = 0;
+	virtual void stopped(Reflectance*) = 0;
+	virtual void finished(Reflectance*) = 0;
+	virtual ~ReflectanceListener() {}
+};
+
 class Reflectance {
+private:
+	int m_step;			///<! The current processing step.
+	int m_numSteps;		///<! The number of processing steps to complete.
+
 public:
 	/**
 	 * Processes the radiance image and convolved irradiance spectra to produce a
@@ -28,12 +43,16 @@ public:
 	 * @param reflOut An output image for the reflectance.
 	 * @param running Method will continue so long as this is set to true or until completion.
 	 */
-	void process(const std::string& imuGps, double imuUTCOffset,
+	void run(ReflectanceListener& listener,
+			const std::string& imuGps, double imuUTCOffset,
 			const std::string& rawRad,
 			const std::string& frameIdx,
 			const std::string& irradConv, double irradUTCOffset,
 			const std::string& reflOut,
-			bool* running);
+			bool& running);
+
+	double progress() const;
+
 };
 
 

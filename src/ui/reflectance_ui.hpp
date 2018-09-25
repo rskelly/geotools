@@ -19,7 +19,7 @@
 
 namespace hlrg {
 
-class ReflectanceForm : public QDialog, public Ui::ReflectanceForm {
+class ReflectanceForm : public QDialog, public Ui::ReflectanceForm, hlrg::ReflectanceListener {
 	Q_OBJECT
 private:
 	QSettings m_settings;
@@ -50,11 +50,13 @@ public:
 	void runState();
 	void stopState();
 
+	~ReflectanceForm();
+
 signals:
-	//void started(Convolver*);
-	//void update(Convolver*);
-	//void stopped(Convolver*);
-	//void finished(Convolver*);
+	void started(Reflectance*);
+	void update(Reflectance*);
+	void stopped(Reflectance*);
+	void finished(Reflectance*);
 
 public slots:
 	void txtIMUGPSChanged(QString);
@@ -74,10 +76,10 @@ public slots:
 	void btnHelpClicked();
 	void btnCloseClicked();
 
-	//void convStarted(Convolver*);
-	//void convStopped(Convolver*);
-	//void convUpdate(Convolver*);
-	//void convFinished(Convolver*);
+	void reflStarted(Reflectance*);
+	void reflUpdate(Reflectance*);
+	void reflStopped(Reflectance*);
+	void reflFinished(Reflectance*);
 
 };
 

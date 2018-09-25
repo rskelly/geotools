@@ -35,11 +35,11 @@ GDALDataType _ttype(T v) {
 		return GDT_UInt32;
 	} else if(t == typeid(float).hash_code()) {
 		return GDT_Float32;
-	} else if(typeid(double).hash_code()) {
+	} else if(t == typeid(double).hash_code()) {
 		return GDT_Float64;
-	} else if(typeid(short).hash_code()) {
+	} else if(t == typeid(short).hash_code()) {
 		return GDT_Int16;
-	} else if(typeid(unsigned short).hash_code()) {
+	} else if(t == typeid(unsigned short).hash_code()) {
 		return GDT_UInt16;
 	}
 	throw std::runtime_error("Unknown type.");
@@ -99,7 +99,7 @@ bool Raster::next(std::vector<T>& buf) {
 	if(++m_row < m_rows) {
 		for(int i = 1; i <= m_bands; ++i) {
 			GDALRasterBand* band = m_ds->GetRasterBand(i);
-			if(!band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (buf.data() + (i - 1) * m_cols * sizeof(T)), m_cols, 1, gtype, 0, 0, nullptr))
+			if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (T*) (buf.data() + (i - 1) * m_cols), m_cols, 1, gtype, 0, 0, nullptr))
 				throw std::runtime_error("Failed to read from raster.");
 		}
 		return true;
@@ -115,7 +115,7 @@ bool Raster::write(std::vector<T>& buf, int row) {
 		return false;
 	for(int i = 1; i <= m_bands; ++i) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		if(!band->RasterIO(GF_Write, 0, row, m_cols, 1, (void*) (buf.data() + (i - 1) * m_cols * sizeof(T)), m_cols, 1, gtype, 0, 0, nullptr))
+		if(CE_None != band->RasterIO(GF_Write, 0, row, m_cols, 1, (T*) (buf.data() + (i - 1) * m_cols), m_cols, 1, gtype, 0, 0, nullptr))
 			throw std::runtime_error("Failed to write to raster.");
 	}
 	return true;
@@ -129,10 +129,9 @@ bool Raster::get(std::vector<T>& buf, int row) {
 	std::fill(buf.begin(), buf.end(), 0);
 	if(row < 0 || row >= m_rows)
 		return false;
-	char* data = (char*) buf.data();
 	for(int i = 1; i <= m_bands; ++i) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		if(CPLE_None != band->RasterIO(GF_Read, 0, row, m_cols, 1, (char*) (data + (i - 1) * m_cols * sizeof(T)), m_cols, 1, gtype, 0, 0, nullptr))
+		if(CE_None != band->RasterIO(GF_Read, 0, row, m_cols, 1, (T*) (buf.data() + (i - 1) * m_cols), m_cols, 1, gtype, 0, 0, nullptr))
 			return false;
 	}
 	return true;

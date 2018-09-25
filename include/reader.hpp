@@ -405,8 +405,10 @@ public:
  */
 class FlameReader {
 private:
-	std::ifstream m_in;
-	double m_msOffset;
+	std::ifstream m_in;		///<! The file reader.
+	double m_msOffset;		///<! The time offset in milliseconds.
+	std::string m_filename;	///<! The data file name.
+
 public:
 	std::vector<double> wavelengths;	///<! The list of wavelengths. TODO: This should be stored as ints.
 
@@ -417,6 +419,13 @@ public:
 	 * @param msOffset A time offset in milliseconds to apply to the times stored in each row.
 	 */
 	FlameReader(const std::string& filename, double msOffset);
+
+	/**
+	 * Return the number of rows in the file. This requires reading through the whole file.
+	 *
+	 * @return The number of rows in the file.
+	 */
+	int rows();
 
 	/**
 	 * Read the next row of data into the given row object.
