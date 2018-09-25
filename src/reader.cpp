@@ -290,7 +290,7 @@ FrameIndexReader::FrameIndexReader(const std::string& filename) {
 	// Read the data.
 	std::list<std::pair<int, long> > items;
 	while(in.good()) {
-		std::getline(in, frame, '\t');
+		std::getline(in, frame, ' '); // TODO: Configurable delimiter.
 		std::getline(in, time, '\n');
 		if(time.empty() || frame.empty())
 			continue;
