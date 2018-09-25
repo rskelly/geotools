@@ -1,6 +1,7 @@
 #!/bin/sh
 
-# Must have homebrew installed.
+# Must have homebrew installed. Uncomment this to do it.
+# /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 
 # Install some necessaries.
 brew install cmake
