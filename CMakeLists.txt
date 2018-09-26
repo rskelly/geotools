@@ -59,4 +59,4 @@ add_executable (edgereplace src/edgereplace.cpp)
 
 # Install ################################################################################################
 
-install(TARGETS contrem convolve RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS contrem convolve reflectance RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 

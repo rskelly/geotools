@@ -7,8 +7,10 @@
 brew install cmake
 brew install geos
 brew install gdal
+brew install qt5
 brew link geos
 brew link gdal
+brew link qt5
 
 # Build the software
 mkdir -p build
