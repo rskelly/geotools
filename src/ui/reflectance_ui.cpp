@@ -118,14 +118,28 @@ void ReflectanceForm::cancel() {
 	}
 }
 
+void _enable(std::vector<QWidget*>& widgets, bool enable) {
+	for(QWidget* w : widgets)
+		w->setEnabled(enable);
+}
+
 void ReflectanceForm::runState() {
 	btnRun->setEnabled(false);
 	btnCancel->setEnabled(true);
+	std::vector<QWidget*> widgets = {btnIMUGPS, txtIMUGPS, spnIMUUTCOffset, btnFrameIndex,
+			txtFrameIndex, btnRadRast, txtRadRast, btnConvIrrad,
+			txtConvIrrad, spnIrradUTCOffset, btnReflOutput, txtReflOutput};
+	_enable(widgets, false);
+
 }
 
 void ReflectanceForm::stopState() {
 	btnRun->setEnabled(true);
 	btnCancel->setEnabled(false);
+	std::vector<QWidget*> widgets = {btnIMUGPS, txtIMUGPS, spnIMUUTCOffset, btnFrameIndex,
+			txtFrameIndex, btnRadRast, txtRadRast, btnConvIrrad,
+			txtConvIrrad, spnIrradUTCOffset, btnReflOutput, txtReflOutput};
+	_enable(widgets, true);
 }
 
 void ReflectanceForm::reflStarted(Reflectance* refl) {
