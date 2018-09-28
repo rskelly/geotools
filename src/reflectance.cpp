@@ -121,7 +121,7 @@ void Reflectance::run(ReflectanceListener& listener,
 	FlameRow frow0, frow1;
 	long gpsTime, actualGpsTime0 = 0, actualGpsTime1 = 0;
 	int frame0 = 0, frame1 = 0;
-	std::vector<uint16_t> buffer;
+	std::vector<float> buffer;
 	std::vector<float> refl(raster.cols() * raster.bands());
 
 	// Get the first frame index.
