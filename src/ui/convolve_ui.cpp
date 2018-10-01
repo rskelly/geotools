@@ -44,6 +44,8 @@ ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
 	m_inputScale(1),
 	m_tolerance(0.0001),
 	m_bandShift(0),
+	m_firstRow(0), m_firstCol(0),
+	m_dateCol(-1), m_timeCol(-1),
 	m_convolver(convolver),
 	m_form(nullptr),
 	m_app(app),
@@ -58,6 +60,10 @@ void ConvolveForm::setupUi(QDialog* form) {
 	connect(cboBandDefDelim, SIGNAL(currentTextChanged(QString)), this, SLOT(cboBandDefDelimChanged(QString)));
 	connect(txtSpectra, SIGNAL(textChanged(QString)), this, SLOT(txtSpectraChanged(QString)));
 	connect(cboSpectraDelim, SIGNAL(currentTextChanged(QString)), this, SLOT(cboSpectraDelimChanged(QString)));
+	connect(spnFirstCol, SIGNAL(valueChanged(int)), this, SLOT(spnFirstColChanged(int)));
+	connect(spnFirstRow, SIGNAL(valueChanged(int)), this, SLOT(spnFirstRowChanged(int)));
+	connect(spnDateCol, SIGNAL(valueChanged(int)), this, SLOT(spnDateColChanged(int)));
+	connect(spnTimeCol, SIGNAL(valueChanged(int)), this, SLOT(spnTimeColChanged(int)));
 	connect(txtOutput, SIGNAL(textChanged(QString)), this, SLOT(txtOutputChanged(QString)));
 	connect(cboOutputDelim, SIGNAL(currentTextChanged(QString)), this, SLOT(cboOutputDelimChanged(QString)));
 	connect(spnInputScale, SIGNAL(valueChanged(double)), this, SLOT(spnInputScaleChanged(double)));
@@ -84,6 +90,10 @@ void ConvolveForm::setupUi(QDialog* form) {
 	cboBandDefDelim->setCurrentText(_formatDelim(m_settings.value("lastBandDefDelim", ",").toString().toStdString()).c_str());
 	txtSpectra->setText(m_settings.value("lastSpectra", "").toString());
 	cboSpectraDelim->setCurrentText(_formatDelim(m_settings.value("lastSpectraDelim", ",").toString().toStdString()).c_str());
+	spnFirstCol->setValue(m_settings.value("lastFirstCol", 0).toInt());
+	spnFirstRow->setValue(m_settings.value("lastFirstRow", 0).toInt());
+	spnDateCol->setValue(m_settings.value("lastDateCol", -1).toInt());
+	spnTimeCol->setValue(m_settings.value("lastTimeCol", -1).toInt());
 	txtOutput->setText(m_settings.value("lastOutput", "").toString());
 	cboOutputDelim->setCurrentText(_formatDelim(m_settings.value("lastOutputDelim", ",").toString().toStdString()).c_str());
 	spnInputScale->setValue(m_settings.value("lastInputScale", 1.0).toDouble());
@@ -121,6 +131,30 @@ void ConvolveForm::txtSpectraChanged(QString filename) {
 void ConvolveForm::cboSpectraDelimChanged(QString delim) {
 	m_spectraDelim = _parseDelim(delim.toStdString());
 	m_settings.setValue("lastSpectraDelim", delim);
+	checkRun();
+}
+
+void ConvolveForm::spnFirstColChanged(int v) {
+	m_firstCol = v;
+	m_settings.setValue("lastFirstCol", v);
+	checkRun();
+}
+
+void ConvolveForm::spnFirstRowChanged(int v) {
+	m_firstRow = v;
+	m_settings.setValue("lastFirstRow", v);
+	checkRun();
+}
+
+void ConvolveForm::spnDateColChanged(int v) {
+	m_dateCol = v;
+	m_settings.setValue("lastDateCol", v);
+	checkRun();
+}
+
+void ConvolveForm::spnTimeColChanged(int v) {
+	m_timeCol = v;
+	m_settings.setValue("lastTimeCol", v);
 	checkRun();
 }
 
@@ -181,9 +215,10 @@ void ConvolveForm::btnOutputClicked() {
 void _run(ConvolveForm* form, Convolver* conv,
 		const std::string* bandDef, std::string* bandDefDelim,
 		const std::string* spectra, std::string* spectraDelim,
+		int firstRow, int firstCol, int dateCol, int timeCol,
 		const std::string* output, std::string* outputDelim,
 		double inputScale, double tolerance, double bandShift, bool* running) {
-	conv->run(*form, *bandDef, *bandDefDelim, *spectra, *spectraDelim,
+	conv->run(*form, *bandDef, *bandDefDelim, *spectra, *spectraDelim, firstRow, firstCol, dateCol, timeCol,
 			*output, *outputDelim, inputScale, tolerance, bandShift, *running);
 }
 
@@ -202,6 +237,10 @@ void ConvolveForm::runState() {
 	cboBandDefDelim->setEnabled(false);
 	cboSpectraDelim->setEnabled(false);
 	cboOutputDelim->setEnabled(false);
+	spnFirstCol->setEnabled(false);
+	spnFirstRow->setEnabled(false);
+	spnDateCol->setEnabled(false);
+	spnTimeCol->setEnabled(false);
 }
 
 void ConvolveForm::stopState() {
@@ -219,6 +258,10 @@ void ConvolveForm::stopState() {
 	cboBandDefDelim->setEnabled(true);
 	cboSpectraDelim->setEnabled(true);
 	cboOutputDelim->setEnabled(true);
+	spnFirstCol->setEnabled(true);
+	spnFirstRow->setEnabled(true);
+	spnDateCol->setEnabled(true);
+	spnTimeCol->setEnabled(true);
 }
 
 void ConvolveForm::run() {
@@ -228,6 +271,7 @@ void ConvolveForm::run() {
 		m_thread = std::thread(_run, this, m_convolver,
 				&m_bandDefFile, &m_bandDefDelim,
 				&m_spectraFile, &m_spectraDelim,
+				m_firstRow, m_firstCol, m_dateCol, m_timeCol,
 				&m_outputFile, &m_outputDelim,
 				m_inputScale, m_tolerance, m_bandShift, &m_running);
 	}

@@ -31,6 +31,10 @@ private:
 	double m_inputScale;
 	double m_tolerance;
 	double m_bandShift;
+	int m_firstRow;
+	int m_firstCol;
+	int m_dateCol;
+	int m_timeCol;
 
 	Convolver* m_convolver;
 	QDialog* m_form;
@@ -61,6 +65,10 @@ public slots:
 	void cboBandDefDelimChanged(QString);
 	void txtSpectraChanged(QString);
 	void cboSpectraDelimChanged(QString);
+	void spnFirstColChanged(int);
+	void spnFirstRowChanged(int);
+	void spnDateColChanged(int);
+	void spnTimeColChanged(int);
 	void txtOutputChanged(QString);
 	void cboOutputDelimChanged(QString);
 	void spnInputScaleChanged(double);

@@ -187,6 +187,15 @@ void _stripcr(std::string& buf) {
 	buf.resize(j);
 }
 
+Spectrum::Spectrum(int firstRow, int firstCol, int dateCol, int timeCol) :
+		m_delim(','),
+		m_count(0),
+		m_firstRow(firstRow), m_firstCol(firstCol),
+		m_dateCol(dateCol), m_timeCol(timeCol),
+		time(0) {}
+
+Spectrum::Spectrum() : Spectrum(0, 0, -1, -1) {}
+
 bool Spectrum::load(const std::string& filename, const std::string& delimiter) {
 	// Clear any existing bands list.
 	bands.clear();
@@ -194,34 +203,28 @@ bool Spectrum::load(const std::string& filename, const std::string& delimiter) {
 	m_input.open(filename, std::ios::in);
 	// Set the delimiter
 	m_delim = delimiter[0];
-	// Try to skip the header. If it doesn't work quit.
-	// TODO: This is only relevant to Flame output. Should be configurable. In fact, the input should be in the form of an abstract table model.
-	if(!std::getline(m_input, m_buf))
-		return false;
+
+	// Try to skip extraneous rows.
+	for(int r = 0; r < m_firstRow; ++r) {
+		if(!std::getline(m_input, m_buf))
+			return false;
+	}
 
 	std::string buf;		// A temporary buffer.
 	bool header = false; 	// False when the band wl header hasn't been read yet.
+
 	// Run over the rows.
 	while(std::getline(m_input, m_buf)) {
 		_stripcr(m_buf); // Strip carriage return.
 		if(m_buf.size() == 0) {
 			// If the line contains no information, skip it.
 			continue;
-		} else if(!header && m_buf.find(':') < std::string::npos) {
-			// Process the colon-delimited headers for properties.
-			std::stringstream ss(m_buf);
-			std::getline(ss, buf, ':');
-			std::getline(ss, m_buf);
-			properties[buf] = m_buf; // The carriage return is at the beginning of the line
-		} else if(m_buf.find(">>>") < std::string::npos) {
-			// Skip the divider.
-			continue;
 		} else if(!header) {
 			// Parse the wavelengths out of the header section. The first two columns (date, time) are empty.
-			_stripws(m_buf);
+			// Skip the unneeded columns.
 			std::stringstream ss(m_buf);
-			std::getline(ss, buf, m_delim);
-			std::getline(ss, buf, m_delim);
+			for(int c = 0; c < m_firstCol; ++c)
+				std::getline(ss, buf, m_delim);
 			while(std::getline(ss, buf, m_delim))
 				bands.emplace_back(atof(buf.c_str()), 0);
 			header = true;
@@ -253,17 +256,40 @@ bool Spectrum::next() {
 	// No buffer was read on the previous read. We're done.
 	if(m_buf.empty())
 		return false;
-	// Read the date, timestamp and values out of the line.
-	std::stringstream ss(m_buf);
-	std::string part;
-	std::getline(ss, date, m_delim);
-	std::getline(ss, part, m_delim);
-	time = std::strtol(part.c_str(), nullptr, 10);
-	size_t i = 0;
-	while(std::getline(ss, part, m_delim))
-		bands[i++].setValue(std::strtod(part.c_str(), nullptr));
+
+	// Read the date string.
+	{
+		std::stringstream ss(m_buf);
+		for(int c = 0; c <= m_dateCol; ++c)
+			std::getline(ss, date, m_delim);
+	}
+
+	// Read the timestamp.
+	{
+		std::stringstream ss(m_buf);
+		std::string part;
+		for(int c = 0; c <= m_timeCol; ++c)
+			std::getline(ss, part, m_delim);
+		time = std::strtol(part.c_str(), nullptr, 10);
+	}
+
+	// Read the data.
+	{
+		size_t i = 0;
+		std::stringstream ss(m_buf);
+		std::string part;
+		for(int c = 0; c < m_firstCol; ++c)
+			std::getline(ss, part, m_delim);
+		while(std::getline(ss, part, m_delim))
+			bands[i++].setValue(std::strtod(part.c_str(), nullptr));
+	}
+
 	// Read the next buffer. If it fails, we'll find out on the next call to next.
-	std::getline(m_input, m_buf);
+	if(!m_input.eof() && m_input.good()) {
+		std::getline(m_input, m_buf);
+	} else {
+		m_buf = "";
+	}
 	return true;
 }
 
@@ -406,6 +432,8 @@ void Convolver::run(ConvolverListener& listener,
 		const std::string& bandDefDelim,
 		const std::string& spectra,
 		const std::string& spectraDelim,
+		int spectraFirstRow, int spectraFirstCol,
+		int spectraDateCol, int spectraTimeCol,
 		const std::string& output,
 		const std::string& outputDelim,
 		double inputScale, double tolerance, double bandShift, bool& running) {
@@ -421,7 +449,7 @@ void Convolver::run(ConvolverListener& listener,
 	rdr.load(bandDef, bandDefDelim);
 
 	// Load the spectrum.
-	Spectrum spec;
+	Spectrum spec(spectraFirstRow, spectraFirstCol, spectraDateCol, spectraTimeCol);
 	spec.load(spectra, spectraDelim);
 	spec.shift(bandShift);
 	spec.scale(inputScale);

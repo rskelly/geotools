@@ -247,12 +247,20 @@ private:
 	std::string m_buf;								///<! The current file buffer.
 	char m_delim;									///<! The column delimiter.
 	size_t m_count;									///<! The number of records in the file.
+	int m_firstRow;									///<! The first row of data.
+	int m_firstCol;									///<! The first column of data.
+	int m_dateCol;									///<! The date column (or -1 if not used.)
+	int m_timeCol;									///<! The timestamp column (or -1 if not used.)
 
 public:
 	std::vector<Band> bands;						///<! A list of the bands. This changes as the file is read through.
 	std::map<std::string, std::string> properties;	///<! Properties read from the header block.
 	std::string date;								///<! The date of the current row.
 	long time;										///<! The timestamp of the current row.
+
+	Spectrum();
+
+	Spectrum(int firstRow, int firstCol, int dateCol, int timeCol);
 
 	/**
 	 * Load the data file and read the header information.
@@ -261,6 +269,8 @@ public:
 	 *
 	 * @param filename A data file.
 	 * @param delimiter The column delimiter.
+	 * @param firstRow The zero-based index of the first row of data.
+	 * @param firstcol  The zero-based index of the first column of data.
 	 * @return True if the file is loaded and has information in it.
 	 */
 	bool load(const std::string& filename, const std::string& delimiter);
@@ -453,6 +463,10 @@ public:
 	 * @param bandDefDelim The delimiter for the data file.
 	 * @param spectra The spectral data file.
 	 * @param spectraDelim The delimiter for the data file.
+	 * @param spectraFirstRow The zero-based index of the first data row.
+	 * @param spectraFirstCol The zero-based index of the first data column.
+	 * @param spectraDateCol The zero-based index of a date string. -1 for none.
+	 * @param spectraTimeCol The zero-based index of a timestamp. -1 for none.
 	 * @param output The output file.
 	 * @param outputDelim The delimiter for the data file.
 	 * @param inputScale Scale every input spectral value by this much.
@@ -463,6 +477,8 @@ public:
 	void run(ConvolverListener& listener,
 			const std::string& bandDef, const std::string& bandDefDelim,
 			const std::string& spectra, const std::string& spectraDelim,
+			int spectraFirstRow, int spectraFirstCol,
+			int spectraDateCol, int spectraTimeCol,
 			const std::string& output, const std::string& outputDelim,
 			double inputScale, double tolerance, double bandShift, bool& running);
 
