@@ -190,7 +190,7 @@ void Reflectance::run(ReflectanceListener& listener,
 					}
 
 					// Write to the new raster
-					output.write(refl, row);
+					output.write(refl, row - firstIdx);
 
 					++m_step;
 					listener.update(this);

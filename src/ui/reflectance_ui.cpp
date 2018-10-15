@@ -101,6 +101,8 @@ void ReflectanceForm::run() {
 	if(!m_running) {
 		m_running = true;
 		runState();
+		if(m_thread.joinable())
+			m_thread.join();
 		m_thread = std::thread(_process, static_cast<ReflectanceListener*>(this),
 				&m_imuGps, m_imuUTCOffset,
 				&m_rawRad,
