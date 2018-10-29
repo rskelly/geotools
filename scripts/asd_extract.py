@@ -313,6 +313,34 @@ def gen_plot(outfile, data, width, height):
 	plt.savefig(outfile, bbox_inches = 'tight')
 	plt.close()
 
+def transpose(infile, outfile, groupcol, datcolstart):
+	'''
+	Transposes a spreadsheet. Calculates the means of columns
+	grouped by a label column.
+	'''
+
+	with open(infile, 'rU') as input:
+		with open(outfile, 'w') as output:
+
+			db = []
+			for row in [x for x in input.read().split('\n')]:
+				db.append(row.split(','))
+
+			cols = []
+			for i in range(len(db[0])):
+				cols.append([0] * (len(db) + 2))
+
+			for i in range(len(db[0])):
+				for j in range(len(db)):
+					try:
+						cols[i][j] = db[j][i]
+					except: pass
+			
+			for row in cols:
+				output.write(','.join(list(map(str, row))) + '\n')
+
+
+
 if __name__ == '__main__':
 
 	try:
@@ -335,6 +363,8 @@ if __name__ == '__main__':
 				password = sys.argv[6]
 			except: pass
 			process_db(name, filename, dbname, user, password)
+		elif phase == 'transpose':
+			transpose(sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5]))
 		else:
 			usage()
 	except Exception as e:
