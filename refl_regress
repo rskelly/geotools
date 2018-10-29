@@ -1,0 +1,12 @@
+# Creating Reflectance Regression Coefficients
+
+The **refl_regress.py** script is a multi-step process for producing regression coefficients and plots from input data.
+
+There are three main steps:
+
+1) Sample the apparent reflectance raster using a spreadsheet containing sample points.
+2) Perform the regression.
+3) Transform the raster using the generated coefficients.
+
+There is an optional intermediate step which allows the plotting of input values.
+
