@@ -5,7 +5,7 @@ This is the Wiki page for the HLRG tools, including:
 * [reflectance](https://github.com/rskelly/contrem/wiki/reflectance) -- Tool for calculating reflectance from radiance images.
 * [refl_regress](https://github.com/rskelly/contrem/wiki/refl_regress) -- Tool for calculating reflectance regression coefficients. 
 
-Production instructions for regression coefficients are [here](https://github.com/rskelly/contrem/blob/master/process.md).
+Production instructions for regression coefficients are [here](https://github.com/rskelly/contrem/wiki/process).
 
 # Installation
 Install the program by doing the usual:
