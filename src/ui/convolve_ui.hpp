@@ -87,6 +87,7 @@ public slots:
 	void convUpdate(Convolver*);
 	void convFinished(Convolver*);
 
+	void handleException(const std::exception& ex);
 };
 
 #endif /* SRC_UI_CONVOLVE_UI_HPP_ */

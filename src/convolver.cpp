@@ -220,6 +220,8 @@ bool Spectrum::load(const std::string& filename, const std::string& delimiter) {
 			// If the line contains no information, skip it.
 			continue;
 		} else if(!header) {
+			if(std::string::npos == m_buf.find(m_delim))
+				throw std::runtime_error("The selected delimiter wasn't found in this file.");
 			// Parse the wavelengths out of the header section. The first two columns (date, time) are empty.
 			// Skip the unneeded columns.
 			std::stringstream ss(m_buf);
@@ -287,6 +289,8 @@ bool Spectrum::next() {
 	// Read the next buffer. If it fails, we'll find out on the next call to next.
 	if(!m_input.eof() && m_input.good()) {
 		std::getline(m_input, m_buf);
+		if(std::string::npos == m_buf.find(m_delim))
+			throw std::runtime_error("The selected delimiter wasn't found in this file.");
 	} else {
 		m_buf = "";
 	}
