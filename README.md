@@ -3,6 +3,9 @@ This is the Wiki page for the HLRG tools, including:
 * [contrem](https://github.com/rskelly/contrem/wiki/contrem) -- The convex hull continuum removal tool.
 * [convolve](https://github.com/rskelly/contrem/wiki/convolve) -- The spectral convolution tool.
 * [reflectance](https://github.com/rskelly/contrem/wiki/reflectance) -- Tool for calculating reflectance from radiance images.
+* [refl_regress](https://github.com/rskelly/contrem/wiki/refl_regress) -- Tool for calculating reflectance regression coefficients. 
+
+Production instructions for regression coefficients are [here](https://github.com/rskelly/contrem/wiki/process).
 
 # Installation
 Install the program by doing the usual:
