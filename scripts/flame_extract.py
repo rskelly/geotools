@@ -15,7 +15,7 @@ def usage():
         -o <file>        The output file.
         -b               The start time of extraction, in the format yyyy-mm-dd hh:mm:ss.
                          The argument is optional, and the date part is optional if the time is given. 
-        -e               The end time of extraction, same format as -s0.
+        -e               The end time of extraction, same format as -b.
         -d <interval>    The extraction interval in seconds.
         ''')
     

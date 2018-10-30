@@ -101,10 +101,14 @@ def mean(lst):
 def load_asd_nano(asd_filename, nano_filename, 
 	asd_offset, nano_offset, asd_label_idx, nano_label_idx,
 	asd_labels, nano_labels, num_bands):
-
+	'''
+	Load data from the ASD and NANO and return the data.
+	'''
+	# Load the headers.
 	nano_head = load_csv_head(nano_filename)
 	asd_head = load_csv_head(asd_filename)
 
+	# Load selected rows and put the data in the arrays.
 	nano_y_light = []
 	nano_y_dark = []
 	asd_y_light = []
