@@ -17,6 +17,7 @@ def load_csv_col(filename, col, where = []):
 
 	Returns a list of floats.
 	'''
+	print(filename)
 	data = []
 	with open(filename, 'rU') as f:
 		for line in f:
@@ -69,7 +70,7 @@ def sample_raster(rfilename, pfilename, ofilename, labels = ('light', 'dark'), l
 		x, y, id, target = samples[i]
 		for b in range(bands):
 			band = ds.GetRasterBand(b + 1)
-			v = band.ReadAsArray(int(float(x)), int(-float(y)), 1, 1)
+			v = band.ReadAsArray(int(float(x)), int(rows - float(y)), 1, 1)
 			samples[i].append(v[0,0])
 	
 	# For light and dark, compute the means of all samples for each band.
@@ -95,6 +96,7 @@ def mean(lst):
 	'''
 	Compute the mean of a list.
 	'''
+	print(lst)
 	return float(sum(lst)) / len(lst)
 
 
