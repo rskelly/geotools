@@ -57,6 +57,7 @@ signals:
 	void update(Reflectance*);
 	void stopped(Reflectance*);
 	void finished(Reflectance*);
+	void exception(Reflectance*, const std::exception&);
 
 public slots:
 	void txtIMUGPSChanged(QString);
@@ -80,6 +81,7 @@ public slots:
 	void reflUpdate(Reflectance*);
 	void reflStopped(Reflectance*);
 	void reflFinished(Reflectance*);
+	void reflException(Reflectance* refl, const std::exception& ex);
 
 };
 

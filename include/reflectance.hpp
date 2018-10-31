@@ -20,6 +20,7 @@ public:
 	virtual void update(Reflectance*) = 0;
 	virtual void stopped(Reflectance*) = 0;
 	virtual void finished(Reflectance*) = 0;
+	virtual void exception(Reflectance*, const std::exception&) = 0;
 	virtual ~ReflectanceListener() {}
 };
 

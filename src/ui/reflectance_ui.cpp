@@ -54,6 +54,7 @@ void ReflectanceForm::setupUi(QDialog* form) {
 	connect(this, SIGNAL(stopped(Reflectance*)), this, SLOT(reflStopped(Reflectance*)));
 	connect(this, SIGNAL(update(Reflectance*)), this, SLOT(reflUpdate(Reflectance*)));
 	connect(this, SIGNAL(finished(Reflectance*)), this, SLOT(reflFinished(Reflectance*)));
+	connect(this, SIGNAL(exception(Reflectance*, const std::exception&)), this, SLOT(reflFinished(Reflectance*, const std::exception&)));
 
 	txtIMUGPS->setText(m_settings.value("lastIMUGPS", "").toString());
 	spnIMUUTCOffset->setValue(m_settings.value("lastIMUUTCOffset", 0).toDouble());
@@ -94,7 +95,11 @@ void _process(ReflectanceListener* listener,
 		bool* running) {
 
 	Reflectance refl;
-	refl.run(*listener, *imuGps, imuUTCOffset, *rawRad, *frameIdx, *irradConv, irradUTCOffset, *reflOut, *running);
+	try {
+		refl.run(*listener, *imuGps, imuUTCOffset, *rawRad, *frameIdx, *irradConv, irradUTCOffset, *reflOut, *running);
+	} catch(const std::exception& ex) {
+		listener->exception(&refl, ex);
+	}
 }
 
 void ReflectanceForm::run() {
@@ -112,11 +117,18 @@ void ReflectanceForm::run() {
 	}
 }
 
+bool _failure = false;
+
 void ReflectanceForm::cancel() {
 	if(m_running) {
 		m_running = false;
-		if(m_thread.joinable())
-			m_thread.join();
+		if(_failure) {
+			m_thread.detach();
+			_failure = false;
+		} else {
+			if(m_thread.joinable())
+				m_thread.join();
+		}
 	}
 }
 
@@ -157,12 +169,23 @@ void ReflectanceForm::reflUpdate(Reflectance* refl) {
 
 void ReflectanceForm::reflStopped(Reflectance* refl) {
 	m_running = false;
+	if(m_thread.joinable())
+		m_thread.detach();
 	stopState();
 }
 
 void ReflectanceForm::reflFinished(Reflectance* refl) {
 	m_running = false;
+	if(m_thread.joinable())
+		m_thread.detach();
 	stopState();
+}
+
+void ReflectanceForm::reflException(Reflectance* refl, const std::exception& ex) {
+	progressBar->setValue(0);
+	QMessageBox::critical(this, "Error", ex.what());
+	_failure = true;
+	cancel();
 }
 
 void ReflectanceForm::txtIMUGPSChanged(QString v) {
@@ -266,7 +289,8 @@ void ReflectanceForm::btnCloseClicked() {
 }
 
 ReflectanceForm::~ReflectanceForm() {
-
+	if(m_thread.joinable())
+		m_thread.detach();
 }
 
 
