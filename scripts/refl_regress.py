@@ -17,7 +17,6 @@ def load_csv_col(filename, col, where = []):
 
 	Returns a list of floats.
 	'''
-	print(filename)
 	data = []
 	with open(filename, 'rU') as f:
 		for line in f:
@@ -96,7 +95,6 @@ def mean(lst):
 	'''
 	Compute the mean of a list.
 	'''
-	print(lst)
 	return float(sum(lst)) / len(lst)
 
 
@@ -116,7 +114,6 @@ def load_asd_nano(asd_filename, nano_filename,
 	asd_y_light = []
 	asd_y_dark = []
 	for b in range(num_bands):
-
 		nano_y_light.append(mean(load_csv_col(nano_filename, b + nano_offset, [(nano_label_idx, nano_labels[0],)])))
 		nano_y_dark.append(mean(load_csv_col(nano_filename, b + nano_offset, [(nano_label_idx, nano_labels[1])])))
 
@@ -224,7 +221,6 @@ def transform_raster(irasterfile, orasterfile, coeffile):
 	dsout = drv.Create(orasterfile, cols, rows, bands, gdal.GDT_Float32)
 
 	for b in range(cbands):
-		print(b)
 		# Input and output bands.
 		iband = dsin.GetRasterBand(b + 1)
 		oband = dsout.GetRasterBand(b + 1)
@@ -258,10 +254,11 @@ if __name__ == '__main__':
 		cmd = sys.argv[1]
 	except:
 		usage()
+		sys.exit(1)
 
-	asd_offset = 5
+	asd_offset = 3
 	nano_offset = 4
-	asd_label_idx = 1
+	asd_label_idx = 0
 	nano_label_idx = 3
 	asd_labels = ('mean_light', 'mean_dark')
 	nano_labels = ('mean_light', 'mean_dark')
