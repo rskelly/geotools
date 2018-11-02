@@ -38,7 +38,7 @@ int makedir(const std::string& filename) {
 }
 
 GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
-		const std::vector<double>& wavelengths, const std::vector<std::string>& bandNames,
+		const std::vector<double>& wavelengths, const std::vector<std::string>& bandNames, char** meta,
 		DataType type, const std::string& interleave, const std::string& unit) :
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
@@ -70,6 +70,9 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	m_ds = drv->Create(filename.c_str(), cols, rows, bands, gtype, options);
 	if(!m_ds)
 		throw std::runtime_error("Failed to open " + filename + " for writing");
+
+	if(meta)
+		m_ds->SetMetadata(meta);
 
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();

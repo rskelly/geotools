@@ -50,6 +50,9 @@ def sample_raster(rfilename, pfilename, ofilename, labels = ('light', 'dark'), l
 	Writes the sampled values to the ofilename. Format is the same as the point
 	file with bands appended.
 	'''
+	if os.path.exists(ofilename):
+		raise Exception('Error! The output filename, ' + ofilename + ', already exists.')
+	
 	ds = gdal.Open(rfilename)
 	cols = ds.RasterXSize
 	rows = ds.RasterYSize
@@ -162,8 +165,16 @@ def regress(nano_filename, asd_filename, out_filename, asd_offset, nano_offset, 
 	value is a function of the ASD reflectance (which is assumed to have no
 	atmospheric component), path radiance and some coefficient (the slope.)
 
-	Computes and writes the slope and y-intercept for each pair.
+	Computes and writes the slope and y-intercept for each pair to the output database.
+	
+	nano_filename - The radiance image produced by the spectrometer.
+	asd_filename - The convolved ASD spectra.
+	out_filename - The output filename, which will contain the coefficients.
 	'''
+	
+	if os.path.exists(out_filename):
+		raise Exception('Error! The output file, ' + out_filename + ', already exists.')
+
 	asd_head, nano_head, asd_y_light, asd_y_dark, nano_y_light, nano_y_dark, count = load_asd_nano(asd_filename, nano_filename,
 		asd_offset, nano_offset, asd_label_idx, nano_label_idx, 
 		asd_labels, nano_labels, num_bands)
@@ -179,7 +190,7 @@ def regress(nano_filename, asd_filename, out_filename, asd_offset, nano_offset, 
 	head = list(map(float, asd_head[asd_offset:]))
 
 	coeffs = []
-	for b in range(count):
+	for b in range(161, 169): #range(count):
 		xl = asd_y_light[b]
 		yl= nano_y_light[b]
 		xd = asd_y_dark[b]
@@ -204,7 +215,16 @@ def regress(nano_filename, asd_filename, out_filename, asd_offset, nano_offset, 
 	plt.legend()
 	plt.show()
 
-def transform_raster(irasterfile, orasterfile, coeffile):
+def transform_raster(irasterfile, coeffile, orasterfile):
+	'''
+	Apply the coefficients determined in the regress step to the raster.
+	irasterfile - The apparent reflectance raster.
+	coeffile - The file containing coefficients, produced by the regress step.
+	orasterfile - The transformed raster output file.
+	'''
+	
+	if os.path.exists(orasterfile):
+		raise Exception('Error! The output file, ' + orasterfile + ', already exists.')
 
 	with open(coeffile, 'rU') as f:
 		f.readline()
@@ -217,9 +237,10 @@ def transform_raster(irasterfile, orasterfile, coeffile):
 
 	cbands = len(coeffs)
 
-	drv = gdal.GetDriverByName('GTiff')
+	drv = gdal.GetDriverByName('ENVI')
 	dsout = drv.Create(orasterfile, cols, rows, bands, gdal.GDT_Float32)
-
+	dsout.SetMetadata(dsin.GetMetadata())
+	
 	for b in range(cbands):
 		# Input and output bands.
 		iband = dsin.GetRasterBand(b + 1)
@@ -246,7 +267,12 @@ def usage():
 			values.
 		4) refl_regress.py transform <raster file> <transformed raster file> <coefficients file>
 			Transforms the apparent reflectance file, removing path radiance and scaling by the slope.
-			Outputs a new raster.''')
+			Outputs a new raster.
+			
+		Help for this tool and the processing steps can be found at 
+			https://github.com/rskelly/contrem/wiki/refl_regress
+			https://github.com/rskelly/contrem/wiki/Reflectance-Coefficients
+	''')
 
 if __name__ == '__main__':
 
@@ -264,14 +290,18 @@ if __name__ == '__main__':
 	nano_labels = ('mean_light', 'mean_dark')
 	num_bands = 272
 
-	if cmd == 'sample':
-		sample_raster(*sys.argv[2:5])
-	elif cmd == 'plot':
-		plot(sys.argv[2], sys.argv[3], asd_offset, nano_offset, asd_label_idx, nano_label_idx, 
-		asd_labels, nano_labels, num_bands)
-	elif cmd == 'regress':
-		regress(sys.argv[2], sys.argv[3], sys.argv[4], asd_offset, nano_offset, asd_label_idx, nano_label_idx, asd_labels, nano_labels, num_bands)
-	elif cmd == 'transform':
-		transform_raster(*sys.argv[2:5])
-	else:
+	try:
+		if cmd == 'sample':
+			sample_raster(*sys.argv[2:5])
+		elif cmd == 'plot':
+			plot(sys.argv[2], sys.argv[3], asd_offset, nano_offset, asd_label_idx, nano_label_idx, 
+			asd_labels, nano_labels, num_bands)
+		elif cmd == 'regress':
+			regress(sys.argv[2], sys.argv[3], sys.argv[4], asd_offset, nano_offset, asd_label_idx, nano_label_idx, asd_labels, nano_labels, num_bands)
+		elif cmd == 'transform':
+			transform_raster(*sys.argv[2:5])
+		else:
+			usage()
+	except Exception as e:
+		print(e)
 		usage()

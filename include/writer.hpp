@@ -96,7 +96,7 @@ public:
 	 * @param unit The wavelength units.
 	 */
 	GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
-			const std::vector<double>& wavelengths = {}, const std::vector<std::string>& bandNames = {},
+			const std::vector<double>& wavelengths = {}, const std::vector<std::string>& bandNames = {}, char** meta = nullptr,
 			DataType type = DataType::Float32, const std::string& interleave = "BIL", const std::string& unit = "nm");
 
 	bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0);

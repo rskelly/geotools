@@ -340,13 +340,15 @@ void writeQueue(QConfig* config) {
 	// Remove the extension if there is one.
 	outfile = outfile.substr(0, outfile.find_last_of("."));
 
+	char* meta;
+
 	GDALWriter writerss(outfile + "_ss" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 	GDALWriter writerch(outfile + "_ch" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 	GDALWriter writercr(outfile + "_cr" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 	GDALWriter writercrnm(outfile + "_crnm" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 	GDALWriter writerhull(outfile + "_agg" + ext, driver, cols, rows, 7, {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count"});
-	GDALWriter writermax(outfile + "_maxcount" + ext, driver, cols, rows, 1, {}, {"equal_max_count"}, DataType::Byte);
-	GDALWriter writervalid(outfile + "_valid" + ext, driver, cols, rows, 1, {}, {"valid_hull"}, DataType::Byte);
+	GDALWriter writermax(outfile + "_maxcount" + ext, driver, cols, rows, 1, {}, {"equal_max_count"}, &meta, DataType::Byte);
+	GDALWriter writervalid(outfile + "_valid" + ext, driver, cols, rows, 1, {}, {"valid_hull"}, &meta, DataType::Byte);
 
 	writermax.fill(0);
 	writervalid.fill(0);

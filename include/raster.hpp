@@ -40,6 +40,14 @@ private:
 	int m_rows;
 	int m_row;
 
+protected:
+
+	GDALDataset* ds() const;
+
+	GDALRasterBand* band(int b) const;
+
+	char** metadata() const;
+
 public:
 	/**
 	 * Construct a readable raster object using the given filename.
@@ -49,7 +57,7 @@ public:
 	/**
 	 * Construct a writable raster object using the given filename.
 	 */
-	Raster(const std::string& filename, int cols, int rows, int bands, int srid, DataType type);
+	Raster(const std::string& filename, int cols, int rows, int bands, int srid, DataType type, Raster* parent = nullptr);
 
 	/**
 	 * Return the number of bands.
@@ -67,6 +75,7 @@ public:
 
 
 	int rows() const;
+
 
 	/**
 	 * Read all bands of the next row. This will write the pixel rows for each band

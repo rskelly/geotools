@@ -54,7 +54,7 @@ void ReflectanceForm::setupUi(QDialog* form) {
 	connect(this, SIGNAL(stopped(Reflectance*)), this, SLOT(reflStopped(Reflectance*)));
 	connect(this, SIGNAL(update(Reflectance*)), this, SLOT(reflUpdate(Reflectance*)));
 	connect(this, SIGNAL(finished(Reflectance*)), this, SLOT(reflFinished(Reflectance*)));
-	connect(this, SIGNAL(exception(Reflectance*, const std::exception&)), this, SLOT(reflFinished(Reflectance*, const std::exception&)));
+	connect(this, SIGNAL(exception(Reflectance*, const std::exception&)), this, SLOT(reflException(Reflectance*, const std::exception&)));
 
 	txtIMUGPS->setText(m_settings.value("lastIMUGPS", "").toString());
 	spnIMUUTCOffset->setValue(m_settings.value("lastIMUUTCOffset", 0).toDouble());

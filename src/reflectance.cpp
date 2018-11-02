@@ -102,7 +102,7 @@ void Reflectance::run(ReflectanceListener& listener,
 
 	// Set up rasters.
 	Raster raster(rawRad);
-	Raster output(reflOut, raster.cols(), raster.rows(), raster.bands(), 0, Float32);
+	Raster output(reflOut, raster.cols(), raster.rows(), raster.bands(), 0, Float32, &raster);
 
 	// Add rows to the number of steps.
 	m_numSteps += raster.rows();
