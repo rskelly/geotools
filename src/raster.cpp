@@ -79,29 +79,27 @@ Raster::Raster(const std::string& filename, int cols, int rows, int bands, int s
 
 	GDALAllRegister();
 
-	if(parent) {
-		GDALDriver* drv = parent->ds()->GetDriver();
-		static char* op = "INTERLEAVE=BIL";
-		if(!(m_ds = drv->CreateCopy(filename.c_str(), parent->ds(), 1, &op, NULL, NULL)))
-			throw std::invalid_argument("Failed to copy dataset.");
-	} else {
-		GDALDriverManager* dm = GetGDALDriverManager();
-		GDALDriver* drv = dm->GetDriverByName("ENVI");
-		GDALDataType gtype = _gtype(type);
-		if(!(m_ds = (GDALDataset*) drv->Create(filename.c_str(), cols, rows, bands, gtype, nullptr)))
-			throw std::invalid_argument("Failed to create dataset.");
-	}
+	static char op[] {"INTERLEAVE=BIL"};
+	static char* op0 = &op[0];
+
+	GDALDriverManager* dm = GetGDALDriverManager();
+	GDALDriver* drv = dm->GetDriverByName("ENVI");
+	GDALDataType gtype = _gtype(type);
+	if(!(m_ds = (GDALDataset*) drv->Create(filename.c_str(), cols, rows, bands, gtype, &op0)))
+		throw std::invalid_argument("Failed to create dataset.");
+
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();
-	/*
-	char** meta = parent->metadata();
-	m_ds->SetMetadata(meta);
-	for(int b = 1; b <= m_bands; ++b) {
-		char** bmeta = parent->band(b)->GetMetadata();
-		m_ds->GetRasterBand(b)->SetMetadata(bmeta);
+
+	if(parent) {
+		char** meta = parent->metadata();
+		m_ds->SetMetadata(meta);
+		for(int b = 1; b <= m_bands; ++b) {
+			char** bmeta = parent->band(b)->GetMetadata();
+			m_ds->GetRasterBand(b)->SetMetadata(bmeta);
+		}
 	}
-	*/
 }
 
 char** Raster::metadata() const {
