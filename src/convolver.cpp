@@ -289,7 +289,7 @@ bool Spectrum::next() {
 	// Read the next buffer. If it fails, we'll find out on the next call to next.
 	if(!m_input.eof() && m_input.good()) {
 		std::getline(m_input, m_buf);
-		if(std::string::npos == m_buf.find(m_delim))
+		if(!m_buf.empty() && std::string::npos == m_buf.find(m_delim))
 			throw std::runtime_error("The selected delimiter wasn't found in this file.");
 	} else {
 		m_buf = "";
