@@ -30,31 +30,34 @@ set (THREADS_PREFER_PTHREAD_FLAG ON)
 
 find_package (GDAL 2.2 REQUIRED)
 find_package (Qt5Widgets REQUIRED)
+find_package (Eigen3 REQUIRED)
 find_library (GEOS_LIBRARY geos PATHS /opt/lib /usr/local/lib /usr/lib NO_CMAKE_SYSTEM_PATH)
 
 project (contrem)
 
 # Configure directories###################################################################################
 
-include_directories(BEFORE SYSTEM ./include /opt/include /usr/include/gdal) 
-link_directories(. /opt/lib /usr/local/lib /usr/lib)
+include_directories(BEFORE SYSTEM ./include 
+	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} 
+	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}) 
+link_directories(. /usr/local/lib /usr/lib)
 
 # Build support libraries ################################################################################
 
 add_executable (contrem src/contrem.cpp src/ui/contrem_ui.cpp src/reader.cpp src/writer.cpp src/contrem_proc.cpp src/stats.cpp)
-target_include_directories(contrem PUBLIC contrem_autogen/include  
-	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS})
+target_include_directories(contrem PUBLIC contrem_autogen/include )
 target_link_libraries (contrem gdal ${GEOS_LIBRARY} Qt5::Widgets)
 
 add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve_ui.cpp)
-target_include_directories(convolve PUBLIC convolve_autogen/include  
-	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS})
+target_include_directories(convolve PUBLIC convolve_autogen/include)
 target_link_libraries (convolve Qt5::Widgets)
 
 add_executable (reflectance src/reflectance.cpp src/reader.cpp src/raster.cpp src/ui/reflectance_ui.cpp)
 target_link_libraries (reflectance gdal Qt5::Widgets)
 
 add_executable (edgereplace src/edgereplace.cpp)
+
+add_executable(boresight src/boresight.cpp)
 
 
 # Install ################################################################################################
