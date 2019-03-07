@@ -44,16 +44,6 @@ inline double gaussian(double sigma, double x, double x0) {
 	return  1.0 / (sigma * std::sqrt(2.0 * PI)) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
 }
 
-/*
-double invGaussian(double sigma, double y, double x0) {
-	return sigma * std::sqrt(-2.0 * std::log(y)) + x0;
-}
-
-double gaussian(double sigma, double x, double x0) {
-	return  std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
-}
-*/
-
 Kernel::Kernel(double wl, double fwhm, double threshold) :
 	m_wl(wl),
 	m_fwhm(fwhm),
