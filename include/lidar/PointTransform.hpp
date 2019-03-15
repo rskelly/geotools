@@ -34,11 +34,13 @@ public:
 	}
 
 	Matrix3d rotation() const {
-		Matrix3d rot;
-		rot = (AngleAxis<double>(rotX, Vector3d::UnitX())
-				* AngleAxis<double>(rotY, Vector3d::UnitY())
-				* AngleAxis<double>(rotZ, Vector3d::UnitZ())).matrix();
-		return rot;
+		Matrix3d rotx;
+		rotx << 1, 0, 0, 0, std::cos(rotX), -std::sin(rotX), 0, std::sin(rotX), std::cos(rotX);
+		Matrix3d roty;
+		roty << std::cos(rotY), 0, std::sin(rotY), 0, 1, 0, -std::sin(rotY), 0, std::cos(rotY);
+		Matrix3d rotz;
+		rotz << std::cos(rotZ), -std::sin(rotZ), 0, std::sin(rotZ), std::cos(rotZ), 0, 0, 0, 1;
+		return rotz * roty * rotx;
 	}
 
 	static std::vector<PointTransform> read(std::istream& input) {
