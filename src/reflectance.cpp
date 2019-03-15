@@ -24,6 +24,41 @@
 
 namespace hlrg {
 
+class DummyListener : public ReflectanceListener {
+private:
+	int lastP;
+public:
+	void started(Reflectance* r) {
+		lastP = -1;
+		std::cout << "Running ";
+	}
+
+	void update(Reflectance* r) {
+		int p = (int) (r->progress() * 100);
+		if(p != lastP) {
+			if(p % 25 == 0)
+				std::cout << " " << p << "% ";
+			if(p % 10 == 0)
+				std::cout << ".";
+			lastP = p;
+		}
+	}
+
+	void stopped(Reflectance* r) {
+		std::cout << " Stopped.\n";
+	}
+
+	void finished(Reflectance* r) {
+		std::cout << " Done.\n";
+	}
+
+	void exception(Reflectance* r, const std::exception& ex) {
+		std::cerr << ex.what() << "\n";
+	}
+
+	~DummyListener() {}
+};
+
 /**
  * Average the values in the given vector.
  */
@@ -248,8 +283,83 @@ int runWithGui(int argc, char **argv) {
 } // hlrg
 
 
+void usage() {
+	std::cout << "Usage: reflectance [<options>]\n"
+			<< " -i 	The IMUGPS file.\n"
+			<< " -io 	Time offset to convert IMUGPS time to UTC. (Default 0).\n"
+			<< " -r 	The raw radiance file (raster).\n"
+			<< " -f 	The frame index file.\n"
+			<< " -c		Convolved irradiance file.\n"
+			<< " -co	Time offset to convert convolved time to UTC. (Default 0).\n"
+			<< " -o 	Reflectance output file.\n";
+}
+
 int main(int argc, char** argv) {
 
-	hlrg::runWithGui(argc, argv);
+	if(argc <= 1) {
+
+		hlrg::runWithGui(argc, argv);
+
+	} else {
+
+		double imuUTCOffset = 0;
+		double irradUTCOffset = 0;
+		std::string imuGps;
+		std::string rawRad;
+		std::string frameIdx;
+		std::string irradConv;
+		std::string reflOut;
+
+		for(int i = 1; i < argc; ++i) {
+			std::string arg(argv[i]);
+			if(arg == "-i") {
+				imuGps = argv[++i];
+			} else if(arg == "-io") {
+				imuUTCOffset = atof(argv[++i]);
+			} else if(arg == "-r") {
+				rawRad = argv[++i];
+			} else if(arg == "-f") {
+				frameIdx = argv[++i];
+			} else if(arg == "-c") {
+				irradConv = argv[++i];
+			} else if(arg == "-o") {
+				reflOut = argv[++i];
+			} else if(arg == "-co") {
+				irradUTCOffset = atof(argv[++i]);
+			}
+		}
+
+		if(imuGps.empty()) {
+			std::cerr << "IMUGPS file is required.\n";
+			usage();
+			return 1;
+		}
+		if(rawRad.empty()) {
+			std::cerr << "Radiance file is required.\n";
+			usage();
+			return 1;
+		}
+		if(frameIdx.empty()) {
+			std::cerr << "Frame index is required.\n";
+			usage();
+			return 1;
+		}
+		if(irradConv.empty()) {
+			std::cerr << "Convolved irradiance is required.\n";
+			usage();
+			return 1;
+		}
+		if(reflOut.empty()) {
+			std::cerr << "Reflectance output file is required.\n";
+			usage();
+			return 1;
+		}
+
+		bool running = true;
+		hlrg::Reflectance refl;
+		hlrg::DummyListener listener;
+		refl.run(listener, imuGps, imuUTCOffset, rawRad, frameIdx, irradConv, irradUTCOffset, reflOut, running);
+
+	}
 
 }

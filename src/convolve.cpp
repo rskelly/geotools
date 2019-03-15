@@ -45,21 +45,35 @@ int runWithGui(int argc, char **argv) {
 class DummyListener : public ConvolverListener {
 public:
 	void started(Convolver* conv) {
-		std::cout << "Started\n";
+		std::cout << "Running ";
 	}
 	void update(Convolver* conv) {
-		std::cout << "Progress: " << (int) (conv->progress() * 100) << "%\n";
+		int p = (int) (conv->progress() * 100);
+		if(p % 25 == 0)
+			std::cout << " " << p << "% ";
+		if(p % 10 == 0)
+			std::cout << ".";
 	}
 	void stopped(Convolver* conv) {
-		std::cout << "Stopped.\n";
+		std::cout << " Stopped.\n";
 	}
 	void finished(Convolver* conv) {
-		std::cout << "Finished.\n";
+		std::cout << " Done.\n";
 	}
 };
 
 void usage() {
-	std::cerr << "Usage: convolve [<band definition file> <spectra file> <output file> [input scale] [threshold]]\n"
+	std::cerr << "Usage: convolve [[options] <band definition file> <spectra file> <output file>]\n"
+			<< " -t		The threshold -- the gaussian will extend out until it is below this value. (Default 0.0001).\n"
+			<< " -f 	The wavelength shift. Used to counter mis-calibration in the spectrometer. (Default 0).\n"
+			<< " -s		Scale the input. (Default 1).\n"
+			<< " -ds	Delimiter for the spectra file. (Default ',').\n"
+			<< " -db	Delimiter for the band map file. (Default ',').\n"
+			<< " -do	Delimiter for the output file. (Default ',').\n"
+			<< " -fr	First data row index (zero-based). (Default 0).\n"
+			<< " -fc 	First data column index (zero-based). (Default 0).\n"
+			<< " -dc 	Date column index (zero-based). (Default -1).\n"
+			<< " -tc 	Timestamp column index (zero-based). (Default -1).\n"
 			<< "    Run without arguments to use the gui.\n";
 }
 
@@ -68,25 +82,57 @@ void usage() {
 int main(int argc, char** argv) {
 
 	if(argc > 1) {
-		if(argc != 4) {
+		if(argc < 4) {
 			usage();
 			return 1;
 		} else {
-			std::string bandDef = argv[1];
-			std::string spectra = argv[2];
-			std::string output = argv[3];
+			std::vector<std::string> files;
 			double inputScale = 1.0;
 			double threshold = 0.0001;
 			double shift = 0;
-			if(argc > 4)
-				inputScale = std::strtod(argv[4], nullptr);
-			if(argc > 5)
-				threshold = std::strtod(argv[5], nullptr);
+			std::string bandDelim = ",";
+			std::string specDelim = ",";
+			std::string outputDelim = ",";
+			int firstRow = 0;
+			int firstCol = 0;
+			int dateCol = -1;
+			int timeCol = -1;
+
+			for(int i = 1; i < argc; ++i) {
+				std::string arg = argv[++i];
+				if(arg == "-s") {
+					inputScale = atof(argv[++i]);
+				} else if(arg == "-t"){
+					threshold = atof(argv[++i]);
+				} else if(arg == "-f") {
+					shift = atof(argv[++i]);
+				} else if(arg == "-ds") {
+					specDelim = argv[++i];
+				} else if (arg == "-db") {
+					bandDelim = argv[++i];
+				} else if (arg == "-do") {
+					outputDelim = argv[++i];
+				} else if (arg == "-fr") {
+					firstRow = atoi(argv[++i]);
+				} else if (arg == "-fc") {
+					firstCol = atoi(argv[++i]);
+				} else if (arg == "-dc") {
+					dateCol = atoi(argv[++i]);
+				} else if (arg == "-tc") {
+					timeCol = atoi(argv[++i]);
+				} else {
+					files.push_back(arg);
+				}
+			}
+
+			std::string bandDef = files[0];
+			std::string spectra = files[1];
+			std::string output = files[2];
 
 			Convolver conv;
 			DummyListener listener;
 			bool running = true;
-			conv.run(listener, bandDef, ",", spectra, ",", 0, 0, -1, -1, output, ",", inputScale, threshold, shift, running);
+			conv.run(listener, bandDef, bandDelim, spectra, specDelim, firstRow, firstCol, dateCol, timeCol, output, outputDelim, inputScale, threshold, shift, running);
 		}
 	} else {
 		return runWithGui(argc, argv);
