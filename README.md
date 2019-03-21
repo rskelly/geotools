@@ -23,23 +23,22 @@ This will create a folder called geotools in the Documents folder with the sourc
 Then follow the instructions below.
 
 ## Linux
-1) mkdir build
-3) cd build
-4) cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..
-5) make
-6) sudo make install
+1) `mkdir build`
+3) `cd build`
+4) `cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..`
+5) `make`
+6) `sudo make install`
 
 Note: The program requires GDAL and GEOS so these must be installed first, preferably using the package manager.
 
 ## OSX
-1) ./INSTALL_OSX.sh
+1) `./INSTALL_OSX.sh`
 
-Note: the INSTALL_OSX.sh file must have execute permissions set to run. Change them using the following command in Terminal:
+Note: If the script fails with a message about permissions, it may need to have the execute permissions set to run. Change them using the following command in Terminal:
 
     chmod +x INSTALL_OSX.sh
 
-Note: The program requires GDAL and GEOS so these must be installed first. The install script attempts this
-using homebrew.
+Note: The program requires GDAL, GEOS and some other libraries to run so these must be installed first. The install script attempts this using Homebrew. It is a common point of failure.
 
 ## Windows
 1) Nope.
