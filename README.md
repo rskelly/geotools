@@ -29,12 +29,16 @@ Then follow the instructions below.
 5) make
 6) sudo make install
 
-The program requires GDAL and GEOS so these must be installed first, preferably using the package manager.
+Note: The program requires GDAL and GEOS so these must be installed first, preferably using the package manager.
 
 ## OSX
 1) ./INSTALL_OSX.sh
 
-The program requires GDAL and GEOS so these must be installed first. The install script attempts this
+Note: the INSTALL_OSX.sh file must have execute permissions set to run. Change them using the following command in Terminal:
+
+    chmod +x INSTALL_OSX.sh
+
+Note: The program requires GDAL and GEOS so these must be installed first. The install script attempts this
 using homebrew.
 
 ## Windows
