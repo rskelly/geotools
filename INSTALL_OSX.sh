@@ -4,13 +4,13 @@
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 
 # Install some necessaries.
-brew install cmake
-brew install geos
-brew install gdal
-brew install qt5
-brew link geos
-brew link gdal
-brew link qt5
+sudo brew install cmake
+sudo brew install geos
+sudo brew install gdal
+sudo brew install qt5
+sudo brew link geos
+sudo brew link gdal
+sudo brew link qt5
 
 # Build the software
 mkdir -p build
