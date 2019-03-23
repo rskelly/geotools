@@ -47,7 +47,7 @@ project (contrem)
 
 # Configure directories###################################################################################
 
-include_directories(BEFORE SYSTEM ./include 
+include_directories(BEFORE SYSTEM ./include /usr/local/include /usr/include 
 	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} 
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}) 
 link_directories(. /usr/local/lib /usr/lib)
