@@ -36,14 +36,18 @@ void ReflectanceForm::setupUi(QDialog* form) {
 	connect(btnIMUGPS, SIGNAL(clicked()), this, SLOT(btnIMUGPSClicked()));
 	connect(txtIMUGPS, SIGNAL(textChanged(QString)), this, SLOT(txtIMUGPSChanged(QString)));
 	connect(spnIMUUTCOffset, SIGNAL(valueChanged(double)), this, SLOT(spnIMUUTCOffsetChanged(double)));
-	connect(btnFrameIndex, SIGNAL(clicked()), this, SLOT(btnFrameIndexClicked()));
+	connect(btnFrameIndexFile, SIGNAL(clicked()), this, SLOT(btnFrameIndexFileClicked()));
+	connect(btnFrameIndexDir, SIGNAL(clicked()), this, SLOT(btnFrameIndexDirClicked()));
 	connect(txtFrameIndex, SIGNAL(textChanged(QString)), this, SLOT(txtFrameIndexChanged(QString)));
-	connect(btnRadRast, SIGNAL(clicked()), this, SLOT(btnRadRastClicked()));
+	connect(btnRadRastFile, SIGNAL(clicked()), this, SLOT(btnRadRastFileClicked()));
+	connect(btnRadRastDir, SIGNAL(clicked()), this, SLOT(btnRadRastDirClicked()));
 	connect(txtRadRast, SIGNAL(textChanged(QString)), this, SLOT(txtRadRastChanged(QString)));
-	connect(btnConvIrrad, SIGNAL(clicked()), this, SLOT(btnConvIrradClicked()));
+	connect(btnConvIrradFile, SIGNAL(clicked()), this, SLOT(btnConvIrradFileClicked()));
+	connect(btnConvIrradDir, SIGNAL(clicked()), this, SLOT(btnConvIrradDirClicked()));
 	connect(txtConvIrrad, SIGNAL(textChanged(QString)), this, SLOT(txtConvIrradChanged(QString)));
 	connect(spnIrradUTCOffset, SIGNAL(valueChanged(double)), this, SLOT(spnIrradUTCOffsetChanged(double)));
-	connect(btnReflOutput, SIGNAL(clicked()), this, SLOT(btnReflOutputClicked()));
+	connect(btnReflOutputFile, SIGNAL(clicked()), this, SLOT(btnReflOutputFileClicked()));
+	connect(btnReflOutputDir, SIGNAL(clicked()), this, SLOT(btnReflOutputDirClicked()));
 	connect(txtReflOutput, SIGNAL(textChanged(QString)), this, SLOT(txtReflOutputChanged(QString)));
 	connect(btnRun, SIGNAL(clicked()), this, SLOT(btnRunClicked()));
 	connect(btnCancel, SIGNAL(clicked()), this, SLOT(btnCancelClicked()));
@@ -214,9 +218,17 @@ void ReflectanceForm::txtFrameIndexChanged(QString v) {
 	checkRun();
 }
 
-void ReflectanceForm::btnFrameIndexClicked() {
+void ReflectanceForm::btnFrameIndexFileClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "Frame Index File", lastDir);
+	QFileInfo dir(filename);
+	m_settings.setValue("lastDir", dir.dir().absolutePath());
+	txtFrameIndex->setText(filename);
+}
+
+void ReflectanceForm::btnFrameIndexDirClicked() {
+	QString lastDir = m_settings.value("lastDir", "").toString();
+	QString filename = QFileDialog::getExistingDirectory(this, "Frame Index Folder", lastDir);
 	QFileInfo dir(filename);
 	m_settings.setValue("lastDir", dir.dir().absolutePath());
 	txtFrameIndex->setText(filename);
@@ -228,9 +240,17 @@ void ReflectanceForm::txtRadRastChanged(QString v) {
 	checkRun();
 }
 
-void ReflectanceForm::btnRadRastClicked() {
+void ReflectanceForm::btnRadRastFileClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "Raw Radiance File", lastDir);
+	QFileInfo dir(filename);
+	m_settings.setValue("lastDir", dir.dir().absolutePath());
+	txtRadRast->setText(filename);
+}
+
+void ReflectanceForm::btnRadRastDirClicked() {
+	QString lastDir = m_settings.value("lastDir", "").toString();
+	QString filename = QFileDialog::getExistingDirectory(this, "Raw Radiance Folder", lastDir);
 	QFileInfo dir(filename);
 	m_settings.setValue("lastDir", dir.dir().absolutePath());
 	txtRadRast->setText(filename);
@@ -242,9 +262,17 @@ void ReflectanceForm::txtConvIrradChanged(QString v) {
 	checkRun();
 }
 
-void ReflectanceForm::btnConvIrradClicked() {
+void ReflectanceForm::btnConvIrradFileClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "Convolved Irradiance File", lastDir);
+	QFileInfo dir(filename);
+	m_settings.setValue("lastDir", dir.dir().absolutePath());
+	txtConvIrrad->setText(filename);
+}
+
+void ReflectanceForm::btnConvIrradDirClicked() {
+	QString lastDir = m_settings.value("lastDir", "").toString();
+	QString filename = QFileDialog::getExistingDirectory(this, "Convolved Irradiance Folder", lastDir);
 	QFileInfo dir(filename);
 	m_settings.setValue("lastDir", dir.dir().absolutePath());
 	txtConvIrrad->setText(filename);
@@ -262,9 +290,17 @@ void ReflectanceForm::txtReflOutputChanged(QString v) {
 	checkRun();
 }
 
-void ReflectanceForm::btnReflOutputClicked() {
+void ReflectanceForm::btnReflOutputFileClicked() {
 	QString lastDir = m_settings.value("lastDir", "").toString();
-	QString filename = QFileDialog::getOpenFileName(this, "Reflectance output File", lastDir);
+	QString filename = QFileDialog::getOpenFileName(this, "Reflectance Output File", lastDir);
+	QFileInfo dir(filename);
+	m_settings.setValue("lastDir", dir.dir().absolutePath());
+	txtReflOutput->setText(filename);
+}
+
+void ReflectanceForm::btnReflOutputDirClicked() {
+	QString lastDir = m_settings.value("lastDir", "").toString();
+	QString filename = QFileDialog::getExistingDirectory(this, "Reflectance Output Folder", lastDir);
 	QFileInfo dir(filename);
 	m_settings.setValue("lastDir", dir.dir().absolutePath());
 	txtReflOutput->setText(filename);

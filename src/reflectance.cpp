@@ -12,10 +12,12 @@
 #include <iomanip>
 #include <sstream>
 
-
 #include <QtCore/QObject>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMessageBox>
+
+#include <unistd.h>
+#include <dirent.h>
 
 #include "reader.hpp"
 #include "raster.hpp"
@@ -89,12 +91,42 @@ std::string _ts2str(long ts) {
 	return ss.str();
 }
 
+/**
+ * Return a vector of the files associated with the given path and pattern. If the
+ * path is itself a file, return a vector with it as the single element.
+ */
+std::vector<std::string> _getFiles(const std::string& path, const std::string& pat) {
+	std::vector<std::string> result;
+	struct stat s;
+	if(stat(path.c_str(), &s)) {
+		throw std::runtime_error("Failed to read file/directory: " + path);
+	} else {
+		if(S_ISREG(s.st_mode)) {			// Is a file
+			result.push_back(path);
+		} else if(S_ISDIR(s.st_mode)) {		// Is a dir.
+			DIR* d = opendir(path.c_str());
+			struct dirent* de;
+			while((de = readdir(d)) != nullptr) {
+				if(de->d_type == DT_REG) {
+					std::string fname(de->d_name);
+					if(fname.find(pat) != std::string::npos)
+						result.push_back(fname);
+				}
+			}
+			closedir(d);
+		}
+	}
+	return result;
+}
+
 void Reflectance::run(ReflectanceListener& listener,
 		const std::string& imuGps, double imuUTCOffset,
 		const std::string& rawRad,
+		const std::string& rawPat,
 		const std::string& frameIdx,
-		const std::string& irradConv, double irradUTCOffset,
-		const std::string& reflOut,
+		const std::string& framePat,
+		const std::string& irradConv, const std::string& irradPat, double irradUTCOffset,
+		const std::string& reflOut, const std::string& reflPat,
 		bool& running) {
 
 	// Proposed algorithm: Since the flame is the largest dataset, we iterate over the rows, using the frame index
@@ -134,6 +166,8 @@ void Reflectance::run(ReflectanceListener& listener,
 
 	++m_step;
 	listener.update(this);
+
+	std::vector<std::string> rawRadFiles = _getFiles(rawRad, rawPat);
 
 	// Set up rasters.
 	Raster raster(rawRad);
