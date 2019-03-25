@@ -79,7 +79,7 @@ Raster::Raster(const std::string& filename, int cols, int rows, int bands, int s
 
 	GDALAllRegister();
 
-	static char op[] {"INTERLEAVE=BIL"};
+	static char op[] {"INTERLEAVE=BSQ"};
 	static char* op0 = &op[0];
 
 	GDALDriverManager* dm = GetGDALDriverManager();
