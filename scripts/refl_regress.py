@@ -20,7 +20,12 @@ def load_csv_col(filename, col, where = []):
 	data = []
 	with open(filename, 'rU') as f:
 		for line in f:
-			line = line.strip().split(',')
+			line = line.strip()
+			if not len(line):
+				continue
+			line = line.split(',')
+			if len(line) <= col or not line[col]:
+				continue
 			keep = True
 			for c, v in where:
 				if line[c] != v:
@@ -98,7 +103,7 @@ def mean(lst):
 	'''
 	Compute the mean of a list.
 	'''
-	return float(sum(lst)) / len(lst)
+	return float(sum(lst)) / len(lst) if len(lst) else float('nan')
 
 
 def load_asd_nano(asd_filename, nano_filename, 
@@ -190,7 +195,7 @@ def regress(nano_filename, asd_filename, out_filename, asd_offset, nano_offset, 
 	head = list(map(float, asd_head[asd_offset:]))
 
 	coeffs = []
-	for b in range(161, 169): #range(count):
+	for b in range(0, num_bands, int(max(1, num_bands / 10))):
 		xl = asd_y_light[b]
 		yl= nano_y_light[b]
 		xd = asd_y_dark[b]
@@ -282,13 +287,15 @@ if __name__ == '__main__':
 		usage()
 		sys.exit(1)
 
-	asd_offset = 3
+	# Change these indices to accomodate changes to the data structure,
+	# but prefer conforming data structures to changing these indices!
+	asd_offset = 4
 	nano_offset = 4
-	asd_label_idx = 0
+	asd_label_idx = 3
 	nano_label_idx = 3
 	asd_labels = ('mean_light', 'mean_dark')
 	nano_labels = ('mean_light', 'mean_dark')
-	num_bands = 272
+	num_bands = 268
 
 	try:
 		if cmd == 'sample':
@@ -303,5 +310,6 @@ if __name__ == '__main__':
 		else:
 			usage()
 	except Exception as e:
+		import traceback
 		print(e)
 		usage()
