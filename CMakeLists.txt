@@ -54,9 +54,9 @@ link_directories(. /usr/local/lib /usr/lib)
 
 # Build support libraries ################################################################################
 
-#add_executable (contrem src/contrem.cpp src/ui/contrem_ui.cpp src/reader.cpp src/writer.cpp src/contrem_proc.cpp src/stats.cpp)
-#target_include_directories(contrem PUBLIC contrem_autogen/include )
-#target_link_libraries (contrem gdal ${GEOS_LIBRARY} Qt5::Widgets)
+add_executable (contrem src/contrem.cpp src/ui/contrem_ui.cpp src/reader.cpp src/writer.cpp src/contrem_proc.cpp src/stats.cpp)
+target_include_directories(contrem PUBLIC contrem_autogen/include )
+target_link_libraries (contrem gdal ${GEOS_LIBRARY} Qt5::Widgets)
 
 add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)

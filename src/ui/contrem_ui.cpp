@@ -328,7 +328,7 @@ void ContremForm::btnCancelClicked() {
 }
 
 void ContremForm::btnHelpClicked() {
-	QDesktopServices::openUrl(QUrl("https://github.com/rskelly/contrem/wiki/convolve", QUrl::TolerantMode));
+	QDesktopServices::openUrl(QUrl("https://github.com/rskelly/contrem/wiki/contrem", QUrl::TolerantMode));
 }
 
 void ContremForm::btnCloseClicked() {
