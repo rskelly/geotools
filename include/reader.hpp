@@ -180,6 +180,14 @@ public:
 	GDALReader(const std::string& filename);
 
 	/**
+	 * Returns the mapping of band number (1-based) to wavelength. Wavelength
+	 * is a floating point number scaled by WL_SCALE to be an integer.
+	 *
+	 * \return A mapping of band number to wavelength, scaled to an integer.
+	 */
+	std::map<int, int> getBandMap();
+
+	/**
 	 * Fill the buffer with the next available row of data. Data will be stored sequentially by band,
 	 * so band 1 will be stored as pixel 0-n, and then band 2, pixel 0-n, etc. The column
 	 * and row references are updated with the current values representing the region just read.
@@ -196,18 +204,20 @@ public:
 	 ~GDALReader();
 };
 
-/**
- * A utility class representing a pixel.
- */
-class px {
-public:
-	int c, r;
-	std::vector<double> values;
-	px(int c, int r) :
-		c(c), r(r) {}
-	px() : px(0, 0) {}
-};
+namespace {
+	/**
+	 * A utility class representing a pixel.
+	 */
+	class px {
+	public:
+		int c, r;
+		std::vector<double> values;
+		px(int c, int r) :
+			c(c), r(r) {}
+		px() : px(0, 0) {}
+	};
 
+}
 
 /**
  * An implementation of Reader that reads ENVI ROI files.
@@ -436,6 +446,37 @@ public:
 	bool next(FlameRow& row);
 };
 
+
+class CSVReader {
+private:
+	std::vector<std::vector<std::string>> m_data;
+	std::string m_filename;
+	int m_cols;
+	int m_rows;
+	int m_idx;
+
+	void load();
+
+public:
+	CSVReader(const std::string& filename);
+
+	void transpose();
+
+	int rows() const;
+
+	int cols() const;
+
+	void reset();
+
+	bool next(std::vector<std::string>& row);
+
+	bool next(std::vector<std::string>& row, int& start, int& end);
+
+	bool next(std::vector<double>& row);
+
+	bool next(std::vector<double>& row, int& start, int& end);
+
+};
 } // hlrg
 
 #endif /* READER_HPP_ */
