@@ -43,19 +43,20 @@ namespace {
 		ROI,
 		SHP,
 		CSV,
+		SQLITE,
 		Unknown
 	};
 
-	constexpr std::array<FileType, 3> INPUT_TYPES = {GTiff, ENVI, CSV};		///<! Allowed input types for spectral data.
-	constexpr std::array<FileType, 3> OUTPUT_TYPES = {GTiff, ENVI, CSV};	///<! Allowed output types for results.
-	constexpr std::array<FileType, 4> ROI_TYPES = {GTiff, ENVI, SHP, ROI};	///<! Allowed mask/ROI file types.
+	constexpr std::array<FileType, 3> INPUT_TYPES = {GTiff, ENVI, CSV};				///<! Allowed input types for spectral data.
+	constexpr std::array<FileType, 3> OUTPUT_TYPES = {GTiff, ENVI, CSV};			///<! Allowed output types for results.
+	constexpr std::array<FileType, 5> ROI_TYPES = {GTiff, ENVI, SHP, SQLITE, ROI};	///<! Allowed mask/ROI file types.
 
 	FileType getFileType(const std::string& filename) {
 		std::string ext;
 		{
 			size_t p = filename.find('.');
 			if(p < std::string::npos) {
-				std::string ext0 = filename.substr();
+				std::string ext0 = filename.substr(p);
 				std::transform(ext0.begin(), ext0.end(), ext.begin(), ::tolower);
 			}
 		}
@@ -65,16 +66,21 @@ namespace {
 			return ROI;
 		} else {
 			GDALAllRegister();
-			GDALDataset* ds = static_cast<GDALDataset*>(GDALOpen(filename.c_str(), GA_ReadOnly));
+			GDALDataset* ds = static_cast<GDALDataset*>(GDALOpenEx(filename.c_str(), GDAL_OF_READONLY, 0, 0, 0));
 			if(ds) {
 				std::string drv(ds->GetDriverName());
+				FileType type = Unknown;
 				if(drv == "GTiff") {
-					GDALClose(ds);
-					return GTiff;
+					type = GTiff;
 				} else if(drv == "ENVI") {
-					GDALClose(ds);
-					return ENVI;
+					type = ENVI;
+				} else if(drv == "ESRI Shapefile") {
+					type = SHP;
+				} else if(drv == "SQLite") {
+					type = SQLITE;
 				}
+				GDALClose(ds);
+				return type;
 			}
 		}
 		return Unknown;
@@ -98,7 +104,7 @@ namespace {
 			{
 				GDALReader rdr(filename);
 				for(const auto& it : rdr.getBandMap())
-					map[it.first] = it.second / WL_SCALE;
+					map[it.second] = (double) it.first / WL_SCALE;
 			}
 			break;
 		case CSV:
@@ -177,6 +183,8 @@ void ContremForm::setupUi(QDialog* form) {
 	connect(cboSpectraType, SIGNAL(currentTextChanged(QString)), this, SLOT(cboSpectraTypeChanged(QString)));
 	connect(txtOutputFile, SIGNAL(textChanged(QString)), this, SLOT(txtOutputFileChanged(QString)));
 	connect(cboOutputType, SIGNAL(currentTextChanged(QString)), this, SLOT(cboOutputTypeChanged(QString)));
+	connect(cboMinWL, SIGNAL(currentIndexChanged(int)), this, SLOT(cboMinWLChanged(int)));
+	connect(cboMaxWL, SIGNAL(currentIndexChanged(int)), this, SLOT(cboMaxWLChanged(int)));
 	connect(btnROI, SIGNAL(clicked()), this, SLOT(btnROIClicked()));
 	connect(btnSpectra, SIGNAL(clicked()), this, SLOT(btnSpectraClicked()));
 	connect(btnOutput, SIGNAL(clicked()), this, SLOT(btnOutputClicked()));
@@ -226,6 +234,7 @@ void ContremForm::updateROIType() {
 void ContremForm::txtROIFileChanged(QString filename) {
 	m_roiFile = filename.toStdString();
 	m_settings.setValue(LAST_ROI, filename);
+	updateROIType();
 	checkRun();
 }
 
@@ -239,10 +248,54 @@ void ContremForm::updateSpectraType() {
 	cboSpectraType->setCurrentText(fileType.c_str());
 }
 
+double nearestWl(double v, const std::map<int, double>& map) {
+	for(auto it = map.begin(); it != map.end(); ++it) {
+		if(it->second > v) {
+			if(it == map.begin()) {
+				return it->second;
+			} else {
+				auto it0 = it; --it0;
+				double a = it->second;
+				double b = it0->second;
+				if(std::abs(v - a) < std::abs(v - b)) {
+					return a;
+				} else {
+					return b;
+				}
+			}
+		}
+	}
+	return map.rbegin()->second;
+}
+
+bool __blockWlCombo;
+
+void ContremForm::updateWavelengths() {
+	__blockWlCombo = true;
+	std::map<int, double> map = loadWavelengths(m_spectraFile);
+	int i = 0;
+	cboMinWL->clear();
+	cboMaxWL->clear();
+	for(auto it : map) {
+		QString min, max;
+		QList<QVariant> data;
+		data << it.first << it.second;
+		cboMinWL->insertItem(i, min.setNum(it.second, 'f', 3), QVariant(data));
+		cboMaxWL->insertItem(i, max.setNum(it.second, 'f', 3), QVariant(data));
+		++i;
+	}
+	QString min, max;
+	min.setNum(nearestWl(m_minWl, map), 'f', 3);
+	max.setNum(nearestWl(m_maxWl, map), 'f', 3);
+	cboMinWL->setCurrentText(min);
+	cboMaxWL->setCurrentText(max);
+	__blockWlCombo = false;
+}
+
 void ContremForm::txtSpectraFileChanged(QString filename) {
 	m_spectraFile = filename.toStdString();
 	updateSpectraType();
-	loadWavelengths(m_spectraFile);
+	updateWavelengths();
 	m_settings.setValue(LAST_SPECTRA, filename);
 	checkRun();
 }
@@ -268,21 +321,25 @@ void ContremForm::cboOutputTypeChanged(QString value) {
 	checkRun();
 }
 
-void ContremForm::spnMinWLChanged(double value) {
-	m_minWl = value;
-	m_settings.setValue(LAST_MIN_WL, value);
+void ContremForm::cboMinWLChanged(int index) {
+	if(__blockWlCombo) return;
+	QList<QVariant> v = cboMinWL->itemData(index).toList();
+	m_minWl = v[1].toDouble();
+	m_settings.setValue(LAST_MIN_WL, v[1].toDouble());
 	checkRun();
 }
 
-void ContremForm::spnMaxWLChanged(double value) {
-	m_maxWl = value;
-	m_settings.setValue(LAST_MAX_WL, value);
+void ContremForm::cboMaxWLChanged(int index) {
+	if(__blockWlCombo) return;
+	QList<QVariant> v = cboMinWL->itemData(index).toList();
+	m_maxWl = v[1].toDouble();
+	m_settings.setValue(LAST_MAX_WL, v[1].toDouble());
 	checkRun();
 }
 
 void ContremForm::btnROIClicked() {
 	QString lastDir = m_settings.value(LAST_DIR, "").toString();
-	QString filename = QFileDialog::getOpenFileName(this, "ENVI ROI File", lastDir);
+	QString filename = QFileDialog::getOpenFileName(this, "ROI/Mask File", lastDir);
 	QFileInfo dir(filename);
 	m_settings.setValue(LAST_DIR, dir.dir().absolutePath());
 	txtROIFile->setText(filename);

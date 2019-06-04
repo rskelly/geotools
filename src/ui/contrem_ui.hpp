@@ -53,6 +53,8 @@ private:
 
 	void updateOutputType();
 
+	void updateWavelengths();
+
 public:
 
 	/**
@@ -139,8 +141,8 @@ public slots:
 	void btnOutputClicked();
 	void cboOutputTypeChanged(QString);
 
-	void spnMinWLChanged(double);
-	void spnMaxWLChanged(double);
+	void cboMinWLChanged(int);
+	void cboMaxWLChanged(int);
 
 	void btnRunClicked();
 	void btnCancelClicked();
