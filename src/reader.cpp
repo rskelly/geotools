@@ -97,6 +97,30 @@ int Reader::bands() const {
 	return m_maxIdx - m_minIdx + 1;
 }
 
+std::map<int, int> GDALReader::getBandMap() {
+	std::map<int, int> bandMap;
+	std::vector<std::string> names = {"wavelength", "WAVELENGTH"};
+	for(int i = 1; i <= m_bands; ++i) {
+		GDALRasterBand* band = m_ds->GetRasterBand(i);
+		const char* m = nullptr;
+		for(const std::string& name : names) {
+			if((m = band->GetMetadataItem(name.c_str())) != nullptr)
+				break;
+		}
+		if(m) {
+			// The wavelength is scaled so that exact matches can occur.
+			int wl = (int) (atof(m) * WL_SCALE);
+			if(wl > 0)
+				bandMap[wl] = i;
+		}
+		m = band->GetDescription();
+		if(m)
+			m_bandNames.push_back(m);
+	}
+	if((int) bandMap.size() <= m_bands)
+		std::runtime_error("The band map is incomplete -- wavelengths could not be read for all layers.");
+	return bandMap;
+}
 
 GDALReader::GDALReader(const std::string& filename) : Reader(),
 		m_ds(nullptr) {
@@ -110,54 +134,32 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();
 
-	{
-		std::map<int, int> bandMap;
-		std::string name = "wavelength";
-		for(int i = 1; i <= m_bands; ++i) {
-			GDALRasterBand* band = m_ds->GetRasterBand(i);
-			const char* m = band->GetMetadataItem(name.c_str());
-			if(m) {
-				// The wavelength is scaled so that exact matches can occur.
-				int wl = (int) (atof(m) * WL_SCALE);
-				if(wl > 0)
-					bandMap[wl] = i;
-			}
-			m = band->GetDescription();
-			if(m)
-				m_bandNames.push_back(m);
-		}
-		if((int) bandMap.size() <= m_bands)
-			std::runtime_error("The band map is incomplete -- wavelengths could not be read for all layers.");
-		setBandMap(bandMap);
-	}
+	setBandMap(getBandMap());
 }
 
-bool GDALReader::next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows) {
-	if(m_col >= m_cols) {
-		m_row += m_bufSize;
-		m_col = 0;
-	}
+bool GDALReader::next(std::vector<double>& buf, int& cols) {
+
 	if(m_row >= m_rows)
 		return false;
 
+
+	int numBands = m_maxIdx - m_minIdx;
+
+	cols = m_cols;
+	buf.resize(m_cols * numBands);
 	std::fill(buf.begin(), buf.end(), 0);
-
-	col = m_col;
-	row = m_row;
-	cols = std::min(m_bufSize, m_cols - m_col);
-	rows = std::min(m_bufSize, m_rows - m_row);
-
-	m_col += m_bufSize;
 
 	double* data = (double*) buf.data();
 	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
 		//std::cerr << "band " << i << "\n";
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		if(band->RasterIO(GF_Read, col, row, cols, rows,
-				(void*) (data + (i - m_minIdx) * m_bufSize * m_bufSize),
-				m_bufSize, m_bufSize, GDT_Float64, 0, 0, 0))
+		size_t offset = numBands * (i - 1);
+		if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + offset), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
 			return false;
 	}
+
+	++m_row;
+
 	return true;
 }
 
@@ -551,3 +553,73 @@ bool FlameReader::next(FlameRow& row) {
 	return row.read(m_in, m_msOffset);
 }
 
+
+CSVReader::CSVReader(const std::string& filename, bool transpose, int minWlCol, int maxWlCol) :
+	m_cols(0), m_rows(0),
+	m_idx(0),
+	m_transpose(transpose),
+	m_minWlCol(minWlCol), m_maxWlCol(maxWlCol) {
+	load();
+}
+
+void CSVReader::load() {
+	m_data.clear();
+	std::ifstream input(m_filename);
+	m_cols = 0;
+	m_rows = 0;
+	std::string line;
+	while(std::getline(input, line)) {
+		std::vector<std::string> row;
+		std::string field;
+		std::stringstream ss(line);
+		while(std::getline(ss, field, ','))
+			row.push_back(field);
+		m_data.push_back(row);
+		if((int) row.size() > m_cols)
+			m_cols = row.size();
+		++m_rows;
+	}
+
+	for(std::vector<std::string>& row : m_data)
+		row.resize(m_cols);
+
+	if(m_transpose)
+		transpose();
+}
+
+void CSVReader::reset() {
+	m_idx = 0;
+}
+
+void CSVReader::transpose() {
+	std::vector<std::vector<std::string> > tmp(m_cols);
+	for(int c = 0; c < m_cols; ++c)
+		tmp[c].resize(m_rows);
+	for(int r = 0; r < m_rows; ++r) {
+		for(int c = 0; c < m_cols; ++c)
+			tmp[c][r] = m_data[r][c];
+	}
+	m_data.swap(tmp);
+	m_cols = m_rows;
+	m_rows = m_data.size();
+}
+
+int CSVReader::rows() const {
+	return m_rows;
+}
+
+int CSVReader::cols() const {
+	return 1; // It's a table, so it's 2d, not 3d.
+}
+
+bool CSVReader::next(std::vector<double>& buf, int& cols) {
+	if(m_idx >= m_rows)
+		return false;
+	std::vector<double> data(m_maxWlCol - m_minWlCol + 1);
+	for(int i = m_minWlCol; i <= m_maxWlCol; ++i)
+		data[i] = atof(m_data[m_idx][i].c_str());
+	buf.assign(data.begin(), data.end());
+	cols = 1;
+	++m_idx;
+	return true;
+}

@@ -54,14 +54,11 @@ public:
 	 * so band 1 will be stored as pixel 0-n, and then band 2, pixel 0-n, etc. The column
 	 * and row references are updated with the current values representing the region just read.
 	 *
-	 * @param buf A buffer large enough to store the pixels and bands of a row, in band-sequential order.
-	 * @param col A reference to a value that will be updated with the current column.
-	 * @param col A reference to a value that will be updated with the current row.
-	 * @param col A reference to a value that will be updated with the number of columns in the buffer.
-	 * @param col A reference to a value that will be updated with the numbe of rows in the buffer.
+	 * @param buf A buffer to store the pixels and bands of a row, in band-sequential order.
+	 * @param cols A reference to a value that will be updated with the number of columns in the buffer.
 	 * @return True if there is another row to be read after this one.
 	 */
-	virtual bool next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows) = 0;
+	virtual bool next(std::vector<double>& buf, int& cols) = 0;
 
 	/**
 	 * Set the size of the buffer for reading.
@@ -180,34 +177,32 @@ public:
 	GDALReader(const std::string& filename);
 
 	/**
-	 * Fill the buffer with the next available row of data. Data will be stored sequentially by band,
-	 * so band 1 will be stored as pixel 0-n, and then band 2, pixel 0-n, etc. The column
-	 * and row references are updated with the current values representing the region just read.
+	 * Returns the mapping of band number (1-based) to wavelength. Wavelength
+	 * is a floating point number scaled by WL_SCALE to be an integer.
 	 *
-	 * @param buf A buffer large enough to store the pixels and bands of a row, in band-sequential order.
-	 * @param col A reference to a value that will be updated with the current column.
-	 * @param col A reference to a value that will be updated with the current row.
-	 * @param col A reference to a value that will be updated with the number of columns in the buffer.
-	 * @param col A reference to a value that will be updated with the numbe of rows in the buffer.
-	 * @return True if there is another row to be read after this one.
+	 * \return A mapping of band number to wavelength, scaled to an integer.
 	 */
-	bool next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows);
+	std::map<int, int> getBandMap();
+
+	bool next(std::vector<double>& buf, int& cols);
 
 	 ~GDALReader();
 };
 
-/**
- * A utility class representing a pixel.
- */
-class px {
-public:
-	int c, r;
-	std::vector<double> values;
-	px(int c, int r) :
-		c(c), r(r) {}
-	px() : px(0, 0) {}
-};
+namespace {
+	/**
+	 * A utility class representing a pixel.
+	 */
+	class px {
+	public:
+		int c, r;
+		std::vector<double> values;
+		px(int c, int r) :
+			c(c), r(r) {}
+		px() : px(0, 0) {}
+	};
 
+}
 
 /**
  * An implementation of Reader that reads ENVI ROI files.
@@ -434,6 +429,35 @@ public:
 	 * @return True if there is another row to read after the present row.
 	 */
 	bool next(FlameRow& row);
+};
+
+
+class CSVReader : public Reader {
+private:
+	std::vector<std::vector<std::string>> m_data;
+	std::string m_filename;
+	int m_cols;
+	int m_rows;
+	int m_idx;
+	bool m_transpose;
+	int m_minWlCol;
+	int m_maxWlCol;
+
+	void load();
+
+	void transpose();
+
+
+public:
+	CSVReader(const std::string& filename, bool transpose, int minWlCol, int maxWlCol);
+
+	void reset();
+
+	bool next(std::vector<double>& buf, int& cols);
+
+	int rows() const;
+
+	int cols() const;
 };
 
 } // hlrg

@@ -16,26 +16,29 @@
 
 using namespace hlrg;
 
-std::string _parseDelim(const std::string& delim) {
-	if(delim == "[tab]") {
-		return "\t";
-	} else if(delim == "[space]") {
-		return " ";
-	} else {
-		return delim;
-	}
-}
+namespace {
 
-std::string _formatDelim(const std::string& delim) {
-	if(delim == "\t") {
-		return "[tab]";
-	} else if(delim == " ") {
-		return "[space]";
-	} else {
-		return delim;
+	std::string parseDelim(const std::string& delim) {
+		if(delim == "[tab]") {
+			return "\t";
+		} else if(delim == "[space]") {
+			return " ";
+		} else {
+			return delim;
+		}
 	}
-}
 
+	std::string formatDelim(const std::string& delim) {
+		if(delim == "\t") {
+			return "[tab]";
+		} else if(delim == " ") {
+			return "[space]";
+		} else {
+			return delim;
+		}
+	}
+
+}
 
 ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
 	m_bandDefDelim(","),
@@ -92,15 +95,15 @@ void ConvolveForm::setupUi(QDialog* form) {
 	connect(this, SIGNAL(finished(Convolver*)), this, SLOT(convFinished(Convolver*)));
 
 	txtBandDef->setText(m_settings.value("lastBandDef", "").toString());
-	cboBandDefDelim->setCurrentText(_formatDelim(m_settings.value(lastBandDelim, ",").toString().toStdString()).c_str());
+	cboBandDefDelim->setCurrentText(formatDelim(m_settings.value(lastBandDelim, ",").toString().toStdString()).c_str());
 	txtSpectra->setText(m_settings.value("lastSpectra", "").toString());
-	cboSpectraDelim->setCurrentText(_formatDelim(m_settings.value(lastSpectraDelim, ",").toString().toStdString()).c_str());
+	cboSpectraDelim->setCurrentText(formatDelim(m_settings.value(lastSpectraDelim, ",").toString().toStdString()).c_str());
 	spnFirstCol->setValue(m_settings.value("lastFirstCol", 0).toInt());
 	spnFirstRow->setValue(m_settings.value("lastFirstRow", 0).toInt());
 	spnDateCol->setValue(m_settings.value("lastDateCol", -1).toInt());
 	spnTimeCol->setValue(m_settings.value("lastTimeCol", -1).toInt());
 	txtOutput->setText(m_settings.value("lastOutput", "").toString());
-	cboOutputDelim->setCurrentText(_formatDelim(m_settings.value(lastOutputDelim, ",").toString().toStdString()).c_str());
+	cboOutputDelim->setCurrentText(formatDelim(m_settings.value(lastOutputDelim, ",").toString().toStdString()).c_str());
 	spnInputScale->setValue(m_settings.value("lastInputScale", 1.0).toDouble());
 	spnTolerance->setValue(m_settings.value("lastTolerance", 0.0001).toDouble());
 	spnBandShift->setValue(m_settings.value("lastBandShift", 0).toDouble());
@@ -123,7 +126,7 @@ void ConvolveForm::txtBandDefChanged(QString filename) {
 }
 
 void ConvolveForm::cboBandDefDelimChanged(QString delim) {
-	m_bandDefDelim = _parseDelim(delim.toStdString());
+	m_bandDefDelim = parseDelim(delim.toStdString());
 	m_settings.setValue(lastBandDelim, delim);
 	checkRun();
 }
@@ -135,7 +138,7 @@ void ConvolveForm::txtSpectraChanged(QString filename) {
 }
 
 void ConvolveForm::cboSpectraDelimChanged(QString delim) {
-	m_spectraDelim = _parseDelim(delim.toStdString());
+	m_spectraDelim = parseDelim(delim.toStdString());
 	m_settings.setValue(lastSpectraDelim, delim);
 	checkRun();
 }
@@ -165,7 +168,7 @@ void ConvolveForm::spnTimeColChanged(int v) {
 }
 
 void ConvolveForm::txtOutputChanged(QString filename) {
-	m_outputFile = _parseDelim(filename.toStdString());
+	m_outputFile = parseDelim(filename.toStdString());
 	m_settings.setValue("lastOutput", filename);
 	checkRun();
 }

@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
 	std::string replace = argv[5];
 	int dataType = atoi(argv[6]);
 
-	int dataSize;
+	int dataSize = 2;
 
 	switch(dataType) {
 	case 4:
