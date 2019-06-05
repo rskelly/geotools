@@ -25,6 +25,7 @@
 #include "contrem.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
+#include "contrem_util.hpp"
 
 using namespace geos::geom;
 using namespace geos::algorithm;
@@ -322,8 +323,8 @@ namespace {
 	 */
 	void writeQueue(QConfig* config) {
 
-		std::string outfile = config->contrem->outfile;
-		std::string driver = config->contrem->driver;
+		std::string outfile = config->contrem->output;
+		std::string driver = config->contrem->outputType;
 		const std::vector<double>& wavelengths = config->wavelengths;
 		const std::vector<std::string>& bandNames = config->bandNames;
 		int cols = config->cols;
@@ -413,16 +414,42 @@ namespace {
 
 }
 
-void Contrem::run(ContremListener* listener, Reader* reader) {
+std::unique_ptr<Reader> getReader(const std::string& file, const std::string& fileType) {
+	std::unique_ptr<Reader> rdr;
+	FileType type = getFileType(file);
+	switch(type) {
+	case CSV:
+		rdr.reset(new CSVReader(file, false, 0, 1)); // TODO Configure col/row/transpose.
+		break;
+	case GTiff:
+	case ENVI:
+		rdr.reset(new GDALReader(file));
+		break;
+	case ROI:
+	case SHP:
+	case SQLITE:
+	case Unknown:
+	default:
+		throw std::runtime_error("Unknown file type for " + file);
+	}
+	return rdr;
+}
+
+void Contrem::run(ContremListener* listener) {
 
 	QConfig qconfig;
 	qconfig.contrem = this;
+
+	// TODO: Raster/CSV spectral reader.
+
+	std::unique_ptr<Reader> reader = getReader(spectra, spectraType);
+
 	qconfig.cols = reader->cols();
 	qconfig.rows = reader->rows();
 	qconfig.bands = reader->bands();
 
-	// A buffer for input data.
-	std::vector<double> buf(bufferSize * bufferSize * reader->bands());
+	// A buffer for input data. Stores a row from a raster, or a single "pixel" from a table.
+	std::vector<double> buf(qconfig.cols * reader->bands());
 
 	// A list of wavelengths.
 	qconfig.wavelengths = reader->getWavelengths();
@@ -445,24 +472,21 @@ void Contrem::run(ContremListener* listener, Reader* reader) {
 	std::thread t1(writeQueue, &qconfig);
 
 	// Read through the buffer and populate the input queue.
-	int col, row, cols, rows;
-	while(reader->next(buf, col, row, cols, rows)) {
-
-		std::cerr << col << "," << row << " of " << reader->cols() << "," << reader->rows() << "\n";
+	int cols, r = 0;
+	int bands = reader->bands();
+	while(reader->next(buf, cols)) {
 
 		{
 			// Read out the input objects and add to the queue.
 			std::lock_guard<std::mutex> lk(qconfig.inmtx);
-			for(int r = 0; r < rows; ++r) {
-				for(int c = 0; c < cols; ++c) {
-					input in(c + col, r + row);
-					for(int b = 0; b < reader->bands(); ++b) {
-						double v = buf[b * bufferSize * bufferSize + r * bufferSize + c];
-						double w = qconfig.wavelengths[b];
-						in.data.emplace_back(w, v);
-					}
-					qconfig.inqueue.push_back(in);
+			for(int c = 0; c < cols; ++c) {
+				input in(c, r);
+				for(int b = 0; b < bands; ++b) {
+					double v = buf[c * bands + b];
+					double w = qconfig.wavelengths[b];
+					in.data.emplace_back(w, v);
 				}
+				qconfig.inqueue.push_back(in);
 			}
 		}
 
@@ -491,3 +515,20 @@ double Contrem::progress() const {
 	return 0;
 }
 
+/*
+ * 		if(m_reader)
+			delete m_reader;
+		if(!m_roiFile.empty()) {
+			m_reader = new ROIReader(m_roiFile);
+		} else if(!m_spectraFile.empty()) {
+			m_reader = new GDALReader(m_spectraFile);
+		} else {
+			throw std::invalid_argument("No input file (-r or -d) given.");
+		}
+
+		if(m_minWl > 0 && m_maxWl > 0)
+			m_reader->setBandRange(m_minWl, m_maxWl);
+
+		m_reader->setBufSize(m_buffer);
+ *
+ */

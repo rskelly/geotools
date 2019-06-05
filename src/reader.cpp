@@ -137,32 +137,29 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 	setBandMap(getBandMap());
 }
 
-bool GDALReader::next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows) {
-	if(m_col >= m_cols) {
-		m_row += m_bufSize;
-		m_col = 0;
-	}
+bool GDALReader::next(std::vector<double>& buf, int& cols) {
+
 	if(m_row >= m_rows)
 		return false;
 
+
+	int numBands = m_maxIdx - m_minIdx;
+
+	cols = m_cols;
+	buf.resize(m_cols * numBands);
 	std::fill(buf.begin(), buf.end(), 0);
-
-	col = m_col;
-	row = m_row;
-	cols = std::min(m_bufSize, m_cols - m_col);
-	rows = std::min(m_bufSize, m_rows - m_row);
-
-	m_col += m_bufSize;
 
 	double* data = (double*) buf.data();
 	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
 		//std::cerr << "band " << i << "\n";
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		if(band->RasterIO(GF_Read, col, row, cols, rows,
-				(void*) (data + (i - m_minIdx) * m_bufSize * m_bufSize),
-				m_bufSize, m_bufSize, GDT_Float64, 0, 0, 0))
+		size_t offset = numBands * (i - 1);
+		if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + offset), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
 			return false;
 	}
+
+	++m_row;
+
 	return true;
 }
 
@@ -557,8 +554,11 @@ bool FlameReader::next(FlameRow& row) {
 }
 
 
-CSVReader::CSVReader(const std::string& filename) :
-	m_cols(0), m_rows(0), m_idx(0) {
+CSVReader::CSVReader(const std::string& filename, bool transpose, int minWlCol, int maxWlCol) :
+	m_cols(0), m_rows(0),
+	m_idx(0),
+	m_transpose(transpose),
+	m_minWlCol(minWlCol), m_maxWlCol(maxWlCol) {
 	load();
 }
 
@@ -579,8 +579,12 @@ void CSVReader::load() {
 			m_cols = row.size();
 		++m_rows;
 	}
+
 	for(std::vector<std::string>& row : m_data)
 		row.resize(m_cols);
+
+	if(m_transpose)
+		transpose();
 }
 
 void CSVReader::reset() {
@@ -605,45 +609,17 @@ int CSVReader::rows() const {
 }
 
 int CSVReader::cols() const {
-	return m_cols;
+	return 1; // It's a table, so it's 2d, not 3d.
 }
 
-bool CSVReader::next(std::vector<std::string>& row) {
-	int start = 0;
-	int end = -1;
-	return next(row, start, end);
-}
-
-bool CSVReader::next(std::vector<std::string>& row, int& start, int& end) {
-	if(m_idx >= (int) m_data.size())
+bool CSVReader::next(std::vector<double>& buf, int& cols) {
+	if(m_idx >= m_rows)
 		return false;
-	if(end == -1)
-		end = m_cols;
-	if(start < 0)
-		start = 0;
-	std::vector<std::string>& tmp = m_data[m_idx++];
-	row.assign(tmp.begin() + start, tmp.begin() + end);;
+	std::vector<double> data(m_maxWlCol - m_minWlCol + 1);
+	for(int i = m_minWlCol; i <= m_maxWlCol; ++i)
+		data[i] = atof(m_data[m_idx][i].c_str());
+	buf.assign(data.begin(), data.end());
+	cols = 1;
+	++m_idx;
 	return true;
 }
-
-bool CSVReader::next(std::vector<double>& row) {
-	int start = 0;
-	int end = -1;
-	return next(row, start, end);
-}
-
-bool CSVReader::next(std::vector<double>& row, int& start, int& end) {
-	std::vector<std::string> tmp;
-	if(next(tmp, start, end)) {
-		row.resize(end - start);
-		for(int i = start; i <= end; ++i) {
-			double v = atof(tmp[i].c_str());
-			if(std::isnan(v))
-				throw std::runtime_error("The field value is not a number: " + tmp[i]);
-			row[i - start] = v;
-		}
-		return true;
-	}
-	return false;
-}
-

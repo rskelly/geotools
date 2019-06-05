@@ -54,14 +54,11 @@ public:
 	 * so band 1 will be stored as pixel 0-n, and then band 2, pixel 0-n, etc. The column
 	 * and row references are updated with the current values representing the region just read.
 	 *
-	 * @param buf A buffer large enough to store the pixels and bands of a row, in band-sequential order.
-	 * @param col A reference to a value that will be updated with the current column.
-	 * @param col A reference to a value that will be updated with the current row.
-	 * @param col A reference to a value that will be updated with the number of columns in the buffer.
-	 * @param col A reference to a value that will be updated with the numbe of rows in the buffer.
+	 * @param buf A buffer to store the pixels and bands of a row, in band-sequential order.
+	 * @param cols A reference to a value that will be updated with the number of columns in the buffer.
 	 * @return True if there is another row to be read after this one.
 	 */
-	virtual bool next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows) = 0;
+	virtual bool next(std::vector<double>& buf, int& cols) = 0;
 
 	/**
 	 * Set the size of the buffer for reading.
@@ -187,19 +184,7 @@ public:
 	 */
 	std::map<int, int> getBandMap();
 
-	/**
-	 * Fill the buffer with the next available row of data. Data will be stored sequentially by band,
-	 * so band 1 will be stored as pixel 0-n, and then band 2, pixel 0-n, etc. The column
-	 * and row references are updated with the current values representing the region just read.
-	 *
-	 * @param buf A buffer large enough to store the pixels and bands of a row, in band-sequential order.
-	 * @param col A reference to a value that will be updated with the current column.
-	 * @param col A reference to a value that will be updated with the current row.
-	 * @param col A reference to a value that will be updated with the number of columns in the buffer.
-	 * @param col A reference to a value that will be updated with the numbe of rows in the buffer.
-	 * @return True if there is another row to be read after this one.
-	 */
-	bool next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows);
+	bool next(std::vector<double>& buf, int& cols);
 
 	 ~GDALReader();
 };
@@ -447,36 +432,34 @@ public:
 };
 
 
-class CSVReader {
+class CSVReader : public Reader {
 private:
 	std::vector<std::vector<std::string>> m_data;
 	std::string m_filename;
 	int m_cols;
 	int m_rows;
 	int m_idx;
+	bool m_transpose;
+	int m_minWlCol;
+	int m_maxWlCol;
 
 	void load();
 
-public:
-	CSVReader(const std::string& filename);
-
 	void transpose();
+
+
+public:
+	CSVReader(const std::string& filename, bool transpose, int minWlCol, int maxWlCol);
+
+	void reset();
+
+	bool next(std::vector<double>& buf, int& cols);
 
 	int rows() const;
 
 	int cols() const;
-
-	void reset();
-
-	bool next(std::vector<std::string>& row);
-
-	bool next(std::vector<std::string>& row, int& start, int& end);
-
-	bool next(std::vector<double>& row);
-
-	bool next(std::vector<double>& row, int& start, int& end);
-
 };
+
 } // hlrg
 
 #endif /* READER_HPP_ */

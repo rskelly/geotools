@@ -5,8 +5,8 @@
  *      Author: rob
  */
 
-#ifndef PROCESSOR_HPP_
-#define PROCESSOR_HPP_
+#ifndef _CONTREM_HPP_
+#define _CONTREM_HPP_
 
 #include "reader.hpp"
 
@@ -61,21 +61,25 @@ public:
  */
 class Contrem {
 public:
-	std::string outfile;	///<! The output file.
-	std::string driver;		///<! The output driver.
-	std::string extension;	///<! The output extension.
-	int bufferSize;			///<! The buffer size.
-	int threads;			///<! The number of threads to use.
-	bool sampleStats;		///<! True if sample stats should be used, otherwise population stats.
+	std::string output;			///<! The output file.
+	std::string outputType;		///<! The output file type.
+	std::string extension;		///<! The output extension.
+	std::string roi;			///<! The mask/ROI; Shapefile, SQLite, ENVI ROI.
+	std::string roiType;		///<! The mask/ROI file type. May be empty.
+	std::string spectra;		///<! The input spectra; raster or CSV.
+	std::string spectraType;	///<! The input spectra file type. May be empty.
+	double minWl;				///<! The lower bound of the wavelength range to process.
+	double maxWl;				///<! The upper bound of the wavelength range to process.
+	int threads;				///<! The number of threads to use.
+	bool sampleStats;			///<! True if sample stats should be used, otherwise population stats.
 
 	/**
 	 * Process the continuum removal job.
 	 *
 	 * @param listener An implementation of ContremListener that can receive status events.
-	 * @param reader A Reader implementation that can provide data.
 	 * @param config A configuration object.
 	 */
-	void run(ContremListener* listener, Reader* reader);
+	void run(ContremListener* listener);
 
 	/**
 	 * Returns the current processing progress as a double from 0 to 1.
@@ -88,4 +92,4 @@ public:
 
 } // hlrg
 
-#endif /* PROCESSOR_HPP_ */
+#endif /* _CONTREM_HPP_ */

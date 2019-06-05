@@ -12,10 +12,9 @@
 #include <QtGui/QDesktopServices>
 #include <QtWidgets/QMessageBox>
 
-#include <gdal_priv.h>
-
 #include "contrem_ui.hpp"
 #include "contrem.hpp"
+#include "contrem_util.hpp"
 
 namespace {
 
@@ -37,107 +36,10 @@ namespace {
 	constexpr const char* LAST_THREADS = "lastThreads";
 	constexpr const char* LAST_DIR = "lastDir";
 
-	enum FileType {
-		GTiff,
-		ENVI,
-		ROI,
-		SHP,
-		CSV,
-		SQLITE,
-		Unknown
-	};
-
-	constexpr std::array<FileType, 3> INPUT_TYPES = {GTiff, ENVI, CSV};				///<! Allowed input types for spectral data.
-	constexpr std::array<FileType, 3> OUTPUT_TYPES = {GTiff, ENVI, CSV};			///<! Allowed output types for results.
-	constexpr std::array<FileType, 5> ROI_TYPES = {GTiff, ENVI, SHP, SQLITE, ROI};	///<! Allowed mask/ROI file types.
-
-	FileType getFileType(const std::string& filename) {
-		std::string ext;
-		{
-			size_t p = filename.find('.');
-			if(p < std::string::npos) {
-				std::string ext0 = filename.substr(p);
-				std::transform(ext0.begin(), ext0.end(), ext.begin(), ::tolower);
-			}
-		}
-		if(ext == ".csv") {
-			return CSV;
-		} else if(ext == ".roi") {
-			return ROI;
-		} else {
-			GDALAllRegister();
-			GDALDataset* ds = static_cast<GDALDataset*>(GDALOpenEx(filename.c_str(), GDAL_OF_READONLY, 0, 0, 0));
-			if(ds) {
-				std::string drv(ds->GetDriverName());
-				FileType type = Unknown;
-				if(drv == "GTiff") {
-					type = GTiff;
-				} else if(drv == "ENVI") {
-					type = ENVI;
-				} else if(drv == "ESRI Shapefile") {
-					type = SHP;
-				} else if(drv == "SQLite") {
-					type = SQLITE;
-				}
-				GDALClose(ds);
-				return type;
-			}
-		}
-		return Unknown;
+	void trun(ContremListener* form, Contrem* contrem) {
+		contrem->run(form);
 	}
 
-	void trun(ContremListener* form, Contrem* contrem, Reader* reader) {
-		contrem->run(form, reader);
-	}
-
-	/**
-	 * Return a map containing pairs where the int is the 1-based band index,
-	 * and the float is the wavelength. Attempts to load from raster metadata
-	 * or table header. If these fail, will attempt to load from first column
-	 * of presumably transposed table.
-	 */
-	std::map<int, double> loadWavelengths(const std::string& filename) {
-		std::map<int, double> map;
-		switch(getFileType(filename)) {
-		case GTiff:
-		case ENVI:
-			{
-				GDALReader rdr(filename);
-				for(const auto& it : rdr.getBandMap())
-					map[it.second] = (double) it.first / WL_SCALE;
-			}
-			break;
-		case CSV:
-			{
-				CSVReader rdr(filename);
-				if(true)
-					rdr.transpose();
-				std::vector<double> row;
-				std::map<int, int> map;
-				for(size_t i = 0; i < row.size(); ++i) {
-					if(!std::isnan(row[i]))
-						map[i] = row[i];
-				}
-			}
-			break;
-		case SHP:
-		case ROI:
-		default:
-			throw std::runtime_error("Invalid file type: " + filename);
-		}
-		return map;
-	}
-
-	std::string fileTypeAsString(FileType type) {
-		switch(type) {
-		case GTiff: return "GTiff";
-		case ENVI: return "ENVI";
-		case ROI: return "ENVI ROI";
-		case SHP: return "Shapefile";
-		case CSV: return "CSV";
-		default: return "";
-		}
-	}
 }
 
 
@@ -145,10 +47,8 @@ ContremForm::ContremForm(Contrem* contrem, QApplication* app) :
 	m_inputHasHeader(false),
 	m_minWl(0),
 	m_maxWl(0),
-	m_buffer(256),
 	m_threads(1),
 	m_contrem(contrem),
-	m_reader(nullptr),
 	m_form(nullptr),
 	m_app(app),
 	m_running(false) {
@@ -205,7 +105,6 @@ void ContremForm::setupUi(QDialog* form) {
 	m_outputType = m_settings.value(LAST_OUTPUT_TYPE, "ENVI").toString().toStdString();
 	m_minWl = m_settings.value(LAST_MIN_WL, 0).toDouble();
 	m_maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
-	m_buffer = m_settings.value(LAST_BUFFER, 256).toInt();
 	m_threads = m_settings.value(LAST_THREADS, 1).toInt();
 
 	txtROIFile->setText(QString(m_roiFile.c_str()));
@@ -390,32 +289,20 @@ void ContremForm::run() {
 	if(!m_running) {
 		m_running = true;
 
-		m_contrem->bufferSize = m_buffer;
-		m_contrem->driver = m_outputType;
-		m_contrem->outfile = m_outputFile;
+		m_contrem->output = m_outputFile;
+		m_contrem->outputType = m_outputType;
 		m_contrem->threads = m_threads;
+		m_contrem->roi = m_roiFile;
+		m_contrem->roiType = m_roiType;
+		m_contrem->spectra = m_spectraFile;
+		m_contrem->spectraType = m_spectraType;
+		m_contrem->minWl = m_minWl;
+		m_contrem->maxWl = m_maxWl;
 
-		if(m_reader)
-			delete m_reader;
-		if(!m_roiFile.empty()) {
-			m_reader = new ROIReader(m_roiFile);
-		} else if(!m_spectraFile.empty()) {
-			m_reader = new GDALReader(m_spectraFile);
-		} else {
-			throw std::invalid_argument("No input file (-r or -d) given.");
-		}
-
-		if(m_minWl > 0 && m_maxWl > 0)
-			m_reader->setBandRange(m_minWl, m_maxWl);
-
-		m_reader->setBufSize(m_buffer);
-
-		m_thread = std::thread(trun, this, m_contrem, m_reader);
+		m_thread = std::thread(trun, this, m_contrem);
 	}
 	if(!m_thread.joinable()) {
 		m_running = false;
-		delete m_reader;
-		m_reader = nullptr;
 		stopState();
 	}
 }
@@ -425,8 +312,6 @@ void ContremForm::cancel() {
 		m_running = false;
 		if(m_thread.joinable())
 			m_thread.join();
-		delete m_reader;
-		m_reader = nullptr;
 	}
 	stopState();
 }

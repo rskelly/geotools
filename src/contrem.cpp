@@ -8,6 +8,9 @@
 
 #include <iostream>
 #include <unistd.h>
+#include <algorithm>
+
+#include <gdal_priv.h>
 
 #include <QtCore/QObject>
 #include <QtWidgets/QApplication>
@@ -88,6 +91,7 @@ void usage() {
 
 int main(int argc, char** argv) {
 
+	/*
 	if(argc > 1) {
 
 		Contrem processor;
@@ -173,10 +177,10 @@ int main(int argc, char** argv) {
 		}
 
 	} else {
-
+*/
 		return runWithGui(argc, argv);
 
-	}
+	//}
 
 	return 0;
 }

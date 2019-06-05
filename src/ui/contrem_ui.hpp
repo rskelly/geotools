@@ -35,11 +35,9 @@ private:
 	double m_minWl;						///<! The minimum wavelength in the source.
 	double m_maxWl;						///<! The maximum wavelength in the source.
 
-	int m_buffer;
 	int m_threads;
 
-	Contrem* m_contrem;					///<! Poniter to Contrem processor object.
-	Reader* m_reader;					///<! Pointer to the spectral data reader.
+	Contrem* m_contrem;					///<! Pointer to Contrem processor object.
 
 	QDialog* m_form;
 	QApplication* m_app;

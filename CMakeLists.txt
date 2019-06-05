@@ -30,18 +30,10 @@ set (THREADS_PREFER_PTHREAD_FLAG ON)
 set (CMAKE_PREFIX_PATH "/usr/local/share/cmake/Modules;${CMAKE_PREFIX_PATH}")
 set (GDAL_DIR /usr/local)
 
-#find_package (GDAL 2.2 REQUIRED PATHS /usr/local/share/cmake/Modules NO_DEFAULT_PATH)
+find_package (GDAL 2 REQUIRED)
 find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Eigen3 REQUIRED)
-find_library (GEOS_LIBRARY geos PATHS /opt/lib /usr/local/lib /usr/lib NO_CMAKE_SYSTEM_PATH)
-
-if(${GDAL_FOUND})
-else()
-find_library (GDAL gdal PATHS /opt/lib /usr/local/lib NO_CMAKE_SYSTEM_PATH)
-#set (GDAL_FOUND TRUE)
-#set (GDAL_LIBRARY /usr/local/lib)
-#set (GDAL_INCLUDE_DIR /usr/local/include)
-endif()
+find_library (GEOS_LIBRARY geos)
 
 project (contrem)
 
@@ -54,9 +46,9 @@ link_directories(. /usr/local/lib /usr/lib)
 
 # Build support libraries ################################################################################
 
-add_executable (contrem src/contrem.cpp src/ui/contrem_ui.cpp src/reader.cpp src/writer.cpp src/contrem_proc.cpp src/stats.cpp)
+add_executable (contrem src/contrem_util.cpp src/contrem.cpp src/ui/contrem_ui.cpp src/reader.cpp src/writer.cpp src/contrem_proc.cpp src/stats.cpp)
 target_include_directories(contrem PUBLIC contrem_autogen/include )
-target_link_libraries (contrem gdal ${GEOS_LIBRARY} Qt5::Widgets)
+target_link_libraries (contrem ${GDAL_LIBRARY} ${GEOS_LIBRARY} Qt5::Widgets)
 
 add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
