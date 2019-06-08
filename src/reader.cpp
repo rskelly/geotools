@@ -99,7 +99,7 @@ int Reader::bands() const {
 
 std::map<int, int> GDALReader::getBandMap() {
 	std::map<int, int> bandMap;
-	std::vector<std::string> names = {"wavelength", "WAVELENGTH"};
+	std::vector<std::string> names = {"wavelength", "WAVELENGTH", "Description"};
 	for(int i = 1; i <= m_bands; ++i) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		const char* m = nullptr;
@@ -114,10 +114,17 @@ std::map<int, int> GDALReader::getBandMap() {
 				bandMap[wl] = i;
 		}
 		m = band->GetDescription();
-		if(m)
+		if(m) {
 			m_bandNames.push_back(m);
+			double wl = atof(m);
+			if(wl > 0 && !std::isnan(wl) && bandMap.find(wl) == bandMap.end()) {
+				// The wavelength is scaled so that exact matches can occur.
+				int iwl = (int) (wl * WL_SCALE);
+				bandMap[iwl] = i;
+			}
+		}
 	}
-	if((int) bandMap.size() <= m_bands)
+	if((int) bandMap.size() < m_bands)
 		std::runtime_error("The band map is incomplete -- wavelengths could not be read for all layers.");
 	return bandMap;
 }

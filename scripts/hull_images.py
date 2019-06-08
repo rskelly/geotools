@@ -13,7 +13,9 @@ The script draws a hull with the regression line for each column/row.
 
 import sys
 import os
-import cairo
+import numpy as np
+import matplotlib.pyplot as plt
+import random 
 
 csvfile = sys.argv[1]
 outdir = sys.argv[2]
@@ -32,34 +34,27 @@ def draw(c, r, slope, yint, coords):
         if y > maxy: maxy = y
     width = maxx - minx
     height = maxy - miny
-    w = 200.
-    h = 200.
-    xs = 200. / width
-    ys = 200. / height
-    hbuf = 20
-    path = os.path.join(outdir, 'hull_{c}_{r}.svg'.format(c=c, r=r))
-    print(width, height, w, h, xs, ys, hbuf, path)
-    with cairo.SVGSurface(path, w + 2 * hbuf, h + 2 * hbuf) as surf:
-        ctx = cairo.Context(surf)
-        #ctx.scale(width, height)
-        ctx.translate(-200., 0)
-        
-        x, y = coords[0]
-        ctx.move_to(x * xs + hbuf, y * ys + hbuf)
-        for x, y in coords[1:]:
-            ctx.line_to(x * xs + hbuf, y * ys + hbuf)
-        ctx.stroke()
-        
-        ctx.move_to(minx * xs + hbuf, (slope * minx + yint) * ys + hbuf)
-        ctx.line_to(maxx * xs + hbuf, (slope * maxx + yint) * ys + hbuf)
-        print(minx * xs + hbuf, (slope * minx + yint) * ys + hbuf)
-        print(maxx * xs + hbuf, (slope * maxx + yint) * ys + hbuf)
-        ctx.stroke()
-        
+
+    coords = np.array(coords)
+    
+    ax = plt.subplot()
+    ax.plot(coords[...,0], coords[...,1])
+
+    x1 = minx
+    y1 = slope * minx + yint
+    x2 = maxx
+    y2 = slope * maxx + yint
+    
+    ax.plot((x1, x2), (y1, y2))
+    
+    #plt.legend()
+    plt.savefig(os.path.join(outdir, 'hull_{c}_{r}.png'.format(c=c,r=r)))
+    plt.close()
+
 with open(csvfile, 'r') as f:
+    queue = []
     head = f.readline()
     line = f.readline()
-    i = 0
     while line:
         try:
             c, r, slope, yint, coordss = line.split(',')
@@ -69,12 +64,12 @@ with open(csvfile, 'r') as f:
                 for xy in coordss.split(';'):
                     coords.append(list(map(float, xy.split(':'))))
             except: pass
-            draw(int(c), int(r), float(slope), float(yint), coords)
-            if i > 10:
-                break
-            i += 1
+            queue.append((int(c), int(r), float(slope), float(yint), coords))
         except Exception as e:
             print(e)
             break
         line = f.readline()
-        
+    
+    random.shuffle(queue)
+    for q in queue[:10]:
+        draw(*q)
