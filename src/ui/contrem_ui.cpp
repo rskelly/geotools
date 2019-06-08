@@ -36,6 +36,28 @@ namespace {
 	constexpr const char* LAST_THREADS = "lastThreads";
 	constexpr const char* LAST_DIR = "lastDir";
 
+	double nearestWl(double v, const std::map<int, double>& map) {
+		for(auto it = map.begin(); it != map.end(); ++it) {
+			if(it->second > v) {
+				if(it == map.begin()) {
+					return it->second;
+				} else {
+					auto it0 = it; --it0;
+					double a = it->second;
+					double b = it0->second;
+					if(std::abs(v - a) < std::abs(v - b)) {
+						return a;
+					} else {
+						return b;
+					}
+				}
+			}
+		}
+		return map.rbegin()->second;
+	}
+
+	bool __blockWlCombo;
+
 	void trun(ContremListener* form, Contrem* contrem) {
 		contrem->run(form);
 	}
@@ -146,28 +168,6 @@ void ContremForm::updateSpectraType() {
 	std::string fileType = fileTypeAsString(getFileType(m_spectraFile));
 	cboSpectraType->setCurrentText(fileType.c_str());
 }
-
-double nearestWl(double v, const std::map<int, double>& map) {
-	for(auto it = map.begin(); it != map.end(); ++it) {
-		if(it->second > v) {
-			if(it == map.begin()) {
-				return it->second;
-			} else {
-				auto it0 = it; --it0;
-				double a = it->second;
-				double b = it0->second;
-				if(std::abs(v - a) < std::abs(v - b)) {
-					return a;
-				} else {
-					return b;
-				}
-			}
-		}
-	}
-	return map.rbegin()->second;
-}
-
-bool __blockWlCombo;
 
 void ContremForm::updateWavelengths() {
 	__blockWlCombo = true;

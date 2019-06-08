@@ -18,10 +18,10 @@
 
 #include "bintree.hpp"
 
-#define MIN_VALUE 0.000001
-#define WL_SCALE 100000
-
 namespace hlrg {
+
+constexpr double MIN_VALUE = 0.000001; // Note: Can't use this; screws up hull std::numeric_limits<double>::min();
+constexpr double WL_SCALE = 100000;
 
 /**
  * Abstract class for object that read spectral datasets.
@@ -54,80 +54,81 @@ public:
 	 * so band 1 will be stored as pixel 0-n, and then band 2, pixel 0-n, etc. The column
 	 * and row references are updated with the current values representing the region just read.
 	 *
-	 * @param buf A buffer to store the pixels and bands of a row, in band-sequential order.
-	 * @param cols A reference to a value that will be updated with the number of columns in the buffer.
-	 * @return True if there is another row to be read after this one.
+	 * \param buf A buffer to store the pixels and bands of a row, in band-sequential order.
+	 * \param[out] cols A reference to a value that will be updated with the number of columns in the buffer.
+	 * \param[out] row A reference to the row index that was read.
+	 * \return True if there is another row to be read after this one.
 	 */
-	virtual bool next(std::vector<double>& buf, int& cols) = 0;
+	virtual bool next(std::vector<double>& buf, int& cols, int& row) = 0;
 
 	/**
 	 * Set the size of the buffer for reading.
 	 *
-	 * @param bufSize The size of the buffer.
+	 * \param bufSize The size of the buffer.
 	 */
 	void setBufSize(int bufSize);
 
 	/**
 	 * Set the band map; a mapping of band index to band number.
 	 *
-	 * @param map A map containing the mapping from band index to band number.
+	 * \param map A map containing the mapping from band index to band number.
 	 */
 	void setBandMap(const std::map<int, int>& map);
 
 	/**
 	 * Sets the range of wavelengths.
 	 *
-	 * @param min The minimum wavelength.
-	 * @param max The maximum wavelength.
+	 * \param min The minimum wavelength.
+	 * \param max The maximum wavelength.
 	 */
 	void setBandRange(double min, double max);
 
 	/**
 	 * Return a vector containing the wavelengths.
 	 *
-	 * @return A vector containing the wavelengths.
+	 * \return A vector containing the wavelengths.
 	 */
 	std::vector<double> getWavelengths() const;
 
 	/**
 	 * Returns a vector containing the band names.
 	 *
-	 * @return A vector containing the band names.
+	 * \return A vector containing the band names.
 	 */
 	std::vector<std::string> getBandNames() const;
 
 	/**
 	 * Returns a two-element vector containing the min and max wavelengths.
 	 *
-	 * @return A two-element vector containing the min and max wavelengths.
+	 * \return A two-element vector containing the min and max wavelengths.
 	 */
 	std::vector<double> getBandRange() const;
 
 	/**
 	 * Returns a two-element vector containing the min and max indices.
 	 *
-	 * @return A two-element vector containing the min and max indices.
+	 * \return A two-element vector containing the min and max indices.
 	 */
 	std::vector<int> getIndices() const;
 
 	/**
 	 * Returns the number of bands.
 	 *
-	 * @return The number of bands.
+	 * \return The number of bands.
 	 */
 	int bands() const;
 
 	/**
 	 * Returns the number of columns.
 	 *
-	 * @return The number of columns.
+	 * \return The number of columns.
 	 */
 	int cols() const;
 
 	/**
 	 * Returns the number of rows.
 	 *
-	 * @return The number of rows.
+	 * \return The number of rows.
 	 */
 	int rows() const;
 
@@ -146,17 +147,17 @@ public:
 	/**
 	 * Construct the band map.
 	 *
-	 * @param filename The source of the band map data.
-	 * @param wlCol The column containing wavelengths.
-	 * @param idxCol The column containing the band indices.
-	 * @param hasHeader True if the source has a header row which should be ignored.
+	 * \param filename The source of the band map data.
+	 * \param wlCol The column containing wavelengths.
+	 * \param idxCol The column containing the band indices.
+	 * \param hasHeader True if the source has a header row which should be ignored.
 	 */
 	BandMapReader(const std::string& filename, int wlCol, int idxCol, bool hasHeader = true);
 
 	/**
 	 * Return a reference to the internal band map.
 	 *
-	 * @return The band map.
+	 * \return The band map.
 	 */
 	const std::map<int, int>& bandMap() const;
 };
@@ -172,7 +173,7 @@ public:
 	/**
 	 * Construct the reader around the given filename.
 	 *
-	 * @param filename The filename of a GDAL data source.
+	 * \param filename The filename of a GDAL data source.
 	 */
 	GDALReader(const std::string& filename);
 
@@ -184,7 +185,7 @@ public:
 	 */
 	std::map<int, int> getBandMap();
 
-	bool next(std::vector<double>& buf, int& cols);
+	bool next(std::vector<double>& buf, int& cols, int& row);
 
 	 ~GDALReader();
 };
@@ -215,7 +216,7 @@ public:
 	/**
 	 * Construct the reader around the given ROI file.
 	 *
-	 * @param filename An ROI file.
+	 * \param filename An ROI file.
 	 */
 	ROIReader(const std::string& filename);
 
@@ -224,12 +225,12 @@ public:
 	 * so band 1 will be stored as pixel 0-n, and then band 2, pixel 0-n, etc. The column
 	 * and row references are updated with the current values representing the region just read.
 	 *
-	 * @param buf A buffer large enough to store the pixels and bands of a row, in band-sequential order.
-	 * @param col A reference to a value that will be updated with the current column.
-	 * @param col A reference to a value that will be updated with the current row.
-	 * @param col A reference to a value that will be updated with the number of columns in the buffer.
-	 * @param col A reference to a value that will be updated with the numbe of rows in the buffer.
-	 * @return True if there is another row to be read after this one.
+	 * \param buf A buffer large enough to store the pixels and bands of a row, in band-sequential order.
+	 * \param col A reference to a value that will be updated with the current column.
+	 * \param col A reference to a value that will be updated with the current row.
+	 * \param col A reference to a value that will be updated with the number of columns in the buffer.
+	 * \param col A reference to a value that will be updated with the numbe of rows in the buffer.
+	 * \return True if there is another row to be read after this one.
 	 */
 	bool next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows);
 
@@ -249,7 +250,7 @@ public:
 	/**
 	 * Loads the frame index into a map. Indexed by frame index (0-based, value is the GPS timestamp in us).
 	 *
-	 * @param filename The filename of the frame index file.
+	 * \param filename The filename of the frame index file.
 	 */
 	FrameIndexReader(const std::string& filename);
 
@@ -257,9 +258,9 @@ public:
 	 * Get the frame corresponding to the given timestamp.
 	 * Returns true if the frame was found.
 	 *
-	 * @param utcTime The timestamp to search for.
-	 * @param frame A value that will be updated with the index of the frame.
-	 * @return True if the frame is found, false otherwise.
+	 * \param utcTime The timestamp to search for.
+	 * \param frame A value that will be updated with the index of the frame.
+	 * \return True if the frame is found, false otherwise.
 	 */
 	bool getFrame(long utcTime, int& frame) const;
 
@@ -267,10 +268,10 @@ public:
 	 * Get the frame nearest to the given timestamp.
 	 * Returns true if a frame was found.
 	 *
-	 * @param utcTime The timestamp to search for.
-	 * @param actualUtcTime A value that will be updated with the nearest timestamp to the one given.
-	 * @param frame A value that will be updated with the index of the frame.
-	 * @return True if a frame is found, false otherwise.
+	 * \param utcTime The timestamp to search for.
+	 * \param actualUtcTime A value that will be updated with the nearest timestamp to the one given.
+	 * \param frame A value that will be updated with the index of the frame.
+	 * \return True if a frame is found, false otherwise.
 	 */
 	bool getNearestFrame(long utcTime, long& actualUtcTime, int& frame) const;
 
@@ -278,9 +279,9 @@ public:
 	 * Get the timestamp corresponding to the given frame.
 	 * Returns true if the timestamp was found.
 	 *
-	 * @param frame The frame to search for.
-	 * @param utcTime A value that will be updated with the timestamp.
-	 * @return True if the timestamp is found, false otherwise.
+	 * \param frame The frame to search for.
+	 * \param utcTime A value that will be updated with the timestamp.
+	 * \return True if the timestamp is found, false otherwise.
 	 */
 	bool getTime(int frame, long& utcTime) const;
 
@@ -288,10 +289,10 @@ public:
 	 * Get the timestamp nearest to the given frame.
 	 * Returns true if a timestamp was found.
 	 *
-	 * @param frame The frame to search for.
-	 * @param actualFrame A value that will be updated with the nearest frame to the one given.
-	 * @param utcTime A value that will be updated with the index of the timestamp.
-	 * @return True if a timestmap is found, false otherwise.
+	 * \param frame The frame to search for.
+	 * \param actualFrame A value that will be updated with the nearest frame to the one given.
+	 * \param utcTime A value that will be updated with the index of the timestamp.
+	 * \return True if a timestmap is found, false otherwise.
 	 */
 	bool getNearestTime(int frame, int& actualFrame, long& utcTime) const;
 
@@ -321,8 +322,8 @@ public:
 	 * The offset argument is for adjusting the timestamps according to a known offset, in
 	 * milliseconds.
 	 *
-	 * @param in An input stream.
-	 * @param msOffset A time offset to apply to the times in the rows, in milliseconds.
+	 * \param in An input stream.
+	 * \param msOffset A time offset to apply to the times in the rows, in milliseconds.
 	 */
 	IMUGPSRow(std::istream& in, double msOffset);
 };
@@ -343,16 +344,16 @@ public:
 	/**
 	 * Load the file.
 	 *
-	 * @param filename The filename.
+	 * \param filename The filename.
 	 */
 	IMUGPSReader(const std::string& filename, double msOffset);
 
 	/**
 	 * Compute and return the interpolated UTC timestamp since the epoch (Jan 1, 1970) in miliseconds.
 	 *
-	 * @param gpsTime The timestamp as emitted by the APX.
-	 * @param utcTime A value that will be update with the UTC timestamp.
-	 * @return True if the utcTime value has been set successfully.
+	 * \param gpsTime The timestamp as emitted by the APX.
+	 * \param utcTime A value that will be update with the UTC timestamp.
+	 * \return True if the utcTime value has been set successfully.
 	 */
 	bool getUTCTime(long gpsTime, long& utcTime);
 
@@ -360,9 +361,9 @@ public:
 	 * Compute and return the interpolated GPS timestamp corresponding to the given
 	 * UTC timestamp.
 	 *
-	 * @param utcTime The UTC timestamp.
-	 * @param gpsTime A value that will be updated with the GPS timestamp.
-	 * @return True if the gpsTime is updated successfully.
+	 * \param utcTime The UTC timestamp.
+	 * \param gpsTime A value that will be updated with the GPS timestamp.
+	 * \return True if the gpsTime is updated successfully.
 	 */
 	bool getGPSTime(long utcTime, long& gpsTime);
 
@@ -385,9 +386,9 @@ public:
 	 * Read the row data from the given input stream.
 	 * The offset argument applies a known offst (in ms) to the times in the row.
 	 *
-	 * @param in An input stream.
-	 * @param msOffset A time offset in milliseconds.
-	 * @return True if the row was read successfully.
+	 * \param in An input stream.
+	 * \param msOffset A time offset in milliseconds.
+	 * \return True if the row was read successfully.
 	 */
 	bool read(std::istream& in, double msOffset);
 };
@@ -410,23 +411,23 @@ public:
 	/**
 	 * Construct a FlameReader using the given filename and time offset.
 	 *
-	 * @param filename The filename of the Flame output dataset.
-	 * @param msOffset A time offset in milliseconds to apply to the times stored in each row.
+	 * \param filename The filename of the Flame output dataset.
+	 * \param msOffset A time offset in milliseconds to apply to the times stored in each row.
 	 */
 	FlameReader(const std::string& filename, double msOffset);
 
 	/**
 	 * Return the number of rows in the file. This requires reading through the whole file.
 	 *
-	 * @return The number of rows in the file.
+	 * \return The number of rows in the file.
 	 */
 	int rows();
 
 	/**
 	 * Read the next row of data into the given row object.
 	 *
-	 * @param row A FlameRow instance to populate with values from the next row.
-	 * @return True if there is another row to read after the present row.
+	 * \param row A FlameRow instance to populate with values from the next row.
+	 * \return True if there is another row to read after the present row.
 	 */
 	bool next(FlameRow& row);
 };
@@ -453,7 +454,7 @@ public:
 
 	void reset();
 
-	bool next(std::vector<double>& buf, int& cols);
+	bool next(std::vector<double>& buf, int& cols, int& row);
 
 	int rows() const;
 

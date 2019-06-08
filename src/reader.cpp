@@ -137,15 +137,16 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 	setBandMap(getBandMap());
 }
 
-bool GDALReader::next(std::vector<double>& buf, int& cols) {
+bool GDALReader::next(std::vector<double>& buf, int& cols, int& row) {
 
 	if(m_row >= m_rows)
 		return false;
 
-
-	int numBands = m_maxIdx - m_minIdx;
+	int numBands = m_maxIdx - m_minIdx + 1;
 
 	cols = m_cols;
+	row = m_row;
+
 	buf.resize(m_cols * numBands);
 	std::fill(buf.begin(), buf.end(), 0);
 
@@ -153,8 +154,7 @@ bool GDALReader::next(std::vector<double>& buf, int& cols) {
 	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
 		//std::cerr << "band " << i << "\n";
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		size_t offset = numBands * (i - 1);
-		if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + offset), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
+		if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + i - 1), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
 			return false;
 	}
 
@@ -612,14 +612,19 @@ int CSVReader::cols() const {
 	return 1; // It's a table, so it's 2d, not 3d.
 }
 
-bool CSVReader::next(std::vector<double>& buf, int& cols) {
+bool CSVReader::next(std::vector<double>& buf, int& cols, int& row) {
 	if(m_idx >= m_rows)
 		return false;
+
+	cols = 1;
+	row = m_idx;
+
 	std::vector<double> data(m_maxWlCol - m_minWlCol + 1);
 	for(int i = m_minWlCol; i <= m_maxWlCol; ++i)
 		data[i] = atof(m_data[m_idx][i].c_str());
 	buf.assign(data.begin(), data.end());
-	cols = 1;
+
 	++m_idx;
+
 	return true;
 }

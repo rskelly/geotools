@@ -63,13 +63,14 @@ namespace {
 	 */
 	class outpoint {
 	public:
-		double w; // Wavelength
-		double ss; // Sample spectra
-		double ch; // Intersection with convex hull (y)
-		double cr; // Continuum removal (ss/ch)
-		double crn;
-		double crm; // Mirrored cr
-		double crnm; // Mirrored normalized cr
+		double w; 		// Wavelength.
+		double ss; 		// Sample spectra (intensity).
+		double ch; 		// Intersection with convex hull (y).
+		double cr; 		// Continuum removal (ss/ch).
+		double crn;		// Continuum removal normalized (1 - cr).
+		double crm;		// Mirrored cr.
+		double crnm;	// Mirrored normalized cr.
+
 		outpoint(inpoint& in, double ch) :
 			w(in.w), ss(in.ss),
 			ch(ch), cr(0), crn(0), crm(0), crnm(0) {}
@@ -104,6 +105,8 @@ namespace {
 		double symmetry; // larea / area
 		double maxCrm; // maximum normalized mirrored continuum removal
 		double maxWl; // Wavelength at the maxCrm value
+		double slope;	// The slope of the regression line through the crnm points.
+		double yint;	// The y-intercept of the regression.
 		int maxCount; // The number of equal maximum values.
 		std::vector<outpoint> data;
 		output() : output(0, 0) {}
@@ -113,6 +116,7 @@ namespace {
 			c(c), r(r),
 			area(0), larea(0), rarea(0), symmetry(0),
 			maxCrm(0), maxWl(0),
+			slope(0), yint(0),
 			maxCount(0) {}
 	};
 
@@ -159,7 +163,7 @@ namespace {
 			Point* p1 = ring->getPointN(i + 1);
 			double x0 = p0->getX(), y0 = p0->getY();
 			double x1 = p1->getX(), y1 = p1->getY();
-			// Only add a segment if it isn't at a corner where y=0.
+			// Only add a segment if it isn't a bottom or end segment (which have at least one zero y-coordinate).
 			if(y0 > 0 && y1 > 0)
 				lines.emplace_back(x0, y0, x1, y1);
 			delete p0;
@@ -219,11 +223,14 @@ namespace {
 				config->inqueue.pop_front();
 			}
 
-			// Adjust <=0 intensities to MIN_VALUE.
-			for(size_t i = 0; i < in.data.size(); ++i)
-				if(in.data[i].ss <= MIN_VALUE) in.data[i].ss = MIN_VALUE;
+			// Adjust <=0 intensities to MIN_VALUE. This enables the creation
+			// of a hull even though the area of the hull will be zero for practical purposes.
+			for(size_t i = 0; i < in.data.size(); ++i) {
+				if(in.data[i].ss <= MIN_VALUE)
+					in.data[i].ss = MIN_VALUE;
+			}
 
-			// Add two corner points to make the hull full.
+			// Add two corner points to complete the hull.
 			std::vector<inpoint> pts(in.data.begin(), in.data.end());
 			pts.emplace_back(pts[pts.size() - 1].w, 0.0);
 			pts.emplace_back(pts[0].w, 0.0);
@@ -253,11 +260,10 @@ namespace {
 			out.maxCrm = 0;
 			int maxIdx = 0, i = 0;
 			for(outpoint& pt : out.data) {
-				pt.cr = pt.ss / pt.ch;
-				pt.crm = 1 - pt.cr;
+				pt.cr = pt.ss / pt.ch;		// Continuum removal -- intensity proportional to height of hull.
+				pt.crm = 1 - pt.cr;			// Mirrored continuum removal.
 				if(pt.crm > out.maxCrm) {
-					// There may be more than one equal max; it'll be flagged at a later step,
-					// so don't worry about it now.
+					// There may be more than one equal max; it'll be flagged at a later step
 					out.maxCrm = pt.crm;
 					out.maxWl = pt.w;
 					maxIdx = i;
@@ -265,15 +271,27 @@ namespace {
 				++i;
 			}
 
+			double sxy = 0, sx = 0, sy = 0, sxx = 0;
+			size_t n = out.data.size();
+
 			// Calculate the other ch metrics.
-			for(size_t i = 0; i < out.data.size(); ++i) {
+			for(size_t i = 0; i < n; ++i) {
 				outpoint& pt = out.data[i];
-				pt.crn = pt.crm / out.maxCrm;
-				pt.crnm = 1 - pt.crn;
+				pt.crn = pt.crm / out.maxCrm;	// Normalized continuum removal -- normalized against maximum mirrored cr.
+				pt.crnm = 1 - pt.crn;			// Mirrored normalized continuum removal.
+				if(i > 0 && i < n - 1) {
+					sxy += pt.w * pt.crnm;
+					sx += pt.w;
+					sy += pt.crnm;
+					sxx += pt.w * pt.w;
+				}
 				// Count the values equal to max; will flag those with >1.
 				if(pt.crm == out.maxCrm)
 					++out.maxCount;
 			}
+
+			out.slope = ((n - 2) * sxy - sx * sy) / ((n - 2) * sxx - sx * sx);
+			out.yint = (sy - out.slope * sx) / (n - 2);
 
 			// We were going to do interpolation for adjacent maxima, but put it off.
 			// Kopăcková, V., & Koucká, L. (2017). Integration of absorption feature information from visible to
@@ -349,9 +367,13 @@ namespace {
 		GDALWriter writerch(outfile + "_ch" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 		GDALWriter writercr(outfile + "_cr" + ext, driver, cols, rows, bands, wavelengths, bandNames);
 		GDALWriter writercrnm(outfile + "_crnm" + ext, driver, cols, rows, bands, wavelengths, bandNames);
-		GDALWriter writerhull(outfile + "_agg" + ext, driver, cols, rows, 7, {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count"});
+		GDALWriter writerhull(outfile + "_agg" + ext, driver, cols, rows, 9, {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "y-int"});
 		GDALWriter writermax(outfile + "_maxcount" + ext, driver, cols, rows, 1, {}, {"equal_max_count"}, &meta, DataType::Byte);
 		GDALWriter writervalid(outfile + "_valid" + ext, driver, cols, rows, 1, {}, {"valid_hull"}, &meta, DataType::Byte);
+
+		// Each row is a string of coords which can be turned into a hull.
+		std::ofstream hulls(outfile + "_hulls.csv");
+		hulls << "col,row,slope,yint,coords\n";
 
 		writermax.fill(0);
 		writervalid.fill(0);
@@ -380,17 +402,20 @@ namespace {
 				config->outqueue.pop_front();
 			}
 
+			hulls << out.c << "," << out.r << "," << out.slope << "," << out.yint << ",";
 			for(const outpoint& o : out.data) {
 				ss.push_back(o.ss);
 				ch.push_back(o.ch);
 				cr.push_back(o.cr);
 				crnm.push_back(o.crnm);
+				hulls << o.w << ":" << o.crnm << ";";
 			}
+			hulls << "\n";
 
 			maxima[out.r * cols + out.c] = out.maxCount > 1 ? 0 : 1;
 			valid[out.r * cols + out.c] = out.area > 0 && out.rarea > 0 && out.larea > 0;
 
-			hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm, out.maxWl, (double) out.maxCount};
+			hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm, out.maxWl, (double) out.maxCount, out.slope, out.yint};
 
 			writerss.write(ss, out.c, out.r, 1, 1, 1, 1);
 			writerch.write(ch, out.c, out.r, 1, 1, 1, 1);
@@ -409,7 +434,7 @@ namespace {
 		writermax.write(maxima, 0, 0, cols, rows);
 		writervalid.write(valid, 0, 0, cols, rows);
 
-		writerhull.writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count"});
+		writerhull.writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "yint"});
 	}
 
 }
@@ -444,6 +469,8 @@ void Contrem::run(ContremListener* listener) {
 
 	std::unique_ptr<Reader> reader = getReader(spectra, spectraType);
 
+	reader->setBandRange(minWl, maxWl);
+
 	qconfig.cols = reader->cols();
 	qconfig.rows = reader->rows();
 	qconfig.bands = reader->bands();
@@ -472,15 +499,15 @@ void Contrem::run(ContremListener* listener) {
 	std::thread t1(writeQueue, &qconfig);
 
 	// Read through the buffer and populate the input queue.
-	int cols, r = 0;
+	int cols, row;
 	int bands = reader->bands();
-	while(reader->next(buf, cols)) {
+	while(reader->next(buf, cols, row)) {
 
 		{
 			// Read out the input objects and add to the queue.
 			std::lock_guard<std::mutex> lk(qconfig.inmtx);
 			for(int c = 0; c < cols; ++c) {
-				input in(c, r);
+				input in(c, row);
 				for(int b = 0; b < bands; ++b) {
 					double v = buf[c * bands + b];
 					double w = qconfig.wavelengths[b];
