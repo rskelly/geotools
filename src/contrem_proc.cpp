@@ -439,12 +439,12 @@ namespace {
 
 }
 
-std::unique_ptr<Reader> getReader(const std::string& file, const std::string& fileType) {
+std::unique_ptr<Reader> getReader(const std::string& file, bool transpose, int headerRows, int minCol, int maxCol) {
 	std::unique_ptr<Reader> rdr;
 	FileType type = getFileType(file);
 	switch(type) {
 	case CSV:
-		rdr.reset(new CSVReader(file, false, 0, 1)); // TODO Configure col/row/transpose.
+		rdr.reset(new CSVReader(file, transpose, headerRows, minCol, maxCol));
 		break;
 	case GTiff:
 	case ENVI:
@@ -465,9 +465,7 @@ void Contrem::run(ContremListener* listener) {
 	QConfig qconfig;
 	qconfig.contrem = this;
 
-	// TODO: Raster/CSV spectral reader.
-
-	std::unique_ptr<Reader> reader = getReader(spectra, spectraType);
+	std::unique_ptr<Reader> reader = getReader(spectra, wlTranspose, wlHeaderRows, wlMinCol, wlMaxCol);
 
 	reader->setBandRange(minWl, maxWl);
 

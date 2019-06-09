@@ -443,6 +443,7 @@ private:
 	bool m_transpose;
 	int m_minWlCol;
 	int m_maxWlCol;
+	int m_headerRows;
 
 	void load();
 
@@ -450,9 +451,11 @@ private:
 
 
 public:
-	CSVReader(const std::string& filename, bool transpose, int minWlCol, int maxWlCol);
+	CSVReader(const std::string& filename, bool transpose, int headerRows, int minWlCol, int maxWlCol);
 
 	void reset();
+
+	std::map<int, int> getBandMap();
 
 	bool next(std::vector<double>& buf, int& cols, int& row);
 

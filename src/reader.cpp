@@ -561,11 +561,12 @@ bool FlameReader::next(FlameRow& row) {
 }
 
 
-CSVReader::CSVReader(const std::string& filename, bool transpose, int minWlCol, int maxWlCol) :
+CSVReader::CSVReader(const std::string& filename, bool transpose, int headerRows, int minWlCol, int maxWlCol) :
 	m_cols(0), m_rows(0),
 	m_idx(0),
 	m_transpose(transpose),
-	m_minWlCol(minWlCol), m_maxWlCol(maxWlCol) {
+	m_minWlCol(minWlCol), m_maxWlCol(maxWlCol),
+	m_headerRows(headerRows) {
 	load();
 }
 
@@ -592,10 +593,12 @@ void CSVReader::load() {
 
 	if(m_transpose)
 		transpose();
+
+	reset();
 }
 
 void CSVReader::reset() {
-	m_idx = 0;
+	m_idx = m_headerRows;
 }
 
 void CSVReader::transpose() {
@@ -617,6 +620,18 @@ int CSVReader::rows() const {
 
 int CSVReader::cols() const {
 	return 1; // It's a table, so it's 2d, not 3d.
+}
+
+std::map<int, int> CSVReader::getBandMap() {
+
+	std::map<int, int> map;
+	const std::vector<std::string>& header = m_data[m_headerRows > 0 ? m_headerRows - 1 : 0];
+	for(int i = m_minWlCol; i <= m_maxWlCol; ++i) {
+		double wl = atof(header[i].c_str());
+		int idx = (int) (wl * WL_SCALE);
+		map[idx] = i;
+	}
+	return map;
 }
 
 bool CSVReader::next(std::vector<double>& buf, int& cols, int& row) {

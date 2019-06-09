@@ -7,21 +7,21 @@
     <x>0</x>
     <y>0</y>
     <width>643</width>
-    <height>278</height>
+    <height>312</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Convex Hull Continuum Removal</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="8" column="1" colspan="5">
+   <item row="9" column="1" colspan="9">
     <widget class="Line" name="line_2">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>
-   <item row="2" column="5">
+   <item row="3" column="9">
     <widget class="QToolButton" name="btnROI">
      <property name="text">
       <string>...</string>
@@ -35,14 +35,14 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="1">
+   <item row="3" column="1">
     <widget class="QLabel" name="label_2">
      <property name="text">
       <string>ROI/Mask</string>
      </property>
     </widget>
    </item>
-   <item row="13" column="1" colspan="5">
+   <item row="14" column="1" colspan="9">
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <widget class="QPushButton" name="btnRun">
@@ -93,86 +93,139 @@
      </item>
     </layout>
    </item>
-   <item row="10" column="1" colspan="5">
+   <item row="11" column="1" colspan="9">
     <widget class="QProgressBar" name="progressBar">
      <property name="value">
       <number>24</number>
      </property>
     </widget>
    </item>
-   <item row="4" column="5">
+   <item row="5" column="9">
     <widget class="QToolButton" name="btnOutput">
      <property name="text">
       <string>...</string>
      </property>
     </widget>
    </item>
-   <item row="11" column="1" colspan="5">
+   <item row="12" column="1" colspan="9">
     <widget class="Line" name="line">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>
-   <item row="0" column="5">
+   <item row="0" column="9">
     <widget class="QToolButton" name="btnSpectra">
      <property name="text">
       <string>...</string>
      </property>
     </widget>
    </item>
-   <item row="4" column="1">
+   <item row="5" column="1">
     <widget class="QLabel" name="label_8">
      <property name="text">
       <string>Output File</string>
      </property>
     </widget>
    </item>
-   <item row="5" column="1">
+   <item row="6" column="1">
     <widget class="QLabel" name="label_9">
      <property name="text">
-      <string>Min. Wavelength</string>
+      <string>First Wavelength</string>
      </property>
     </widget>
    </item>
-   <item row="2" column="2" colspan="2">
-    <widget class="QLineEdit" name="txtROIFile"/>
-   </item>
-   <item row="4" column="2" colspan="2">
-    <widget class="QLineEdit" name="txtOutputFile"/>
-   </item>
-   <item row="0" column="4">
-    <widget class="QComboBox" name="cboSpectraType"/>
-   </item>
-   <item row="0" column="2" colspan="2">
-    <widget class="QLineEdit" name="txtSpectraFile"/>
-   </item>
-   <item row="4" column="4">
+   <item row="5" column="8">
     <widget class="QComboBox" name="cboOutputType"/>
    </item>
-   <item row="2" column="4">
-    <widget class="QComboBox" name="cboROIType"/>
-   </item>
-   <item row="6" column="1">
+   <item row="7" column="1">
     <widget class="QLabel" name="label_10">
      <property name="text">
-      <string>Max. Wavelength</string>
+      <string>Last Wavelength</string>
      </property>
     </widget>
    </item>
-   <item row="5" column="2" colspan="2">
-    <widget class="QComboBox" name="cboMinWL"/>
+   <item row="3" column="2" colspan="7">
+    <widget class="QLineEdit" name="txtROIFile"/>
    </item>
-   <item row="6" column="2" colspan="2">
-    <widget class="QComboBox" name="cboMaxWL"/>
+   <item row="1" column="7">
+    <widget class="QSpinBox" name="spnWLLastCol"/>
    </item>
-   <item row="1" column="2" colspan="2">
-    <widget class="QCheckBox" name="chkInputHasHeader">
-     <property name="enabled">
-      <bool>true</bool>
-     </property>
+   <item row="1" column="2">
+    <widget class="QLabel" name="label_6">
      <property name="text">
-      <string>Header Row</string>
+      <string>Header Rows</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="5">
+    <widget class="QSpinBox" name="spnWLFirstCol"/>
+   </item>
+   <item row="5" column="2" colspan="6">
+    <widget class="QLineEdit" name="txtOutputFile"/>
+   </item>
+   <item row="4" column="1">
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Sample Points</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="2" colspan="7">
+    <widget class="QLineEdit" name="txtSamplePoints"/>
+   </item>
+   <item row="6" column="2">
+    <widget class="QComboBox" name="cboMinWL">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="4">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>First Column</string>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="2">
+    <widget class="QComboBox" name="cboMaxWL">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="6">
+    <widget class="QLabel" name="label_5">
+     <property name="text">
+      <string>Last Column</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="3">
+    <widget class="QSpinBox" name="spnWLHeaderRows"/>
+   </item>
+   <item row="1" column="8">
+    <widget class="QCheckBox" name="chkWLTranspose">
+     <property name="text">
+      <string>Transpose</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="9">
+    <widget class="QToolButton" name="btnSamplePoints">
+     <property name="text">
+      <string>...</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="2" colspan="7">
+    <widget class="QLineEdit" name="txtSpectraFile">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+       <horstretch>1</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
      </property>
     </widget>
    </item>
@@ -180,7 +233,4 @@
  </widget>
  <resources/>
  <connections/>
- <buttongroups>
-  <buttongroup name="buttonGroup"/>
- </buttongroups>
 </ui>

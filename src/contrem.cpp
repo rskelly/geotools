@@ -41,8 +41,7 @@ int runWithGui(int argc, char **argv) {
 	};
 
 	ContremApp q(argc, argv);
-	Contrem conv;
-	ContremForm form(&conv, &q);
+	ContremForm form(&q);
 	QDialog qform;
 	form.setupUi(&qform);
 	qform.show();

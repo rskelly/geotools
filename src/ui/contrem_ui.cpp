@@ -27,9 +27,11 @@ namespace {
 	constexpr const char* LAST_INPUT_END_COL = "lastInputEndCol";
 	constexpr const char* LAST_OUTPUT = "lastOutput";
 	constexpr const char* LAST_OUTPUT_TYPE = "lastOutputType";
-	constexpr const char* LAST_WL_COL = "lastWLCol";
+	constexpr const char* LAST_WL_MIN_COL = "lastWLMinCol";
+	constexpr const char* LAST_WL_MAX_COL = "lastWLMaxCol";
 	constexpr const char* LAST_WL_BAND_COL = "lastWLBandCol";
-	constexpr const char* LAST_WL_HAS_HEADER = "lastWLHasHeader";
+	constexpr const char* LAST_WL_HEADER_ROWS = "lastWLHeaderRows";
+	constexpr const char* LAST_WL_TRANSPOSE = "lastWLTranspose";
 	constexpr const char* LAST_MIN_WL = "lastMinWl";
 	constexpr const char* LAST_MAX_WL = "lastMaxWL";
 	constexpr const char* LAST_BUFFER = "lastBuffer";
@@ -64,16 +66,9 @@ namespace {
 
 }
 
-
-ContremForm::ContremForm(Contrem* contrem, QApplication* app) :
-	m_inputHasHeader(false),
-	m_minWl(0),
-	m_maxWl(0),
-	m_threads(1),
-	m_contrem(contrem),
+ContremForm::ContremForm(QApplication* app) :
 	m_form(nullptr),
-	m_app(app),
-	m_running(false) {
+	m_app(app) {
 }
 
 void ContremForm::setupUi(QDialog* form) {
@@ -87,29 +82,22 @@ void ContremForm::setupUi(QDialog* form) {
 		outputTypes << fileTypeAsString(type).c_str();
 	cboOutputType->addItems(outputTypes);
 
-	QStringList spectraTypes;
-	outputTypes << "";
-	for(FileType type : INPUT_TYPES)
-		spectraTypes << fileTypeAsString(type).c_str();
-	cboSpectraType->addItems(spectraTypes);
-
-	QStringList roiTypes;
-	roiTypes << "";
-	for(FileType type : ROI_TYPES)
-		roiTypes << fileTypeAsString(type).c_str();
-	cboROIType->addItems(roiTypes);
-
 	connect(txtROIFile, SIGNAL(textChanged(QString)), this, SLOT(txtROIFileChanged(QString)));
-	connect(cboROIType, SIGNAL(currentTextChanged(QString)), this, SLOT(cboROITypeChanged(QString)));
+	connect(btnROI, SIGNAL(clicked()), this, SLOT(btnROIClicked()));
+
 	connect(txtSpectraFile, SIGNAL(textChanged(QString)), this, SLOT(txtSpectraFileChanged(QString)));
-	connect(cboSpectraType, SIGNAL(currentTextChanged(QString)), this, SLOT(cboSpectraTypeChanged(QString)));
+	connect(btnSpectra, SIGNAL(clicked()), this, SLOT(btnSpectraClicked()));
+	connect(spnWLHeaderRows, SIGNAL(valueChanged(int)), this, SLOT(spnWLHeaderRowsChanged(int)));
+	connect(spnWLFirstCol, SIGNAL(valueChanged(int)), this, SLOT(spnMinWLColChanged(int)));
+	connect(spnWLLastCol, SIGNAL(valueChanged(int)), this, SLOT(spnMaxWLColChanged(int)));
+	connect(chkWLTranspose, SIGNAL(toggled(bool)), this, SLOT(chkWLTransposeChanged(bool)));
+
 	connect(txtOutputFile, SIGNAL(textChanged(QString)), this, SLOT(txtOutputFileChanged(QString)));
 	connect(cboOutputType, SIGNAL(currentTextChanged(QString)), this, SLOT(cboOutputTypeChanged(QString)));
+	connect(btnOutput, SIGNAL(clicked()), this, SLOT(btnOutputClicked()));
 	connect(cboMinWL, SIGNAL(currentIndexChanged(int)), this, SLOT(cboMinWLChanged(int)));
 	connect(cboMaxWL, SIGNAL(currentIndexChanged(int)), this, SLOT(cboMaxWLChanged(int)));
-	connect(btnROI, SIGNAL(clicked()), this, SLOT(btnROIClicked()));
-	connect(btnSpectra, SIGNAL(clicked()), this, SLOT(btnSpectraClicked()));
-	connect(btnOutput, SIGNAL(clicked()), this, SLOT(btnOutputClicked()));
+
 	connect(btnRun, SIGNAL(clicked()), this, SLOT(btnRunClicked()));
 	connect(btnCancel, SIGNAL(clicked()), this, SLOT(btnCancelClicked()));
 	connect(btnHelp, SIGNAL(clicked()), this, SLOT(btnHelpClicked()));
@@ -120,20 +108,26 @@ void ContremForm::setupUi(QDialog* form) {
 	connect(this, SIGNAL(update(Contrem*)), this, SLOT(convUpdate(Contrem*)));
 	connect(this, SIGNAL(finished(Contrem*)), this, SLOT(convFinished(Contrem*)));
 
-	m_roiFile = m_settings.value(LAST_ROI, "").toString().toStdString();
-	m_spectraFile = m_settings.value(LAST_SPECTRA, "").toString().toStdString();
-	m_inputHasHeader = m_settings.value(LAST_INPUT_HAS_HEADER, false).toBool();
-	m_outputFile = m_settings.value(LAST_OUTPUT, "").toString().toStdString();
-	m_outputType = m_settings.value(LAST_OUTPUT_TYPE, "ENVI").toString().toStdString();
-	m_minWl = m_settings.value(LAST_MIN_WL, 0).toDouble();
-	m_maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
-	m_threads = m_settings.value(LAST_THREADS, 1).toInt();
+	m_contrem.roi = m_settings.value(LAST_ROI, "").toString().toStdString();
+	m_contrem.spectra = m_settings.value(LAST_SPECTRA, "").toString().toStdString();
+	m_contrem.wlMinCol = m_settings.value(LAST_WL_MIN_COL, 1).toInt();
+	m_contrem.wlMaxCol = m_settings.value(LAST_WL_MAX_COL, 1).toInt();
+	m_contrem.wlHeaderRows = m_settings.value(LAST_WL_HEADER_ROWS, 1).toInt();
+	m_contrem.wlTranspose = m_settings.value(LAST_WL_TRANSPOSE, 1).toBool();
+	m_contrem.output = m_settings.value(LAST_OUTPUT, "").toString().toStdString();
+	m_contrem.outputType = m_settings.value(LAST_OUTPUT_TYPE, "ENVI").toString().toStdString();
+	m_contrem.minWl = m_settings.value(LAST_MIN_WL, 0).toDouble();
+	m_contrem.maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
+	m_contrem.threads = m_settings.value(LAST_THREADS, 1).toInt();
 
-	txtROIFile->setText(QString(m_roiFile.c_str()));
-	txtSpectraFile->setText(QString(m_spectraFile.c_str()));
-	txtOutputFile->setText(QString(m_outputFile.c_str()));
-	cboOutputType->setCurrentText(QString(m_outputType.c_str()));
-	chkInputHasHeader->setChecked(m_inputHasHeader);
+	txtROIFile->setText(QString(m_contrem.roi.c_str()));
+	txtSpectraFile->setText(QString(m_contrem.spectra.c_str()));
+	txtOutputFile->setText(QString(m_contrem.output.c_str()));
+	cboOutputType->setCurrentText(QString(m_contrem.outputType.c_str()));
+	spnWLFirstCol->setValue(m_contrem.wlMinCol);
+	spnWLLastCol->setValue(m_contrem.wlMaxCol);
+	spnWLHeaderRows->setValue(m_contrem.wlHeaderRows);
+	chkWLTranspose->setChecked(m_contrem.wlTranspose);
 }
 
 void ContremForm::checkRun() {
@@ -147,34 +141,46 @@ void ContremForm::checkRun() {
 	btnRun->setEnabled(true);
 }
 
-void ContremForm::updateROIType() {
-	std::string fileType = fileTypeAsString(getFileType(m_roiFile));
-	cboROIType->setCurrentText(fileType.c_str());
+void ContremForm::spnMinWLColChanged(int col) {
+	m_contrem.wlMinCol = col;
+	m_settings.setValue(LAST_WL_MIN_COL, col);
+	checkRun();
+}
+
+void ContremForm::spnMaxWLColChanged(int col) {
+	m_contrem.wlMaxCol = col;
+	m_settings.setValue(LAST_WL_MAX_COL, col);
+	checkRun();
+}
+
+void ContremForm::spnWLHeaderRowsChanged(int rows) {
+	m_contrem.wlHeaderRows = rows;
+	m_settings.setValue(LAST_WL_HEADER_ROWS, rows);
+	checkRun();
+}
+
+void ContremForm::chkWLTransposeChanged(bool transpose) {
+	m_contrem.wlTranspose = transpose;
+	m_settings.setValue(LAST_WL_TRANSPOSE, transpose);
+	checkRun();
 }
 
 void ContremForm::txtROIFileChanged(QString filename) {
-	m_roiFile = filename.toStdString();
+	m_contrem.roi = filename.toStdString();
 	m_settings.setValue(LAST_ROI, filename);
-	updateROIType();
 	checkRun();
-}
-
-void ContremForm::cboROITypeChanged(QString value) {
-	m_roiType = value.toStdString();
-	checkRun();
-}
-
-void ContremForm::updateSpectraType() {
-	std::string fileType = fileTypeAsString(getFileType(m_spectraFile));
-	cboSpectraType->setCurrentText(fileType.c_str());
 }
 
 void ContremForm::updateWavelengths() {
 	__blockWlCombo = true;
-	std::map<int, double> map = loadWavelengths(m_spectraFile);
-	int i = 0;
+	cboMinWL->setEnabled(false);
+	cboMaxWL->setEnabled(false);
 	cboMinWL->clear();
 	cboMaxWL->clear();
+
+	std::map<int, double> map = loadWavelengths(m_contrem);
+
+	int i = 0;
 	for(auto it : map) {
 		QString min, max;
 		QList<QVariant> data;
@@ -183,47 +189,56 @@ void ContremForm::updateWavelengths() {
 		cboMaxWL->insertItem(i, max.setNum(it.second, 'f', 3), QVariant(data));
 		++i;
 	}
+
 	QString min, max;
-	min.setNum(nearestWl(m_minWl, map), 'f', 3);
-	max.setNum(nearestWl(m_maxWl, map), 'f', 3);
+	min.setNum(nearestWl(m_contrem.minWl, map), 'f', 3);
+	max.setNum(nearestWl(m_contrem.maxWl, map), 'f', 3);
+
 	cboMinWL->setCurrentText(min);
 	cboMaxWL->setCurrentText(max);
+
+	if(!map.empty()) {
+		cboMinWL->setEnabled(true);
+		cboMaxWL->setEnabled(true);
+	}
 	__blockWlCombo = false;
 }
 
+void ContremForm::enableSpectraOptions(bool enable) {
+	spnWLFirstCol->setEnabled(enable);
+	spnWLLastCol->setEnabled(enable);
+	spnWLHeaderRows->setEnabled(enable);
+	chkWLTranspose->setEnabled(enable);
+}
+
 void ContremForm::txtSpectraFileChanged(QString filename) {
-	m_spectraFile = filename.toStdString();
-	updateSpectraType();
+	m_contrem.spectra = filename.toStdString();
+	enableSpectraOptions(getFileType(m_contrem.spectra) == CSV);
 	updateWavelengths();
 	m_settings.setValue(LAST_SPECTRA, filename);
 	checkRun();
 }
 
-void ContremForm::cboSpectraTypeChanged(QString value) {
-	m_spectraType = value.toStdString();
-	checkRun();
-}
-
 void ContremForm::updateOutputType() {
-	std::string fileType = fileTypeAsString(getFileType(m_outputFile));
+	std::string fileType = fileTypeAsString(getFileType(m_contrem.output));
 	cboOutputType->setCurrentText(fileType.c_str());
 }
 
 void ContremForm::txtOutputFileChanged(QString filename) {
-	m_outputFile = filename.toStdString();
+	m_contrem.output = filename.toStdString();
 	m_settings.setValue(LAST_OUTPUT, filename);
 	checkRun();
 }
 
 void ContremForm::cboOutputTypeChanged(QString value) {
-	m_outputType = value.toStdString();
+	m_contrem.outputType = value.toStdString();
 	checkRun();
 }
 
 void ContremForm::cboMinWLChanged(int index) {
 	if(__blockWlCombo) return;
 	QList<QVariant> v = cboMinWL->itemData(index).toList();
-	m_minWl = v[1].toDouble();
+	m_contrem.minWl = v[1].toDouble();
 	m_settings.setValue(LAST_MIN_WL, v[1].toDouble());
 	checkRun();
 }
@@ -231,7 +246,7 @@ void ContremForm::cboMinWLChanged(int index) {
 void ContremForm::cboMaxWLChanged(int index) {
 	if(__blockWlCombo) return;
 	QList<QVariant> v = cboMinWL->itemData(index).toList();
-	m_maxWl = v[1].toDouble();
+	m_contrem.maxWl = v[1].toDouble();
 	m_settings.setValue(LAST_MAX_WL, v[1].toDouble());
 	checkRun();
 }
@@ -286,30 +301,19 @@ void ContremForm::stopState() {
 
 void ContremForm::run() {
 	runState();
-	if(!m_running) {
-		m_running = true;
-
-		m_contrem->output = m_outputFile;
-		m_contrem->outputType = m_outputType;
-		m_contrem->threads = m_threads;
-		m_contrem->roi = m_roiFile;
-		m_contrem->roiType = m_roiType;
-		m_contrem->spectra = m_spectraFile;
-		m_contrem->spectraType = m_spectraType;
-		m_contrem->minWl = m_minWl;
-		m_contrem->maxWl = m_maxWl;
-
-		m_thread = std::thread(trun, this, m_contrem);
+	if(!m_contrem.running) {
+		m_contrem.running = true;
+		m_thread = std::thread(trun, this, &m_contrem);
 	}
 	if(!m_thread.joinable()) {
-		m_running = false;
+		m_contrem.running = false;
 		stopState();
 	}
 }
 
 void ContremForm::cancel() {
-	if(m_running) {
-		m_running = false;
+	if(m_contrem.running) {
+		m_contrem.running = false;
 		if(m_thread.joinable())
 			m_thread.join();
 	}

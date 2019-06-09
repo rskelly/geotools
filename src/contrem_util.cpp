@@ -11,6 +11,7 @@
 
 #include "reader.hpp"
 
+#include "contrem.hpp"
 #include "contrem_util.hpp"
 
 using namespace hlrg;
@@ -21,7 +22,7 @@ FileType hlrg::getFileType(const std::string& filename) {
 		size_t p = filename.find('.');
 		if(p < std::string::npos) {
 			std::string ext0 = filename.substr(p);
-			std::transform(ext0.begin(), ext0.end(), ext.begin(), ::tolower);
+			std::transform(ext0.begin(), ext0.end(), std::back_inserter(ext), ::tolower);
 		}
 	}
 	if(ext == ".csv") {
@@ -56,32 +57,29 @@ FileType hlrg::getFileType(const std::string& filename) {
  * or table header. If these fail, will attempt to load from first column
  * of presumably transposed table.
  */
-std::map<int, double> hlrg::loadWavelengths(const std::string& filename) {
+std::map<int, double> hlrg::loadWavelengths(const Contrem& contrem) {
 	std::map<int, double> map;
-	switch(getFileType(filename)) {
+	switch(getFileType(contrem.spectra)) {
 	case GTiff:
 	case ENVI:
 		{
-			GDALReader rdr(filename);
+			GDALReader rdr(contrem.spectra);
 			for(const auto& it : rdr.getBandMap())
 				map[it.second] = (double) it.first / WL_SCALE;
 		}
 		break;
 	case CSV:
 		{
-			CSVReader rdr(filename, true, 0, 1);
-			std::vector<double> row;
-			std::map<int, int> map;
-			for(size_t i = 0; i < row.size(); ++i) {
-				if(!std::isnan(row[i]))
-					map[i] = row[i];
-			}
+			CSVReader rdr(contrem.spectra, contrem.wlTranspose, contrem.wlHeaderRows, contrem.wlMinCol, contrem.wlMaxCol);
+			std::map<int, int> map = rdr.getBandMap();
+			for(const auto& it : rdr.getBandMap())
+				map[it.second] = (double) it.first / WL_SCALE;
 		}
 		break;
 	case SHP:
 	case ROI:
 	default:
-		throw std::runtime_error("Invalid file type: " + filename);
+		throw std::runtime_error("Invalid file type: " + contrem.spectra);
 	}
 	return map;
 }
