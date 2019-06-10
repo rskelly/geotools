@@ -71,7 +71,6 @@ std::map<int, double> hlrg::loadWavelengths(const Contrem& contrem) {
 	case CSV:
 		{
 			CSVReader rdr(contrem.spectra, contrem.wlTranspose, contrem.wlHeaderRows, contrem.wlMinCol, contrem.wlMaxCol);
-			std::map<int, int> map = rdr.getBandMap();
 			for(const auto& it : rdr.getBandMap())
 				map[it.second] = (double) it.first / WL_SCALE;
 		}

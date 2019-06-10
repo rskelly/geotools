@@ -39,6 +39,8 @@ namespace {
 	constexpr const char* LAST_DIR = "lastDir";
 
 	double nearestWl(double v, const std::map<int, double>& map) {
+		if(map.empty())
+			return 0;
 		for(auto it = map.begin(); it != map.end(); ++it) {
 			if(it->second > v) {
 				if(it == map.begin()) {
@@ -144,24 +146,28 @@ void ContremForm::checkRun() {
 void ContremForm::spnMinWLColChanged(int col) {
 	m_contrem.wlMinCol = col;
 	m_settings.setValue(LAST_WL_MIN_COL, col);
+	updateWavelengths();
 	checkRun();
 }
 
 void ContremForm::spnMaxWLColChanged(int col) {
 	m_contrem.wlMaxCol = col;
 	m_settings.setValue(LAST_WL_MAX_COL, col);
+	updateWavelengths();
 	checkRun();
 }
 
 void ContremForm::spnWLHeaderRowsChanged(int rows) {
 	m_contrem.wlHeaderRows = rows;
 	m_settings.setValue(LAST_WL_HEADER_ROWS, rows);
+	updateWavelengths();
 	checkRun();
 }
 
 void ContremForm::chkWLTransposeChanged(bool transpose) {
 	m_contrem.wlTranspose = transpose;
 	m_settings.setValue(LAST_WL_TRANSPOSE, transpose);
+	updateWavelengths();
 	checkRun();
 }
 
@@ -204,7 +210,17 @@ void ContremForm::updateWavelengths() {
 	__blockWlCombo = false;
 }
 
-void ContremForm::enableSpectraOptions(bool enable) {
+void ContremForm::enableSpectraOptions(const std::string& spectra) {
+	bool enable = CSV == getFileType(spectra);
+	if(enable) {
+		bool transpose;
+		int header, minCol, maxCol;
+		CSVReader::guessFileProperties(spectra, transpose, header, minCol, maxCol);
+		spnWLFirstCol->setValue(minCol);
+		spnWLLastCol->setValue(maxCol);
+		spnWLHeaderRows->setValue(header);
+		chkWLTranspose->setChecked(transpose);
+	}
 	spnWLFirstCol->setEnabled(enable);
 	spnWLLastCol->setEnabled(enable);
 	spnWLHeaderRows->setEnabled(enable);
@@ -213,7 +229,7 @@ void ContremForm::enableSpectraOptions(bool enable) {
 
 void ContremForm::txtSpectraFileChanged(QString filename) {
 	m_contrem.spectra = filename.toStdString();
-	enableSpectraOptions(getFileType(m_contrem.spectra) == CSV);
+	enableSpectraOptions(m_contrem.spectra);
 	updateWavelengths();
 	m_settings.setValue(LAST_SPECTRA, filename);
 	checkRun();

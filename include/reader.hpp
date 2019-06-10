@@ -57,7 +57,7 @@ public:
 	 * \param buf A buffer to store the pixels and bands of a row, in band-sequential order.
 	 * \param[out] cols A reference to a value that will be updated with the number of columns in the buffer.
 	 * \param[out] row A reference to the row index that was read.
-	 * \return True if there is another row to be read after this one.
+	 * \return True if the row was read successfully.
 	 */
 	virtual bool next(std::vector<double>& buf, int& cols, int& row) = 0;
 
@@ -177,6 +177,18 @@ public:
 	 */
 	GDALReader(const std::string& filename);
 
+	int toCol(double x);
+
+	int toRow(double y);
+
+	int getInt(double x, double y);
+
+	int getInt(int col, int row);
+
+	float getFloat(double x, double y);
+
+	float getFloat(int col, int row);
+
 	/**
 	 * Returns the mapping of band number (1-based) to wavelength. Wavelength
 	 * is a floating point number scaled by WL_SCALE to be an integer.
@@ -230,7 +242,7 @@ public:
 	 * \param col A reference to a value that will be updated with the current row.
 	 * \param col A reference to a value that will be updated with the number of columns in the buffer.
 	 * \param col A reference to a value that will be updated with the numbe of rows in the buffer.
-	 * \return True if there is another row to be read after this one.
+	 * \return True if the row was read successfully.
 	 */
 	bool next(std::vector<double>& buf, int& col, int& row, int& cols, int& rows);
 
@@ -437,8 +449,6 @@ class CSVReader : public Reader {
 private:
 	std::vector<std::vector<std::string>> m_data;
 	std::string m_filename;
-	int m_cols;
-	int m_rows;
 	int m_idx;
 	bool m_transpose;
 	int m_minWlCol;
@@ -453,15 +463,28 @@ private:
 public:
 	CSVReader(const std::string& filename, bool transpose, int headerRows, int minWlCol, int maxWlCol);
 
+	/**
+	 * Attempt to guess the default properties for the document.
+	 *
+	 * The assumption is that the header will contain wavelengths, so there must be a contiguous
+	 * sequence of floating point numbers. Each row will contain a sequence of floats, with
+	 * zero or more columns of strings always at the same index. If a row contains a string field,
+	 * the column header must not be a float.
+	 *
+	 * \param filename The CSV file.
+	 * \param[out] transpose True if the document should be transposed.
+	 * \param[out] header The number of header rows.
+	 * \param[out] minCol The first data column.
+	 * \param[out] maxCol The last data column.
+	 */
+	static void guessFileProperties(const std::string& filename, bool& transpose, int& header, int& minCol, int& maxCol);
+
 	void reset();
 
 	std::map<int, int> getBandMap();
 
 	bool next(std::vector<double>& buf, int& cols, int& row);
 
-	int rows() const;
-
-	int cols() const;
 };
 
 } // hlrg

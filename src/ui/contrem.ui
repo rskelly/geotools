@@ -38,7 +38,7 @@
    <item row="3" column="1">
     <widget class="QLabel" name="label_2">
      <property name="text">
-      <string>ROI/Mask</string>
+      <string>Mask</string>
      </property>
     </widget>
    </item>
@@ -149,7 +149,11 @@
     <widget class="QLineEdit" name="txtROIFile"/>
    </item>
    <item row="1" column="7">
-    <widget class="QSpinBox" name="spnWLLastCol"/>
+    <widget class="QSpinBox" name="spnWLLastCol">
+     <property name="maximum">
+      <number>9999</number>
+     </property>
+    </widget>
    </item>
    <item row="1" column="2">
     <widget class="QLabel" name="label_6">

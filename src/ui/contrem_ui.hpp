@@ -55,7 +55,7 @@ private:
 
 	void updateWavelengths();
 
-	void enableSpectraOptions(bool enable);
+	void enableSpectraOptions(const std::string& filename);
 
 public:
 

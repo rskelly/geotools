@@ -144,6 +144,40 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 	setBandMap(getBandMap());
 }
 
+int GDALReader::toCol(double x) {
+	double trans[6];
+	m_ds->GetGeoTransform(trans);
+	return (int) (x - trans[0]) / trans[1];
+}
+
+int GDALReader::toRow(double y) {
+	double trans[6];
+	m_ds->GetGeoTransform(trans);
+	return (int) (y - trans[3]) / trans[5];
+}
+
+int GDALReader::getInt(double x, double y) {
+	return GDALReader::getInt(toCol(x), toRow(y));
+}
+
+int GDALReader::getInt(int col, int row) {
+	return (int) GDALReader::getFloat(col, row);
+}
+
+float GDALReader::getFloat(double x, double y) {
+	return GDALReader::getInt(toCol(x), toRow(y));
+}
+
+float GDALReader::getFloat(int col, int row) {
+	if(col < 0 || col >= m_ds->GetRasterXSize() || row < 0 || row >= m_ds->GetRasterYSize())
+		return 0;
+	float buf[1];
+	GDALRasterBand* band = m_ds->GetRasterBand(1);
+	if(CE_None != band->RasterIO(GF_Read, col, row, 1, 1, buf, 1, 1, GDT_Float32, 0, 0, 0))
+		return 0;
+	return buf[0];
+}
+
 bool GDALReader::next(std::vector<double>& buf, int& cols, int& row) {
 
 	if(m_row >= m_rows)
@@ -562,7 +596,7 @@ bool FlameReader::next(FlameRow& row) {
 
 
 CSVReader::CSVReader(const std::string& filename, bool transpose, int headerRows, int minWlCol, int maxWlCol) :
-	m_cols(0), m_rows(0),
+	m_filename(filename),
 	m_idx(0),
 	m_transpose(transpose),
 	m_minWlCol(minWlCol), m_maxWlCol(maxWlCol),
@@ -573,23 +607,25 @@ CSVReader::CSVReader(const std::string& filename, bool transpose, int headerRows
 void CSVReader::load() {
 	m_data.clear();
 	std::ifstream input(m_filename);
-	m_cols = 0;
+	m_cols = 1;
 	m_rows = 0;
+	int maxCols = 0;
 	std::string line;
 	while(std::getline(input, line)) {
+		if(line.empty())
+			continue;
 		std::vector<std::string> row;
 		std::string field;
 		std::stringstream ss(line);
 		while(std::getline(ss, field, ','))
 			row.push_back(field);
 		m_data.push_back(row);
-		if((int) row.size() > m_cols)
-			m_cols = row.size();
 		++m_rows;
+		maxCols = std::max(maxCols, (int) row.size());
 	}
 
 	for(std::vector<std::string>& row : m_data)
-		row.resize(m_cols);
+		row.resize(maxCols);
 
 	if(m_transpose)
 		transpose();
@@ -614,22 +650,19 @@ void CSVReader::transpose() {
 	m_rows = m_data.size();
 }
 
-int CSVReader::rows() const {
-	return m_rows;
-}
-
-int CSVReader::cols() const {
-	return 1; // It's a table, so it's 2d, not 3d.
-}
-
 std::map<int, int> CSVReader::getBandMap() {
 
 	std::map<int, int> map;
-	const std::vector<std::string>& header = m_data[m_headerRows > 0 ? m_headerRows - 1 : 0];
-	for(int i = m_minWlCol; i <= m_maxWlCol; ++i) {
-		double wl = atof(header[i].c_str());
-		int idx = (int) (wl * WL_SCALE);
-		map[idx] = i;
+	size_t hIdx = m_headerRows > 0 ? m_headerRows - 1 : 0;
+	if(m_data.size() > hIdx) {
+		const std::vector<std::string>& header = m_data[hIdx];
+		if(m_minWlCol >= 0 && m_maxWlCol < header.size()) {
+			for(int i = m_minWlCol; i <= m_maxWlCol; ++i) {
+				double wl = atof(header[i].c_str());
+				int idx = (int) (wl * WL_SCALE);
+				map[idx] = i;
+			}
+		}
 	}
 	return map;
 }
@@ -649,4 +682,83 @@ bool CSVReader::next(std::vector<double>& buf, int& cols, int& row) {
 	++m_idx;
 
 	return true;
+}
+
+
+void CSVReader::guessFileProperties(const std::string& filename, bool& transpose, int& header, int& minCol, int& maxCol) {
+
+	header = 1;
+	transpose = false;
+
+	std::string line;
+	std::string field;
+	std::stringstream linestr;
+	std::vector<bool> headerisfloat;
+	std::vector<bool> isfloat;
+
+	// Run through the first header/rows.
+	{
+		std::ifstream input(filename);
+		int row = 0;
+		while(std::getline(input, line)) {
+			linestr.clear();
+			linestr << line;
+			if(row == header - 1) {
+				while(std::getline(linestr, field, ','))
+					headerisfloat.push_back(!field.empty() && atof(field.c_str()) != 0);
+			} else if(row > header - 1) {
+				while(std::getline(linestr, field, ','))
+					isfloat.push_back(!field.empty() && atof(field.c_str()) != 0);
+				break;
+			}
+			++row;
+		}
+	}
+
+	// Find the first float col.
+	minCol = 0;
+	while(minCol < headerisfloat.size() && !headerisfloat[minCol])
+		++minCol;
+
+	// Find he last float column.
+	maxCol = (int) (headerisfloat.size() - 1);
+	while(maxCol > minCol && !headerisfloat[maxCol])
+		--maxCol;
+
+	// Look for mismatches.
+	if(isfloat.size() < headerisfloat.size())
+		isfloat.resize(headerisfloat.size());
+	for(size_t i = minCol; i <= maxCol; ++i) {
+		if(headerisfloat[i] != isfloat[i]) {
+			transpose = true;
+			break;
+		}
+	}
+
+	// If transpose not required, return.
+	if(!transpose)
+		return;
+
+	{
+		isfloat.clear();
+		std::ifstream input(filename);
+		int row = 0;
+		while(std::getline(input, line)) {
+			linestr.clear();
+			linestr << line;
+			std::getline(linestr, field, ',');
+			isfloat.push_back(!field.empty() && atof(field.c_str()) != 0);
+			++row;
+		}
+	}
+
+	// Find the first float col.
+	minCol = 0;
+	while(minCol < headerisfloat.size() && !headerisfloat[minCol])
+		++minCol;
+
+	// Find he last float column.
+	maxCol = (int) (headerisfloat.size() - 1);
+	while(maxCol > minCol && !headerisfloat[maxCol])
+		--maxCol;
 }

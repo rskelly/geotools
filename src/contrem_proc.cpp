@@ -22,6 +22,8 @@
 #include <geos/geom/LineString.h>
 #include <geos/geom/Point.h>
 
+#include "matplotlibcpp.h"
+
 #include "contrem.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
@@ -209,6 +211,17 @@ namespace {
 	 */
 	void processQueue(QConfig* config) {
 
+		// Check for a mask file.
+		bool hasRoi = false;
+		std::unique_ptr<GDALReader> mask;
+		{
+			std::string roi = config->contrem->roi;
+			if(!roi.empty()) {
+				hasRoi = true;
+				mask.reset(new GDALReader(roi));
+			}
+		}
+
 		input in;
 		while(true) {
 			{
@@ -222,6 +235,10 @@ namespace {
 				in = config->inqueue.front();
 				config->inqueue.pop_front();
 			}
+
+			// If there's a mask, check it. Skip if necessary.
+			if(hasRoi && mask->getInt(in.c, in.r) <= 0)
+				continue;
 
 			// Adjust <=0 intensities to MIN_VALUE. This enables the creation
 			// of a hull even though the area of the hull will be zero for practical purposes.
@@ -373,7 +390,7 @@ namespace {
 
 		// Each row is a string of coords which can be turned into a hull.
 		std::ofstream hulls(outfile + "_hulls.csv");
-		hulls << "col,row,slope,yint,coords\n";
+		hulls << "col,row,slope,yint\n";
 
 		writermax.fill(0);
 		writervalid.fill(0);
@@ -383,6 +400,7 @@ namespace {
 		std::vector<double> cr;
 		std::vector<double> crnm;
 		std::vector<double> hull;
+		std::vector<double> w;
 
 		std::vector<int> maxima(cols * rows);
 		std::vector<int> valid(cols * rows);
@@ -402,15 +420,27 @@ namespace {
 				config->outqueue.pop_front();
 			}
 
-			hulls << out.c << "," << out.r << "," << out.slope << "," << out.yint << ",";
+			hulls << out.c << "," << out.r << "," << out.slope << "," << out.yint << "\n";
+
 			for(const outpoint& o : out.data) {
 				ss.push_back(o.ss);
 				ch.push_back(o.ch);
 				cr.push_back(o.cr);
 				crnm.push_back(o.crnm);
-				hulls << o.w << ":" << o.crnm << ";";
+				w.push_back(o.w);
 			}
 			hulls << "\n";
+
+			{
+				namespace plt = matplotlibcpp;
+				std::vector<double> rx = {w.front(), w.back()};
+				std::vector<double> ry = {w.front() * out.slope + out.yint, w.back() * out.slope + out.yint};
+				plt::named_plot("Normalized, Continuum Removed", w, crnm);
+				plt::named_plot("Regression", rx, ry);
+				plt::title(std::string("Normalized Continuum Removal, ") + std::to_string(out.c) + "," + std::to_string(out.r));
+				plt::save(outfile + "/hull_img/hull_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png");
+				plt::close();
+			}
 
 			maxima[out.r * cols + out.c] = out.maxCount > 1 ? 0 : 1;
 			valid[out.r * cols + out.c] = out.area > 0 && out.rarea > 0 && out.larea > 0;

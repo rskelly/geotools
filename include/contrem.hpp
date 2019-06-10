@@ -64,7 +64,7 @@ public:
 	std::string output;			///<! The output file.
 	std::string outputType;		///<! The output file type.
 	std::string extension;		///<! The output extension.
-	std::string roi;			///<! The mask/ROI; Shapefile, SQLite, ENVI ROI.
+	std::string roi;			///<! The mask/ROI; Raster format.
 	std::string spectra;		///<! The input spectra; raster or CSV.
 	double minWl;				///<! The lower bound of the wavelength range to process.
 	double maxWl;				///<! The upper bound of the wavelength range to process.

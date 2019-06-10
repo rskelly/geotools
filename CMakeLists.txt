@@ -33,6 +33,8 @@ set (GDAL_DIR /usr/local)
 find_package (GDAL 2 REQUIRED)
 find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Eigen3 REQUIRED)
+find_package (PythonLibs 3)
+
 find_library (GEOS_LIBRARY geos)
 
 project (contrem)
@@ -47,8 +49,8 @@ link_directories(. /usr/local/lib /usr/lib)
 # Build support libraries ################################################################################
 
 add_executable (contrem src/contrem_util.cpp src/contrem.cpp src/ui/contrem_ui.cpp src/reader.cpp src/writer.cpp src/contrem_proc.cpp src/stats.cpp)
-target_include_directories(contrem PUBLIC contrem_autogen/include )
-target_link_libraries (contrem ${GDAL_LIBRARY} ${GEOS_LIBRARY} Qt5::Widgets)
+target_include_directories(contrem PUBLIC contrem_autogen/include ${PYTHON_INCLUDE_DIRS})
+target_link_libraries (contrem ${GDAL_LIBRARY} ${GEOS_LIBRARY} Qt5::Widgets ${PYTHON_LIBRARIES})
 
 add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
