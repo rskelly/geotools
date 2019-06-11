@@ -23,31 +23,12 @@ class ContremForm : public QDialog, public Ui::ContremForm, public ContremListen
 private:
 
 	QSettings m_settings;
-	/*
-	std::string m_spectraFile;			///<! The spectrum input. Could be a raster or spreadsheet.
-	std::string m_spectraType;
-	std::string m_roiFile;				///<! A ROI. Could be an ENVI ROI, a Shapefile, SQLite file or mask raster.
-	std::string m_outputFile;			///<! The output file. Can be a raster or CSV.
-	std::string m_outputType;			///<! The type of output file. GTiff, ENVI or CSV.
-
-	double m_minWLCol;
-	double m_maxWLCol;
-	int m_wlHeaderRows;
-	bool m_wlTranspose;
-
-	double m_minWl;						///<! The minimum wavelength in the source.
-	double m_maxWl;						///<! The maximum wavelength in the source.
-	*/
-
-	//int m_threads;
-
-	Contrem m_contrem;					///<! Contrem processor object.
-
 	QDialog* m_form;
 	QApplication* m_app;
 
+	Contrem m_contrem;					///<! Contrem processor object.
+
 	std::thread m_thread;				///<! Processor thread.
-	//bool m_running;						///<! True if currently running.
 
 	void updateSpectraType();
 
@@ -136,6 +117,7 @@ public slots:
 	void spnMinWLColChanged(int);
 	void spnMaxWLColChanged(int);
 	void spnWLHeaderRowsChanged(int);
+	void spnWLIDColChanged(int);
 	void chkWLTransposeChanged(bool);
 
 	void txtSpectraFileChanged(QString);

@@ -19,6 +19,37 @@
 
 using namespace hlrg;
 
+namespace {
+
+	bool _fexists(const std::string& filename) {
+		if(filename.empty())
+			return false;
+		std::ifstream f(filename);
+		return f.good();
+	}
+
+	void _popup(const std::string& title, const std::string& message) {
+
+	}
+
+	void _process(ReflectanceListener* listener,
+			const std::string* imuGps, double imuUTCOffset,
+			const std::string* rawRad,
+			const std::string* frameIdx,
+			const std::string* irradConv, double irradUTCOffset,
+			const std::string* reflOut,
+			bool* running) {
+
+		Reflectance refl;
+		try {
+			refl.run(*listener, *imuGps, imuUTCOffset, *rawRad, *frameIdx, *irradConv, irradUTCOffset, *reflOut, *running);
+		} catch(const std::exception& ex) {
+			listener->exception(&refl, ex);
+		}
+	}
+
+
+}
 ReflectanceForm::ReflectanceForm(Reflectance* ts, QApplication* app) :
 		m_imuUTCOffset(0),
 		m_irradUTCOffset(0),
@@ -67,39 +98,12 @@ void ReflectanceForm::setupUi(QDialog* form) {
 	checkRun();
 }
 
-bool _fexists(const std::string& filename) {
-	if(filename.empty())
-		return false;
-	std::ifstream f(filename);
-	return f.good();
-}
-
-void _popup(const std::string& title, const std::string& message) {
-
-}
-
 void ReflectanceForm::checkRun() {
 	bool a = _fexists(m_imuGps);
 	bool b = _fexists(m_frameIdx);
 	bool c = _fexists(m_rawRad);
 	bool d = _fexists(m_irradConv);
 	btnRun->setEnabled(a && b && c && d);
-}
-
-void _process(ReflectanceListener* listener,
-		const std::string* imuGps, double imuUTCOffset,
-		const std::string* rawRad,
-		const std::string* frameIdx,
-		const std::string* irradConv, double irradUTCOffset,
-		const std::string* reflOut,
-		bool* running) {
-
-	Reflectance refl;
-	try {
-		refl.run(*listener, *imuGps, imuUTCOffset, *rawRad, *frameIdx, *irradConv, irradUTCOffset, *reflOut, *running);
-	} catch(const std::exception& ex) {
-		listener->exception(&refl, ex);
-	}
 }
 
 void ReflectanceForm::run() {

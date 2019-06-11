@@ -148,23 +148,6 @@
    <item row="3" column="2" colspan="7">
     <widget class="QLineEdit" name="txtROIFile"/>
    </item>
-   <item row="1" column="7">
-    <widget class="QSpinBox" name="spnWLLastCol">
-     <property name="maximum">
-      <number>9999</number>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="2">
-    <widget class="QLabel" name="label_6">
-     <property name="text">
-      <string>Header Rows</string>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="5">
-    <widget class="QSpinBox" name="spnWLFirstCol"/>
-   </item>
    <item row="5" column="2" colspan="6">
     <widget class="QLineEdit" name="txtOutputFile"/>
    </item>
@@ -185,29 +168,12 @@
      </property>
     </widget>
    </item>
-   <item row="1" column="4">
-    <widget class="QLabel" name="label_4">
-     <property name="text">
-      <string>First Column</string>
-     </property>
-    </widget>
-   </item>
    <item row="7" column="2">
     <widget class="QComboBox" name="cboMaxWL">
      <property name="enabled">
       <bool>false</bool>
      </property>
     </widget>
-   </item>
-   <item row="1" column="6">
-    <widget class="QLabel" name="label_5">
-     <property name="text">
-      <string>Last Column</string>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="3">
-    <widget class="QSpinBox" name="spnWLHeaderRows"/>
    </item>
    <item row="1" column="8">
     <widget class="QCheckBox" name="chkWLTranspose">
@@ -230,6 +196,60 @@
        <horstretch>1</horstretch>
        <verstretch>0</verstretch>
       </sizepolicy>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="2">
+    <widget class="QLabel" name="label_6">
+     <property name="text">
+      <string>Header Rows</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="2">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>First Column</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="3" colspan="2">
+    <widget class="QSpinBox" name="spnWLFirstCol"/>
+   </item>
+   <item row="2" column="3" colspan="2">
+    <widget class="QSpinBox" name="spnWLHeaderRows"/>
+   </item>
+   <item row="1" column="5">
+    <widget class="QLabel" name="label_5">
+     <property name="text">
+      <string>Last Column</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="5">
+    <widget class="QLabel" name="label_7">
+     <property name="text">
+      <string>ID Column</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="6" colspan="2">
+    <widget class="QSpinBox" name="spnWLLastCol">
+     <property name="maximum">
+      <number>9999</number>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="6" colspan="2">
+    <widget class="QSpinBox" name="spnWLIDCol">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="minimum">
+      <number>-1</number>
+     </property>
+     <property name="value">
+      <number>-1</number>
      </property>
     </widget>
    </item>

@@ -12,6 +12,25 @@
 
 namespace hlrg {
 
+enum FileType {
+	GTiff,
+	ENVI,
+	ROI,
+	SHP,
+	CSV,
+	SQLITE,
+	Unknown
+};
+
+/**
+ * Enumeration containing common data types.
+ */
+enum DataType {
+	Byte,
+	Int32,
+	Float32
+};
+
 /**
  * Forward declaration.
  */
@@ -62,7 +81,7 @@ public:
 class Contrem {
 public:
 	std::string output;			///<! The output file.
-	std::string outputType;		///<! The output file type.
+	FileType outputType;		///<! The output file type.
 	std::string extension;		///<! The output extension.
 	std::string roi;			///<! The mask/ROI; Raster format.
 	std::string spectra;		///<! The input spectra; raster or CSV.
@@ -72,6 +91,7 @@ public:
 	int wlMaxCol;
 	int wlHeaderRows;
 	bool wlTranspose;
+	int wlIDCol;
 
 	int threads;				///<! The number of threads to use.
 	bool running;

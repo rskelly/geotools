@@ -13,7 +13,7 @@
 #include <QtWidgets/QDialog>
 #include <QtCore/QSettings>
 
-#include "../../include/reflectance.hpp"
+#include "include/reflectance.hpp"
 #include "ui_reflectance.h"
 
 

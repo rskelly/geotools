@@ -54,12 +54,13 @@ public:
 	 * so band 1 will be stored as pixel 0-n, and then band 2, pixel 0-n, etc. The column
 	 * and row references are updated with the current values representing the region just read.
 	 *
-	 * \param buf A buffer to store the pixels and bands of a row, in band-sequential order.
+	 * \param[out] id A string to hold the identifier for the item, if there is one.
+	 * \param[out] buf A buffer to store the pixels and bands of a row, in band-sequential order.
 	 * \param[out] cols A reference to a value that will be updated with the number of columns in the buffer.
 	 * \param[out] row A reference to the row index that was read.
 	 * \return True if the row was read successfully.
 	 */
-	virtual bool next(std::vector<double>& buf, int& cols, int& row) = 0;
+	virtual bool next(std::string& id, std::vector<double>& buf, int& cols, int& row) = 0;
 
 	/**
 	 * Set the size of the buffer for reading.
@@ -110,6 +111,14 @@ public:
 	 * \return A two-element vector containing the min and max indices.
 	 */
 	std::vector<int> getIndices() const;
+
+	/**
+	 * Returns the mapping of band number (1-based) to wavelength. Wavelength
+	 * is a floating point number scaled by WL_SCALE to be an integer.
+	 *
+	 * \return A mapping of band number to wavelength, scaled to an integer.
+	 */
+	std::map<int, int> getBandMap();
 
 	/**
 	 * Returns the number of bands.
@@ -169,6 +178,8 @@ class GDALReader : public Reader {
 private:
 	GDALDataset* m_ds;
 
+	void loadBandMap();
+
 public:
 	/**
 	 * Construct the reader around the given filename.
@@ -189,15 +200,7 @@ public:
 
 	float getFloat(int col, int row);
 
-	/**
-	 * Returns the mapping of band number (1-based) to wavelength. Wavelength
-	 * is a floating point number scaled by WL_SCALE to be an integer.
-	 *
-	 * \return A mapping of band number to wavelength, scaled to an integer.
-	 */
-	std::map<int, int> getBandMap();
-
-	bool next(std::vector<double>& buf, int& cols, int& row);
+	bool next(std::string& id, std::vector<double>& buf, int& cols, int& row);
 
 	 ~GDALReader();
 };
@@ -454,14 +457,16 @@ private:
 	int m_minWlCol;
 	int m_maxWlCol;
 	int m_headerRows;
+	int m_idCol;
 
 	void load();
 
 	void transpose();
 
+	void loadBandMap();
 
 public:
-	CSVReader(const std::string& filename, bool transpose, int headerRows, int minWlCol, int maxWlCol);
+	CSVReader(const std::string& filename, bool transpose, int headerRows, int minWlCol, int maxWlCol, int idCol);
 
 	/**
 	 * Attempt to guess the default properties for the document.
@@ -476,14 +481,13 @@ public:
 	 * \param[out] header The number of header rows.
 	 * \param[out] minCol The first data column.
 	 * \param[out] maxCol The last data column.
+	 * \param[out] idCol The likely identifier column, or -1 if there isn't one. Generally, the first non-numeric column.
 	 */
-	static void guessFileProperties(const std::string& filename, bool& transpose, int& header, int& minCol, int& maxCol);
+	static void guessFileProperties(const std::string& filename, bool& transpose, int& header, int& minCol, int& maxCol, int& idCol);
 
 	void reset();
 
-	std::map<int, int> getBandMap();
-
-	bool next(std::vector<double>& buf, int& cols, int& row);
+	bool next(std::string& id, std::vector<double>& buf, int& cols, int& row);
 
 };
 

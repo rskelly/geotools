@@ -11,7 +11,6 @@
 
 #include "reader.hpp"
 
-#include "contrem.hpp"
 #include "contrem_util.hpp"
 
 using namespace hlrg;
@@ -70,7 +69,7 @@ std::map<int, double> hlrg::loadWavelengths(const Contrem& contrem) {
 		break;
 	case CSV:
 		{
-			CSVReader rdr(contrem.spectra, contrem.wlTranspose, contrem.wlHeaderRows, contrem.wlMinCol, contrem.wlMaxCol);
+			CSVReader rdr(contrem.spectra, contrem.wlTranspose, contrem.wlHeaderRows, contrem.wlMinCol, contrem.wlMaxCol, contrem.wlIDCol);
 			for(const auto& it : rdr.getBandMap())
 				map[it.second] = (double) it.first / WL_SCALE;
 		}
@@ -93,3 +92,35 @@ std::string hlrg::fileTypeAsString(FileType type) {
 	default: return "";
 	}
 }
+
+hlrg::FileType hlrg::fileTypeFromString(const std::string& type) {
+	if(type == "GTiff") {
+		return GTiff;
+	} else if(type == "ENVI") {
+		return ENVI;
+	} else if(type == "ENVI ROI") {
+		return ROI;
+	} else if(type == "Shapefile" || type == "ESRI Shapefile") {
+		return SHP;
+	} else if(type == "CSV") {
+		return CSV;
+	} else {
+		return Unknown;
+	}
+}
+
+bool hlrg::isnonzero(const double& v) {
+	return v > 0;
+}
+
+
+int hlrg::makedir(const std::string& filename) {
+	std::string path = filename.substr(0, filename.find_last_of('/'));
+	if(mkdir(path.c_str(), 0755) == 0)
+		return 0;
+	switch(errno) {
+	case EEXIST: return 0;
+	default: return errno;
+	}
+}
+

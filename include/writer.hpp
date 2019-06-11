@@ -13,17 +13,9 @@
 
 #include <gdal_priv.h>
 
+#include "contrem.hpp"
+
 namespace hlrg {
-
-/**
- * Enumeration containing common data types.
- */
-enum DataType {
-	Byte,
-	Int32,
-	Float32
-};
-
 
 /**
  * An abstract class used to write values and statistics in a standard way.
@@ -40,8 +32,10 @@ public:
 	 * \param rows The number of rows to write.
 	 * \param buffSizeX The size of the buffer in the x dimension.
 	 * \param buffSizeY The size of the buffer in the y dimension.
+	 * \param id An identifier.
+	 * \return True if write succeeds.
 	 */
-	virtual bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0) = 0;
+	virtual bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0, const std::string& id = "") = 0;
 
 	/**
 	 * Write the given buffer using the grid coordinates.
@@ -53,8 +47,10 @@ public:
 	 * \param rows The number of rows to write.
 	 * \param buffSizeX The size of the buffer in the x dimension.
 	 * \param buffSizeY The size of the buffer in the y dimension.
+	 * \param id An identifier.
+	 * \return True if write succeeds.
 	 */
-	virtual bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0) = 0;
+	virtual bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0, const std::string& id = "") = 0;
 
 	/**
 	 * Compute stats and write them to the file with the given filename.
@@ -92,7 +88,7 @@ public:
 	 * Construct a GDALWriter.
 	 *
 	 * \param filename The output file name.
-	 * \param driver The file format driver name.
+	 * \param type The file format.
 	 * \param cols The size of the output in columns.
 	 * \param rows The size of the output in rows.
 	 * \param bands The number of bands.
@@ -102,13 +98,12 @@ public:
 	 * \param interleave The interleaving format.
 	 * \param unit The wavelength units.
 	 */
-	GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
+	GDALWriter(const std::string& filename, FileType type, int cols, int rows, int bands,
 			const std::vector<double>& wavelengths = {}, const std::vector<std::string>& bandNames = {}, char** meta = nullptr,
-			DataType type = DataType::Float32, const std::string& interleave = "BIL", const std::string& unit = "nm");
+			DataType dataType = DataType::Float32, const std::string& interleave = "BAND", const std::string& unit = "nm");
 
-	bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0);
-
-	bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0);
+	bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0, const std::string& id = "");
+	bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0, const std::string& id = "");
 
 	bool writeStats(const std::string& filename, const std::vector<std::string>& names = {});
 
@@ -127,6 +122,55 @@ public:
 	void fill(int v);
 
 	~GDALWriter();
+};
+
+/**
+ * An implementation of Writer that can write to GDAL datasources.
+ */
+class CSVWriter : public Writer {
+private:
+	std::ofstream m_output;		///<! Output file stream.
+	int m_id;					///<! An ID to use in the place of a string identifier.
+
+public:
+
+	/**
+	 * Construct a CSVWriter.
+	 *
+	 * \param filename The output file name.
+	 * \param type The file format.
+	 * \param cols The size of the output in columns.
+	 * \param rows The size of the output in rows.
+	 * \param bands The number of bands.
+	 * \param wavelengths A list of the wavelengths corresponding to each band.
+	 * \param bandNames A list of the names of the bands corresponding to each band.
+	 * \param type The data type of the output.
+	 * \param interleave The interleaving format.
+	 * \param unit The wavelength units.
+	 */
+	CSVWriter(const std::string& filename, const std::vector<double>& wavelengths = {},
+			const std::vector<std::string>& bandNames = {}, const std::string& unit = "nm");
+
+	bool write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0, const std::string& id = "");
+	bool write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX = 0, int bufSizeY = 0, const std::string& id = "");
+
+	bool writeStats(const std::string& filename, const std::vector<std::string>& names = {});
+
+	/**
+	 * Fill the raster with the given value.
+	 *
+	 * \param v The value to fill with.
+	 */
+	void fill(double v);
+
+	/**
+	 * Fill the raster with the given value.
+	 *
+	 * \param v The value to fill with.
+	 */
+	void fill(int v);
+
+	~CSVWriter();
 };
 
 } // hlrg

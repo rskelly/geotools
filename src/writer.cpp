@@ -19,27 +19,14 @@
 
 #include "writer.hpp"
 #include "stats.hpp"
+#include "contrem_util.hpp"
 
 using namespace hlrg;
 
-bool __isnonzero(const double& v) {
-	return v > 0;
-}
 
-
-int makedir(const std::string& filename) {
-	std::string path = filename.substr(0, filename.find_last_of('/'));
-	if(mkdir(path.c_str(), 0755) == 0)
-		return 0;
-	switch(errno) {
-	case EEXIST: return 0;
-	default: return errno;
-	}
-}
-
-GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, int cols, int rows, int bands,
+GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int rows, int bands,
 		const std::vector<double>& wavelengths, const std::vector<std::string>& bandNames, char** meta,
-		DataType type, const std::string& interleave, const std::string& unit) :
+		DataType dataType, const std::string& interleave, const std::string& unit) :
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
 
@@ -48,10 +35,10 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 		throw std::runtime_error("Could not create directory for " + filename + "; " + std::to_string(err));
 
 	GDALDataType gtype;
-	switch(type) {
-	case DataType::Byte: gtype = GDT_Byte; break;
-	case DataType::Int32: gtype = GDT_Int32; break;
-	case DataType::Float32: gtype = GDT_Float32; break;
+	switch(dataType) {
+	case Byte: gtype = GDT_Byte; break;
+	case Int32: gtype = GDT_Int32; break;
+	case Float32: gtype = GDT_Float32; break;
 	default:
 		throw std::invalid_argument("Invalid data type.");
 	}
@@ -60,9 +47,9 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	CPLSetConfigOption("GDAL_PAM_ENABLED", "NO");
 
 	GDALDriverManager* gm = GetGDALDriverManager();
-	GDALDriver* drv = gm->GetDriverByName(driver.c_str());
+	GDALDriver* drv = gm->GetDriverByName(fileTypeAsString(type).c_str());
 	if(!drv)
-		throw std::runtime_error("Driver not found: " + driver);
+		throw std::runtime_error("Driver not found: " + type);
 
 	CPLStringList options;
 	options.SetNameValue("INTERLEAVE", interleave.c_str());
@@ -93,7 +80,7 @@ GDALWriter::GDALWriter(const std::string& filename, const std::string& driver, i
 	}
 }
 
-bool GDALWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY) {
+bool GDALWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
 	if(col < 0 || col >= m_cols || col + cols > m_cols
 			|| row < 0 || row >= m_rows || row + rows > m_rows)
 		return false;
@@ -120,7 +107,7 @@ void GDALWriter::fill(int v) {
 	fill((double) v);
 }
 
-bool GDALWriter::write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY) {
+bool GDALWriter::write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
 	if(col < 0 || col >= m_cols || col + cols > m_cols
 			|| row < 0 || row >= m_rows || row + rows > m_rows)
 		return false;
@@ -166,7 +153,7 @@ bool GDALWriter::writeStats(const std::string& filename, const std::vector<std::
 
 		// Filter the values list to eliminate zeroes.
 		std::vector<double> values;
-		std::copy_if(buf.begin(), buf.end(), std::back_inserter(values), __isnonzero);
+		std::copy_if(buf.begin(), buf.end(), std::back_inserter(values), isnonzero);
 
 		if(!values.empty()) {
 			Stats s = Stats::computeStats(values);
@@ -183,3 +170,75 @@ GDALWriter::~GDALWriter() {
 	GDALClose(m_ds);
 }
 
+
+
+CSVWriter::CSVWriter(const std::string& filename, const std::vector<double>& wavelengths,
+		const std::vector<std::string>& bandNames, const std::string& unit) {
+
+	int err;
+	if((err = makedir(filename)))
+		throw std::runtime_error("Could not create directory for " + filename + "; " + std::to_string(err));
+
+	m_output.open(filename);
+	m_output << "id";
+
+	if(bandNames.empty()) {
+		m_output << std::setprecision(3);
+		for(double wl : wavelengths)
+			m_output << "," << wl;
+	} else {
+		for(const std::string& bn : bandNames)
+			m_output << "," << bn;
+	}
+	m_output << "\n";
+	m_output << std::setprecision(6);
+	m_id = 0;
+}
+
+bool CSVWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
+
+	std::string _id(id);
+	if(_id.empty())
+		_id = std::to_string(++m_id);
+
+	m_output << id;
+	for(double v : buf)
+		m_output << "," << v;
+	m_output << "\n";
+
+	return true;
+}
+
+void CSVWriter::fill(double v) {
+
+}
+
+
+void CSVWriter::fill(int v) {
+
+}
+
+bool CSVWriter::write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
+
+	std::string _id(id);
+	if(_id.empty())
+		_id = std::to_string(++m_id);
+
+	m_output << id;
+	for(double v : buf)
+		m_output << "," << v;
+	m_output << "\n";
+
+	return true;
+}
+
+
+bool CSVWriter::writeStats(const std::string& filename, const std::vector<std::string>& names) {
+
+
+	return true;
+}
+
+CSVWriter::~CSVWriter() {
+
+}

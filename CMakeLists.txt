@@ -33,7 +33,7 @@ set (GDAL_DIR /usr/local)
 find_package (GDAL 2 REQUIRED)
 find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Eigen3 REQUIRED)
-find_package (PythonLibs 3)
+find_package (PythonLibs 2.7)
 
 find_library (GEOS_LIBRARY geos)
 

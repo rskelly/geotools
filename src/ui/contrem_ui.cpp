@@ -32,6 +32,7 @@ namespace {
 	constexpr const char* LAST_WL_BAND_COL = "lastWLBandCol";
 	constexpr const char* LAST_WL_HEADER_ROWS = "lastWLHeaderRows";
 	constexpr const char* LAST_WL_TRANSPOSE = "lastWLTranspose";
+	constexpr const char* LAST_WL_ID_COL = "lastWLIDCol";
 	constexpr const char* LAST_MIN_WL = "lastMinWl";
 	constexpr const char* LAST_MAX_WL = "lastMaxWL";
 	constexpr const char* LAST_BUFFER = "lastBuffer";
@@ -92,6 +93,7 @@ void ContremForm::setupUi(QDialog* form) {
 	connect(spnWLHeaderRows, SIGNAL(valueChanged(int)), this, SLOT(spnWLHeaderRowsChanged(int)));
 	connect(spnWLFirstCol, SIGNAL(valueChanged(int)), this, SLOT(spnMinWLColChanged(int)));
 	connect(spnWLLastCol, SIGNAL(valueChanged(int)), this, SLOT(spnMaxWLColChanged(int)));
+	connect(spnWLIDCol, SIGNAL(valueChanged(int)), this, SLOT(spnWLIDColChanged(int)));
 	connect(chkWLTranspose, SIGNAL(toggled(bool)), this, SLOT(chkWLTransposeChanged(bool)));
 
 	connect(txtOutputFile, SIGNAL(textChanged(QString)), this, SLOT(txtOutputFileChanged(QString)));
@@ -116,8 +118,9 @@ void ContremForm::setupUi(QDialog* form) {
 	m_contrem.wlMaxCol = m_settings.value(LAST_WL_MAX_COL, 1).toInt();
 	m_contrem.wlHeaderRows = m_settings.value(LAST_WL_HEADER_ROWS, 1).toInt();
 	m_contrem.wlTranspose = m_settings.value(LAST_WL_TRANSPOSE, 1).toBool();
+	m_contrem.wlIDCol = m_settings.value(LAST_WL_ID_COL, -1).toInt();
 	m_contrem.output = m_settings.value(LAST_OUTPUT, "").toString().toStdString();
-	m_contrem.outputType = m_settings.value(LAST_OUTPUT_TYPE, "ENVI").toString().toStdString();
+	m_contrem.outputType = (FileType) m_settings.value(LAST_OUTPUT_TYPE, ENVI).toInt();
 	m_contrem.minWl = m_settings.value(LAST_MIN_WL, 0).toDouble();
 	m_contrem.maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
 	m_contrem.threads = m_settings.value(LAST_THREADS, 1).toInt();
@@ -125,7 +128,7 @@ void ContremForm::setupUi(QDialog* form) {
 	txtROIFile->setText(QString(m_contrem.roi.c_str()));
 	txtSpectraFile->setText(QString(m_contrem.spectra.c_str()));
 	txtOutputFile->setText(QString(m_contrem.output.c_str()));
-	cboOutputType->setCurrentText(QString(m_contrem.outputType.c_str()));
+	cboOutputType->setCurrentText(QString(fileTypeAsString(m_contrem.outputType).c_str()));
 	spnWLFirstCol->setValue(m_contrem.wlMinCol);
 	spnWLLastCol->setValue(m_contrem.wlMaxCol);
 	spnWLHeaderRows->setValue(m_contrem.wlHeaderRows);
@@ -161,6 +164,12 @@ void ContremForm::spnWLHeaderRowsChanged(int rows) {
 	m_contrem.wlHeaderRows = rows;
 	m_settings.setValue(LAST_WL_HEADER_ROWS, rows);
 	updateWavelengths();
+	checkRun();
+}
+
+void ContremForm::spnWLIDColChanged(int col) {
+	m_contrem.wlIDCol = col;
+	m_settings.setValue(LAST_WL_ID_COL, col);
 	checkRun();
 }
 
@@ -214,11 +223,12 @@ void ContremForm::enableSpectraOptions(const std::string& spectra) {
 	bool enable = CSV == getFileType(spectra);
 	if(enable) {
 		bool transpose;
-		int header, minCol, maxCol;
-		CSVReader::guessFileProperties(spectra, transpose, header, minCol, maxCol);
+		int header, minCol, maxCol, idCol;
+		CSVReader::guessFileProperties(spectra, transpose, header, minCol, maxCol, idCol);
 		spnWLFirstCol->setValue(minCol);
 		spnWLLastCol->setValue(maxCol);
 		spnWLHeaderRows->setValue(header);
+		spnWLIDCol->setValue(idCol);
 		chkWLTranspose->setChecked(transpose);
 	}
 	spnWLFirstCol->setEnabled(enable);
@@ -247,7 +257,7 @@ void ContremForm::txtOutputFileChanged(QString filename) {
 }
 
 void ContremForm::cboOutputTypeChanged(QString value) {
-	m_contrem.outputType = value.toStdString();
+	m_contrem.outputType = fileTypeFromString(value.toStdString());
 	checkRun();
 }
 

@@ -10,32 +10,30 @@
 
 #include <array>
 
+#include "contrem.hpp"
+
 namespace hlrg {
 
-enum FileType {
-	GTiff,
-	ENVI,
-	ROI,
-	SHP,
-	CSV,
-	SQLITE,
-	Unknown
-};
+	constexpr std::array<FileType, 3> OUTPUT_TYPES = {GTiff, ENVI, CSV};			///<! Allowed output types for results.
 
-constexpr std::array<FileType, 3> OUTPUT_TYPES = {GTiff, ENVI, CSV};			///<! Allowed output types for results.
+	FileType getFileType(const std::string& filename);
 
-FileType getFileType(const std::string& filename);
+	/**
+	 * Return a map containing pairs where the int is the 1-based band index,
+	 * and the float is the wavelength. Attempts to load from raster metadata
+	 * or table header. If these fail, will attempt to load from first column
+	 * of presumably transposed table.
+	 */
+	std::map<int, double> loadWavelengths(const Contrem& contrem);
 
-/**
- * Return a map containing pairs where the int is the 1-based band index,
- * and the float is the wavelength. Attempts to load from raster metadata
- * or table header. If these fail, will attempt to load from first column
- * of presumably transposed table.
- */
-std::map<int, double> loadWavelengths(const Contrem& contrem);
+	std::string fileTypeAsString(hlrg::FileType type);
 
-std::string fileTypeAsString(FileType type);
+	hlrg::FileType fileTypeFromString(const std::string& type);
 
+	bool isnonzero(const double& v);
+
+
+	int makedir(const std::string& filename);
 
 } // hlrg
 

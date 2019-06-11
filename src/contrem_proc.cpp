@@ -35,6 +35,21 @@ using namespace hlrg;
 
 namespace {
 
+	std::mutex _pltmtx;		///<! A mutex to protect the plot library.
+
+	/**
+	 * Check if a file exists
+	 *
+	 * \param filename The filename to check.
+	 * \return True if the file exists.
+	 */
+	bool fexists(const std::string& filename) {
+		if(filename.empty())
+			return false;
+		std::ifstream f(filename);
+		return f.good();
+	}
+
 	/**
 	 * A line, representing a segment from a convex hull.
 	 */
@@ -86,12 +101,17 @@ namespace {
 	 */
 	class input {
 	public:
+		std::string id;		///<! Identifies the datum. Useful for spreadsheets.
 		int c, r;
 		std::vector<inpoint> data;
-		input() : input(0, 0) {}
-		input(int c, int r) :
+
+		input() : input("", 0, 0) {}
+
+		input(const std::string& id, int c, int r) :
+			id(id),
 			c(c), r(r) {
 		}
+
 	};
 
 	/**
@@ -100,21 +120,26 @@ namespace {
 	 */
 	class output {
 	public:
-		int c, r;
-		double area; // Hull area.
-		double larea; // Left hand area
-		double rarea; // Right hand area.
-		double symmetry; // larea / area
-		double maxCrm; // maximum normalized mirrored continuum removal
-		double maxWl; // Wavelength at the maxCrm value
-		double slope;	// The slope of the regression line through the crnm points.
-		double yint;	// The y-intercept of the regression.
-		int maxCount; // The number of equal maximum values.
-		std::vector<outpoint> data;
-		output() : output(0, 0) {}
+		std::string id;					///<! Identifies the datum. Useful for spreadsheets.
+		int c, r;						///<! The column and row of the datum. Useful for rasters.
+		double area; 					///<! Total hull area.
+		double larea; 					///<! Left hull area.
+		double rarea; 					///<! Right hull area.
+		double symmetry; 				///<! Ratio of left/right hull areas.
+		double maxCrm; 					///<! Maximum normalized mirrored continuum removal.
+		double maxWl; 					///<! Wavelength at the maxCrm value.
+		double slope;					///<! The slope of the regression line through the crnm points.
+		double yint;					///<! The y-intercept of the regression.
+		int maxCount; 					///<! The number of equal maximum values.
+		std::vector<outpoint> data;		///<! The output data.
+
+		output() : output("", 0, 0) {}
+
 		output(input& in) :
-			output(in.c, in.r) {}
-		output(int c, int r) :
+			output(in.id, in.c, in.r) {}
+
+		output(const std::string& id, int c, int r) :
+			id(id),
 			c(c), r(r),
 			area(0), larea(0), rarea(0), symmetry(0),
 			maxCrm(0), maxWl(0),
@@ -216,9 +241,13 @@ namespace {
 		std::unique_ptr<GDALReader> mask;
 		{
 			std::string roi = config->contrem->roi;
-			if(!roi.empty()) {
-				hasRoi = true;
-				mask.reset(new GDALReader(roi));
+			if(!roi.empty() && fexists(roi)) {
+				try {
+					mask.reset(new GDALReader(roi));
+					hasRoi = true;
+				} catch(const std::exception& ex) {
+					std::cerr << "Could not open mask: " << ex.what() << "\n";
+				}
 			}
 		}
 
@@ -353,13 +382,14 @@ namespace {
 		}
 	}
 
+
 	/**
 	 * Process the output queue and write to file.
 	 */
 	void writeQueue(QConfig* config) {
 
 		std::string outfile = config->contrem->output;
-		std::string driver = config->contrem->outputType;
+		FileType outfileType = config->contrem->outputType;
 		const std::vector<double>& wavelengths = config->wavelengths;
 		const std::vector<std::string>& bandNames = config->bandNames;
 		int cols = config->cols;
@@ -367,33 +397,49 @@ namespace {
 		int bands = config->bands;
 
 		std::string ext;
-		if(driver == "ENVI") {
+		switch(outfileType) {
+		case ENVI:
 			ext = "";
-		} else if(driver == "GTiff") {
+			break;
+		case GTiff:
 			ext = ".tif";
-		} else {
-			throw std::invalid_argument("Unknown driver: " + driver);
+			break;
+		case CSV:
+			ext = ".csv";
+			break;
+		default:
+			throw std::invalid_argument("Unknown output type: " + outfileType);
 		}
 
 		// Remove the extension if there is one.
 		outfile = outfile.substr(0, outfile.find_last_of("."));
 
 		char* meta;
+		std::unordered_map<std::string, std::unique_ptr<Writer>> writer;
 
-		GDALWriter writerss(outfile + "_ss" + ext, driver, cols, rows, bands, wavelengths, bandNames);
-		GDALWriter writerch(outfile + "_ch" + ext, driver, cols, rows, bands, wavelengths, bandNames);
-		GDALWriter writercr(outfile + "_cr" + ext, driver, cols, rows, bands, wavelengths, bandNames);
-		GDALWriter writercrnm(outfile + "_crnm" + ext, driver, cols, rows, bands, wavelengths, bandNames);
-		GDALWriter writerhull(outfile + "_agg" + ext, driver, cols, rows, 9, {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "y-int"});
-		GDALWriter writermax(outfile + "_maxcount" + ext, driver, cols, rows, 1, {}, {"equal_max_count"}, &meta, DataType::Byte);
-		GDALWriter writervalid(outfile + "_valid" + ext, driver, cols, rows, 1, {}, {"valid_hull"}, &meta, DataType::Byte);
+		if(outfileType == CSV) {
+			writer["writerss"].reset(new CSVWriter(outfile + "_ss" + ext, wavelengths, bandNames));
+			writer["writerch"].reset(new CSVWriter(outfile + "_ch" + ext, wavelengths, bandNames));
+			writer["writercr"].reset(new CSVWriter(outfile + "_cr" + ext, wavelengths, bandNames));
+			writer["writercrnm"].reset(new CSVWriter(outfile + "_crnm" + ext, wavelengths, bandNames));
+			writer["writerhull"].reset(new CSVWriter(outfile + "_agg" + ext, {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "y-int"}));
+			writer["writermax"].reset(new CSVWriter(outfile + "_maxcount" + ext, {}, {"equal_max_count"}));
+			writer["writervalid"].reset(new CSVWriter(outfile + "_valid" + ext, {}, {"valid_hull"}));
+		} else {
+			writer["writerss"].reset(new GDALWriter(outfile + "_ss" + ext, outfileType, cols, rows, bands, wavelengths, bandNames));
+			writer["writerch"].reset(new GDALWriter(outfile + "_ch" + ext, outfileType, cols, rows, bands, wavelengths, bandNames));
+			writer["writercr"].reset(new GDALWriter(outfile + "_cr" + ext, outfileType, cols, rows, bands, wavelengths, bandNames));
+			writer["writercrnm"].reset(new GDALWriter(outfile + "_crnm" + ext, outfileType, cols, rows, bands, wavelengths, bandNames));
+			writer["writerhull"].reset(new GDALWriter(outfile + "_agg" + ext, outfileType, cols, rows, 9, {}, {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "y-int"}));
+			writer["writermax"].reset(new GDALWriter(outfile + "_maxcount" + ext, outfileType, cols, rows, 1, {}, {"equal_max_count"}, &meta, DataType::Byte));
+			writer["writervalid"].reset(new GDALWriter(outfile + "_valid" + ext, outfileType, cols, rows, 1, {}, {"valid_hull"}, &meta, DataType::Byte));
+			writer["writermax"]->fill(0);
+			writer["writervalid"]->fill(0);
+		}
 
 		// Each row is a string of coords which can be turned into a hull.
 		std::ofstream hulls(outfile + "_hulls.csv");
 		hulls << "col,row,slope,yint\n";
-
-		writermax.fill(0);
-		writervalid.fill(0);
 
 		std::vector<double> ss;
 		std::vector<double> ch;
@@ -410,7 +456,9 @@ namespace {
 
 		output out;
 		while(true) {
+
 			{
+				// Get an item from the queue.
 				std::unique_lock<std::mutex> lk(config->outmtx);
 				while(config->outqueue.empty() && config->outRunning)
 					config->outcv.wait(lk);
@@ -420,8 +468,10 @@ namespace {
 				config->outqueue.pop_front();
 			}
 
+			// Write the slope/y-int information.
 			hulls << out.c << "," << out.r << "," << out.slope << "," << out.yint << "\n";
 
+			// Populate the lists for plotting/aggregating.
 			for(const outpoint& o : out.data) {
 				ss.push_back(o.ss);
 				ch.push_back(o.ch);
@@ -429,52 +479,61 @@ namespace {
 				crnm.push_back(o.crnm);
 				w.push_back(o.w);
 			}
-			hulls << "\n";
 
-			{
+			// If appropriate plot the normalized spectrum.
+			if(true){
+				std::lock_guard<std::mutex> lk(_pltmtx);
 				namespace plt = matplotlibcpp;
 				std::vector<double> rx = {w.front(), w.back()};
 				std::vector<double> ry = {w.front() * out.slope + out.yint, w.back() * out.slope + out.yint};
+				if(!plt::fignum_exists(111))
+					plt::figure(111);
+				plt::figure_size(600, 400);
 				plt::named_plot("Normalized, Continuum Removed", w, crnm);
 				plt::named_plot("Regression", rx, ry);
 				plt::title(std::string("Normalized Continuum Removal, ") + std::to_string(out.c) + "," + std::to_string(out.r));
+				plt::legend();
 				plt::save(outfile + "/hull_img/hull_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png");
 				plt::close();
 			}
 
+			// The number of equal maxima.
 			maxima[out.r * cols + out.c] = out.maxCount > 1 ? 0 : 1;
+
+			// A hull is valid if the area, left area and right area are non-zero.
 			valid[out.r * cols + out.c] = out.area > 0 && out.rarea > 0 && out.larea > 0;
 
+			// Data for a single hull.
 			hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm, out.maxWl, (double) out.maxCount, out.slope, out.yint};
 
-			writerss.write(ss, out.c, out.r, 1, 1, 1, 1);
-			writerch.write(ch, out.c, out.r, 1, 1, 1, 1);
-			writercr.write(cr, out.c, out.r, 1, 1, 1, 1);
-			writercrnm.write(crnm, out.c, out.r, 1, 1, 1, 1);
-			writerhull.write(hull, out.c, out.r, 1, 1, 1, 1);
+			writer["writerss"]->write(ss, out.c, out.r, 1, 1, 1, 1);
+			writer["writerch"]->write(ch, out.c, out.r, 1, 1, 1, 1);
+			writer["writercr"]->write(cr, out.c, out.r, 1, 1, 1, 1);
+			writer["writercrnm"]->write(crnm, out.c, out.r, 1, 1, 1, 1);
+			writer["writerhull"]->write(hull, out.c, out.r, 1, 1, 1, 1);
 
 			ss.clear();
 			ch.clear();
 			cr.clear();
 			crnm.clear();
+			w.clear();
 
 			config->incv.notify_one();
 		}
 
-		writermax.write(maxima, 0, 0, cols, rows);
-		writervalid.write(valid, 0, 0, cols, rows);
-
-		writerhull.writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "yint"});
+		writer["writermax"]->write(maxima, 0, 0, cols, rows);
+		writer["writervalid"]->write(valid, 0, 0, cols, rows);
+		writer["writerhull"]->writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "yint"});
 	}
 
 }
 
-std::unique_ptr<Reader> getReader(const std::string& file, bool transpose, int headerRows, int minCol, int maxCol) {
+std::unique_ptr<Reader> getReader(const std::string& file, bool transpose, int headerRows, int minCol, int maxCol, int idCol) {
 	std::unique_ptr<Reader> rdr;
 	FileType type = getFileType(file);
 	switch(type) {
 	case CSV:
-		rdr.reset(new CSVReader(file, transpose, headerRows, minCol, maxCol));
+		rdr.reset(new CSVReader(file, transpose, headerRows, minCol, maxCol, idCol));
 		break;
 	case GTiff:
 	case ENVI:
@@ -495,7 +554,7 @@ void Contrem::run(ContremListener* listener) {
 	QConfig qconfig;
 	qconfig.contrem = this;
 
-	std::unique_ptr<Reader> reader = getReader(spectra, wlTranspose, wlHeaderRows, wlMinCol, wlMaxCol);
+	std::unique_ptr<Reader> reader = getReader(spectra, wlTranspose, wlHeaderRows, wlMinCol, wlMaxCol, wlIDCol);
 
 	reader->setBandRange(minWl, maxWl);
 
@@ -527,15 +586,16 @@ void Contrem::run(ContremListener* listener) {
 	std::thread t1(writeQueue, &qconfig);
 
 	// Read through the buffer and populate the input queue.
-	int cols, row;
 	int bands = reader->bands();
-	while(reader->next(buf, cols, row)) {
+	int cols, row;
+	std::string id;
+	while(reader->next(id, buf, cols, row)) {
 
 		{
 			// Read out the input objects and add to the queue.
 			std::lock_guard<std::mutex> lk(qconfig.inmtx);
 			for(int c = 0; c < cols; ++c) {
-				input in(c, row);
+				input in(id, c, row);
 				for(int b = 0; b < bands; ++b) {
 					double v = buf[c * bands + b];
 					double w = qconfig.wavelengths[b];

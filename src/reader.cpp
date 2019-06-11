@@ -19,6 +19,22 @@
 
 using namespace hlrg;
 
+namespace {
+
+	long getUTCMilSec(const std::string& input, const std::string& fmt) {
+		// hack: https://stackoverflow.com/questions/14504870/convert-stdchronotime-point-to-unix-timestamp#14505248
+		std::tm t = {};
+		std::stringstream ss(input);
+		ss >> std::get_time(&t, fmt.c_str());
+		time_t t1 = std::mktime(&t);
+		t = *std::gmtime(&t1);
+		time_t t2 = std::mktime(&t);
+		double a = (t1 - (t2 - t1) + std::stod(input.substr(input.find('.'), 6))) * 1000;
+		return a;
+	}
+
+}
+
 Reader::Reader() :
 	m_cols(0), m_rows(0), m_bands(0),
 	m_col(0), m_row(0),
@@ -61,6 +77,10 @@ void Reader::setBandRange(double min, double max) {
 	}
 }
 
+std::map<int, int> Reader::getBandMap() {
+	return m_bandMap;
+}
+
 std::vector<double> Reader::getBandRange() const {
 	return {(double) m_minWl / WL_SCALE, (double) m_maxWl / WL_SCALE};
 }
@@ -97,7 +117,22 @@ int Reader::bands() const {
 	return m_maxIdx - m_minIdx + 1;
 }
 
-std::map<int, int> GDALReader::getBandMap() {
+GDALReader::GDALReader(const std::string& filename) : Reader(),
+		m_ds(nullptr) {
+
+	GDALAllRegister();
+
+	if(!(m_ds = (GDALDataset*) GDALOpen(filename.c_str(), GA_ReadOnly)))
+		throw std::invalid_argument("Failed to open dataset.");
+
+	m_bands = m_ds->GetRasterCount();
+	m_cols = m_ds->GetRasterXSize();
+	m_rows = m_ds->GetRasterYSize();
+
+	loadBandMap();
+}
+
+void GDALReader::loadBandMap() {
 	std::map<int, int> bandMap;
 	std::vector<std::string> names = {"wavelength", "WAVELENGTH", "Description"};
 	for(int i = 1; i <= m_bands; ++i) {
@@ -126,22 +161,8 @@ std::map<int, int> GDALReader::getBandMap() {
 	}
 	if((int) bandMap.size() < m_bands)
 		std::runtime_error("The band map is incomplete -- wavelengths could not be read for all layers.");
-	return bandMap;
-}
 
-GDALReader::GDALReader(const std::string& filename) : Reader(),
-		m_ds(nullptr) {
-
-	GDALAllRegister();
-
-	if(!(m_ds = (GDALDataset*) GDALOpen(filename.c_str(), GA_ReadOnly)))
-		throw std::invalid_argument("Failed to open dataset.");
-
-	m_bands = m_ds->GetRasterCount();
-	m_cols = m_ds->GetRasterXSize();
-	m_rows = m_ds->GetRasterYSize();
-
-	setBandMap(getBandMap());
+	setBandMap(bandMap);
 }
 
 int GDALReader::toCol(double x) {
@@ -178,7 +199,9 @@ float GDALReader::getFloat(int col, int row) {
 	return buf[0];
 }
 
-bool GDALReader::next(std::vector<double>& buf, int& cols, int& row) {
+bool GDALReader::next(std::string& id, std::vector<double>& buf, int& cols, int& row) {
+
+	id = "";
 
 	if(m_row >= m_rows)
 		return false;
@@ -403,18 +426,6 @@ FrameIndexReader::~FrameIndexReader() {
 	delete m_times;
 }
 
-long _getUTCMilSec(const std::string& input, const std::string& fmt) {
-	// hack: https://stackoverflow.com/questions/14504870/convert-stdchronotime-point-to-unix-timestamp#14505248
-	std::tm t = {};
-	std::stringstream ss(input);
-	ss >> std::get_time(&t, fmt.c_str());
-	time_t t1 = std::mktime(&t);
-	t = *std::gmtime(&t1);
-	time_t t2 = std::mktime(&t);
-	double a = (t1 - (t2 - t1) + std::stod(input.substr(input.find('.'), 6))) * 1000;
-	return a;
-}
-
 IMUGPSRow::IMUGPSRow(std::istream& in, double msOffset) :
 	index(0) {
 	std::string buf;
@@ -433,7 +444,7 @@ IMUGPSRow::IMUGPSRow(std::istream& in, double msOffset) :
 	std::getline(in, buf, '\t');
 	gpsTime = std::stol(buf);
 	std::getline(in, buf, '\t');
-	utcTime = _getUTCMilSec(buf, "%Y/%m/%d %H:%M:%S") + msOffset;
+	utcTime = getUTCMilSec(buf, "%Y/%m/%d %H:%M:%S") + msOffset;
 	std::getline(in, buf, '\t');
 	status = std::stod(buf);
 	std::getline(in, buf);
@@ -551,7 +562,7 @@ bool FlameRow::read(std::istream& in, double msOffset) {
 	std::string buf;
 	if(!std::getline(in, buf, ','))
 		return false;
-	dateTime = _getUTCMilSec(buf, "%Y-%m-%d %H:%M:%S") + msOffset;
+	dateTime = getUTCMilSec(buf, "%Y-%m-%d %H:%M:%S") + msOffset;
 	if(!std::getline(in, buf, ','))
 		return false;
 	utcTime = std::stol(buf);
@@ -595,12 +606,13 @@ bool FlameReader::next(FlameRow& row) {
 }
 
 
-CSVReader::CSVReader(const std::string& filename, bool transpose, int headerRows, int minWlCol, int maxWlCol) :
+CSVReader::CSVReader(const std::string& filename, bool transpose, int headerRows, int minWlCol, int maxWlCol, int idCol) :
 	m_filename(filename),
 	m_idx(0),
 	m_transpose(transpose),
 	m_minWlCol(minWlCol), m_maxWlCol(maxWlCol),
-	m_headerRows(headerRows) {
+	m_headerRows(headerRows),
+	m_idCol(idCol) {
 	load();
 }
 
@@ -630,7 +642,24 @@ void CSVReader::load() {
 	if(m_transpose)
 		transpose();
 
+	loadBandMap();
 	reset();
+}
+
+void CSVReader::loadBandMap() {
+	std::map<int, int> map;
+	size_t hIdx = m_headerRows > 0 ? m_headerRows - 1 : 0;
+	if(m_data.size() > hIdx) {
+		const std::vector<std::string>& header = m_data[hIdx];
+		if(m_minWlCol >= 0 && m_maxWlCol < (int) header.size()) {
+			for(int i = m_minWlCol; i <= m_maxWlCol; ++i) {
+				double wl = atof(header[i].c_str());
+				int idx = (int) (wl * WL_SCALE);
+				map[idx] = i;
+			}
+		}
+	}
+	setBandMap(map);
 }
 
 void CSVReader::reset() {
@@ -650,24 +679,7 @@ void CSVReader::transpose() {
 	m_rows = m_data.size();
 }
 
-std::map<int, int> CSVReader::getBandMap() {
-
-	std::map<int, int> map;
-	size_t hIdx = m_headerRows > 0 ? m_headerRows - 1 : 0;
-	if(m_data.size() > hIdx) {
-		const std::vector<std::string>& header = m_data[hIdx];
-		if(m_minWlCol >= 0 && m_maxWlCol < header.size()) {
-			for(int i = m_minWlCol; i <= m_maxWlCol; ++i) {
-				double wl = atof(header[i].c_str());
-				int idx = (int) (wl * WL_SCALE);
-				map[idx] = i;
-			}
-		}
-	}
-	return map;
-}
-
-bool CSVReader::next(std::vector<double>& buf, int& cols, int& row) {
+bool CSVReader::next(std::string& id, std::vector<double>& buf, int& cols, int& row) {
 	if(m_idx >= m_rows)
 		return false;
 
@@ -679,14 +691,17 @@ bool CSVReader::next(std::vector<double>& buf, int& cols, int& row) {
 		data[i] = atof(m_data[m_idx][i].c_str());
 	buf.assign(data.begin(), data.end());
 
+	id = m_data[m_idx][m_idCol];
+
 	++m_idx;
 
 	return true;
 }
 
 
-void CSVReader::guessFileProperties(const std::string& filename, bool& transpose, int& header, int& minCol, int& maxCol) {
+void CSVReader::guessFileProperties(const std::string& filename, bool& transpose, int& header, int& minCol, int& maxCol, int& idCol) {
 
+	idCol = -1;
 	header = 1;
 	transpose = false;
 
@@ -717,7 +732,7 @@ void CSVReader::guessFileProperties(const std::string& filename, bool& transpose
 
 	// Find the first float col.
 	minCol = 0;
-	while(minCol < headerisfloat.size() && !headerisfloat[minCol])
+	while(minCol < (int) headerisfloat.size() && !headerisfloat[minCol])
 		++minCol;
 
 	// Find he last float column.
@@ -725,10 +740,18 @@ void CSVReader::guessFileProperties(const std::string& filename, bool& transpose
 	while(maxCol > minCol && !headerisfloat[maxCol])
 		--maxCol;
 
+	// Find the id column.
+	for(size_t i = 0; i < isfloat.size(); ++i) {
+		if(!isfloat[i]) {
+			idCol = i;
+			break;
+		}
+	}
+
 	// Look for mismatches.
 	if(isfloat.size() < headerisfloat.size())
 		isfloat.resize(headerisfloat.size());
-	for(size_t i = minCol; i <= maxCol; ++i) {
+	for(int i = minCol; i <= maxCol; ++i) {
 		if(headerisfloat[i] != isfloat[i]) {
 			transpose = true;
 			break;
@@ -754,7 +777,7 @@ void CSVReader::guessFileProperties(const std::string& filename, bool& transpose
 
 	// Find the first float col.
 	minCol = 0;
-	while(minCol < headerisfloat.size() && !headerisfloat[minCol])
+	while(minCol < (int) headerisfloat.size() && !headerisfloat[minCol])
 		++minCol;
 
 	// Find he last float column.
