@@ -30,10 +30,6 @@ GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
 
-	int err;
-	if((err = makedir(filename)))
-		throw std::runtime_error("Could not create directory for " + filename + "; " + std::to_string(err));
-
 	GDALDataType gtype;
 	switch(dataType) {
 	case Byte: gtype = GDT_Byte; break;

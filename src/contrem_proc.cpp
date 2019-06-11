@@ -37,17 +37,25 @@ namespace {
 
 	std::mutex _pltmtx;		///<! A mutex to protect the plot library.
 
-	/**
-	 * Check if a file exists
-	 *
-	 * \param filename The filename to check.
-	 * \return True if the file exists.
-	 */
-	bool fexists(const std::string& filename) {
-		if(filename.empty())
-			return false;
-		std::ifstream f(filename);
-		return f.good();
+	std::unique_ptr<Reader> getReader(const std::string& file, bool transpose, int headerRows, int minCol, int maxCol, int idCol) {
+		std::unique_ptr<Reader> rdr;
+		FileType type = getFileType(file);
+		switch(type) {
+		case CSV:
+			rdr.reset(new CSVReader(file, transpose, headerRows, minCol, maxCol, idCol));
+			break;
+		case GTiff:
+		case ENVI:
+			rdr.reset(new GDALReader(file));
+			break;
+		case ROI:
+		case SHP:
+		case SQLITE:
+		case Unknown:
+		default:
+			throw std::runtime_error("Unknown file type for " + file);
+		}
+		return rdr;
 	}
 
 	/**
@@ -241,7 +249,7 @@ namespace {
 		std::unique_ptr<GDALReader> mask;
 		{
 			std::string roi = config->contrem->roi;
-			if(!roi.empty() && fexists(roi)) {
+			if(!roi.empty() && isfile(roi)) {
 				try {
 					mask.reset(new GDALReader(roi));
 					hasRoi = true;
@@ -383,6 +391,7 @@ namespace {
 	}
 
 
+
 	/**
 	 * Process the output queue and write to file.
 	 */
@@ -413,6 +422,15 @@ namespace {
 
 		// Remove the extension if there is one.
 		outfile = outfile.substr(0, outfile.find_last_of("."));
+		std::string outdir = outfile.substr(0, outfile.find_last_of("/"));
+		std::string plotdir = outdir + "/hull_img";
+
+		if(isfile(outdir))
+			throw std::runtime_error("The output directory is an extant file.");
+		if(!isdir(outdir) && !makedir(outdir))
+			throw std::runtime_error("Failed to create output directory.");
+		if(!isdir(plotdir) && !makedir(plotdir))
+			throw std::runtime_error("Failed to create plot directory.");
 
 		char* meta;
 		std::unordered_map<std::string, std::unique_ptr<Writer>> writer;
@@ -482,6 +500,7 @@ namespace {
 
 			// If appropriate plot the normalized spectrum.
 			if(true){
+				std::string plotfile = plotdir + "/hull_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
 				std::lock_guard<std::mutex> lk(_pltmtx);
 				namespace plt = matplotlibcpp;
 				std::vector<double> rx = {w.front(), w.back()};
@@ -493,7 +512,7 @@ namespace {
 				plt::named_plot("Regression", rx, ry);
 				plt::title(std::string("Normalized Continuum Removal, ") + std::to_string(out.c) + "," + std::to_string(out.r));
 				plt::legend();
-				plt::save(outfile + "/hull_img/hull_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png");
+				plt::save(plotfile);
 				plt::close();
 			}
 
@@ -526,27 +545,6 @@ namespace {
 		writer["writerhull"]->writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "yint"});
 	}
 
-}
-
-std::unique_ptr<Reader> getReader(const std::string& file, bool transpose, int headerRows, int minCol, int maxCol, int idCol) {
-	std::unique_ptr<Reader> rdr;
-	FileType type = getFileType(file);
-	switch(type) {
-	case CSV:
-		rdr.reset(new CSVReader(file, transpose, headerRows, minCol, maxCol, idCol));
-		break;
-	case GTiff:
-	case ENVI:
-		rdr.reset(new GDALReader(file));
-		break;
-	case ROI:
-	case SHP:
-	case SQLITE:
-	case Unknown:
-	default:
-		throw std::runtime_error("Unknown file type for " + file);
-	}
-	return rdr;
 }
 
 void Contrem::run(ContremListener* listener) {
@@ -629,21 +627,3 @@ void Contrem::run(ContremListener* listener) {
 double Contrem::progress() const {
 	return 0;
 }
-
-/*
- * 		if(m_reader)
-			delete m_reader;
-		if(!m_roiFile.empty()) {
-			m_reader = new ROIReader(m_roiFile);
-		} else if(!m_spectraFile.empty()) {
-			m_reader = new GDALReader(m_spectraFile);
-		} else {
-			throw std::invalid_argument("No input file (-r or -d) given.");
-		}
-
-		if(m_minWl > 0 && m_maxWl > 0)
-			m_reader->setBandRange(m_minWl, m_maxWl);
-
-		m_reader->setBufSize(m_buffer);
- *
- */

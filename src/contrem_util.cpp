@@ -5,12 +5,16 @@
  *      Author: rob
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <algorithm>
+#include <sstream>
 
 #include <gdal_priv.h>
 
 #include "reader.hpp"
-
 #include "contrem_util.hpp"
 
 using namespace hlrg;
@@ -109,18 +113,53 @@ hlrg::FileType hlrg::fileTypeFromString(const std::string& type) {
 	}
 }
 
+
 bool hlrg::isnonzero(const double& v) {
-	return v > 0;
+	return v != 0;
 }
 
+bool hlrg::isdir(const std::string& path) {
+	struct stat st;
+	if(!stat(path.c_str(), &st))
+		return S_ISDIR(st.st_mode);
+	return false;
+}
 
-int hlrg::makedir(const std::string& filename) {
-	std::string path = filename.substr(0, filename.find_last_of('/'));
-	if(mkdir(path.c_str(), 0755) == 0)
-		return 0;
-	switch(errno) {
-	case EEXIST: return 0;
-	default: return errno;
+bool hlrg::isfile(const std::string& path) {
+	struct stat st;
+	if(!stat(path.c_str(), &st))
+		return S_ISREG(st.st_mode);
+	return false;
+}
+
+bool hlrg::rem(const std::string& dir) {
+	return !unlink(dir.c_str());
+}
+
+bool hlrg::makedir(const std::string& filename) {
+	std::stringstream path(filename);
+	std::stringstream inter;
+	std::string part, current;
+	if(filename[0] == '/')
+		inter << '/';
+	while(std::getline(path, part, '/')) {
+		inter << part;
+		current = inter.str();
+		if(!isdir(current) && !isfile(current)) {
+			if(mkdir(current.c_str(), 0755))
+				return false;
+		}
+		if(!part.empty())
+			inter << '/';
 	}
+	return true;
 }
 
+#include <regex>
+
+std::string hlrg::sanitize(const std::string& str) {
+	std::regex repl("([^0-9A-Za-z]+)");
+	std::stringstream ss;
+	std::regex_replace(std::ostreambuf_iterator<char>(ss), str.begin(), str.end(), repl, "_");
+	return ss.str();
+}

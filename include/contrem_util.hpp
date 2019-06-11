@@ -32,8 +32,31 @@ namespace hlrg {
 
 	bool isnonzero(const double& v);
 
+	/**
+	 * Return true if it's a dir and it exists.
+	 */
+	bool isdir(const std::string& path);
 
-	int makedir(const std::string& filename);
+	/**
+	 * Return true if it's a file and it exists.
+	 */
+	bool isfile(const std::string& path);
+
+	/**
+	 * Remove the directory or file.
+	 */
+	bool rem(const std::string& dir);
+
+	/**
+	 * Recursively make the directory.
+	 */
+	bool makedir(const std::string& filename);
+
+	/**
+	 * Remove non-alphanumeric characters and replace with underscores.
+	 */
+	std::string sanitize(const std::string& str);
+
 
 } // hlrg
 
