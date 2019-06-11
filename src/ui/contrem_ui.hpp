@@ -118,6 +118,8 @@ signals:
 public slots:
 	void txtROIFileChanged(QString);
 	void btnROIClicked();
+	void txtSamplePointsChanged(QString);
+	void btnSamplePointsClicked();
 
 	void spnMinWLColChanged(int);
 	void spnMaxWLColChanged(int);

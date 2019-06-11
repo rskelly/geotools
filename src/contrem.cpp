@@ -33,8 +33,8 @@ public:
 
 	bool notify(QObject *receiver, QEvent *e) {
 		try {
-			if(plotter)
-				plotter->step();
+			//if(plotter)
+			//	plotter->step();
 			return QApplication::notify(receiver, e);
 		} catch(const std::exception &ex) {
 			QMessageBox err;

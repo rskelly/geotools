@@ -19,6 +19,7 @@
 namespace {
 
 	constexpr const char* LAST_ROI = "lastROI";
+	constexpr const char* LAST_SAMPLE_POINTS = "lastSamplePoints";
 	constexpr const char* LAST_SPECTRA = "lastSpectra";
 	constexpr const char* LAST_INPUT_START_BAND = "lastInputStartBand";
 	constexpr const char* LAST_INPUT_END_BAND = "lastInputEndBand";
@@ -90,7 +91,7 @@ void ContremForm::setupUi(QDialog* form) {
 	cboOutputType->addItems(outputTypes);
 
 	runWidgets = {
-		txtROIFile, btnROI, txtSpectraFile, btnSpectra, spnWLHeaderRows, spnWLFirstCol, spnWLLastCol,
+		txtROIFile, btnROI, txtSamplePoints, btnSamplePoints, txtSpectraFile, btnSpectra, spnWLHeaderRows, spnWLFirstCol, spnWLLastCol,
 		spnWLIDCol, chkWLTranspose, txtOutputFile, cboOutputType, btnOutput, cboMinWL, cboMaxWL,
 		btnRun
 	};
@@ -101,6 +102,9 @@ void ContremForm::setupUi(QDialog* form) {
 
 	connect(txtROIFile, SIGNAL(textChanged(QString)), this, SLOT(txtROIFileChanged(QString)));
 	connect(btnROI, SIGNAL(clicked()), this, SLOT(btnROIClicked()));
+
+	connect(txtSamplePoints, SIGNAL(textChanged(QString)), this, SLOT(txtSamplePointsChanged(QString)));
+	connect(btnSamplePoints, SIGNAL(clicked()), this, SLOT(btnSamplePointsClicked()));
 
 	connect(txtSpectraFile, SIGNAL(textChanged(QString)), this, SLOT(txtSpectraFileChanged(QString)));
 	connect(btnSpectra, SIGNAL(clicked()), this, SLOT(btnSpectraClicked()));
@@ -137,9 +141,11 @@ void ContremForm::setupUi(QDialog* form) {
 	m_contrem.outputType = (FileType) m_settings.value(LAST_OUTPUT_TYPE, ENVI).toInt();
 	m_contrem.minWl = m_settings.value(LAST_MIN_WL, 0).toDouble();
 	m_contrem.maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
-	m_contrem.threads = m_settings.value(LAST_THREADS, 1).toInt();
+	m_contrem.threads = 4; //m_settings.value(LAST_THREADS, 1).toInt();
+	m_contrem.samplePoints = m_settings.value(LAST_SAMPLE_POINTS, "").toString().toStdString();
 
 	txtROIFile->setText(QString(m_contrem.roi.c_str()));
+	txtSamplePoints->setText(QString(m_contrem.samplePoints.c_str()));
 	txtSpectraFile->setText(QString(m_contrem.spectra.c_str()));
 	txtOutputFile->setText(QString(m_contrem.output.c_str()));
 	cboOutputType->setCurrentText(QString(fileTypeAsString(m_contrem.outputType).c_str()));
@@ -197,6 +203,12 @@ void ContremForm::chkWLTransposeChanged(bool transpose) {
 void ContremForm::txtROIFileChanged(QString filename) {
 	m_contrem.roi = filename.toStdString();
 	m_settings.setValue(LAST_ROI, filename);
+	checkRun();
+}
+
+void ContremForm::txtSamplePointsChanged(QString filename) {
+	m_contrem.samplePoints = filename.toStdString();
+	m_settings.setValue(LAST_SAMPLE_POINTS, filename);
 	checkRun();
 }
 
@@ -299,6 +311,14 @@ void ContremForm::btnROIClicked() {
 	txtROIFile->setText(filename);
 }
 
+void ContremForm::btnSamplePointsClicked() {
+	QString lastDir = m_settings.value(LAST_DIR, "").toString();
+	QString filename = QFileDialog::getOpenFileName(this, "Sample Points File", lastDir);
+	QFileInfo dir(filename);
+	m_settings.setValue(LAST_DIR, dir.dir().absolutePath());
+	txtSamplePoints->setText(filename);
+}
+
 void ContremForm::btnSpectraClicked() {
 	QString lastDir = m_settings.value(LAST_DIR, "").toString();
 	QString filename = QFileDialog::getOpenFileName(this, "Spectra File", lastDir);
@@ -316,16 +336,16 @@ void ContremForm::btnOutputClicked() {
 }
 
 void ContremForm::runState() {
-	for(QWidget* w : stopWidgets)
-		w->setEnabled(false);
 	for(QWidget* w : runWidgets)
+		w->setEnabled(false);
+	for(QWidget* w : stopWidgets)
 		w->setEnabled(true);
 }
 
 void ContremForm::stopState() {
-	for(QWidget* w : stopWidgets)
-		w->setEnabled(true);
 	for(QWidget* w : runWidgets)
+		w->setEnabled(true);
+	for(QWidget* w : stopWidgets)
 		w->setEnabled(false);
 }
 
@@ -377,12 +397,15 @@ void ContremForm::convUpdate(Contrem* conv) {
 }
 
 void ContremForm::convStopped(Contrem* conv) {
+	conv->running = false;
 	progressBar->setValue(conv->progress() * 100);
 	stopState();
 	checkRun();
 }
 
 void ContremForm::convFinished(Contrem* conv) {
+	conv->running = false;
+	m_thread.detach();
 	progressBar->setValue(conv->progress() * 100);
 	QMessageBox::information(this, "Finished", "Processing is finished.");
 	stopState();

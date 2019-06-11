@@ -91,6 +91,7 @@ public:
 	std::string extension;		///<! The output extension.
 	std::string roi;			///<! The mask/ROI; Raster format.
 	std::string spectra;		///<! The input spectra; raster or CSV.
+	std::string samplePoints;	///<! The sample points file for plotting.
 	double minWl;				///<! The lower bound of the wavelength range to process.
 	double maxWl;				///<! The upper bound of the wavelength range to process.
 	int wlMinCol;

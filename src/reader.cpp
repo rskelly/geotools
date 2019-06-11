@@ -218,7 +218,7 @@ bool GDALReader::next(std::string& id, std::vector<double>& buf, int& cols, int&
 	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
 		//std::cerr << "band " << i << "\n";
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + i - 1), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
+		if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + i - m_minIdx), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
 			return false;
 	}
 

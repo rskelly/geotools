@@ -642,11 +642,6 @@ void Contrem::run(ContremListener* listener) {
 			qconfig.readcv.wait(lk);
 	}
 
-	m_progress += .02;
-
-	if(m_listener)
-		m_listener->stopped(this);
-
 	// Let the processor threads finish.
 	qconfig.inRunning = false;
 	qconfig.incv.notify_all();
