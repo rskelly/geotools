@@ -30,8 +30,8 @@ public:
 class Plotter {
 private:
 	std::mutex m_pltmtx;		///<! A mutex to protect the plot library.
-	std::mutex m_qmtx;		///<! A mutex to protect the plot library.
-	std::list<PlotJob> m_queue;
+	std::mutex m_qmtx;			///<! A mutex to protect the plot library.
+	std::list<PlotJob> m_queue;	///<! Queue for plot jobs.
 
 public:
 

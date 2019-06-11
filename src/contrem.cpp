@@ -60,17 +60,6 @@ int main(int argc, char** argv) {
 	app.plotter = &(form.contrem().plotter());
 
 	return runWithGui(app, form);
-
-	/*
-	Plotter& plotter = form.contrem().plotter();
-	while(running || plotter.hasItems()) {
-		plotter.step();
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-*/
-	//}
-
-	return 0;
 }
 
 
