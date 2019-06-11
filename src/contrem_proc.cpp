@@ -10,6 +10,7 @@
 #include <iostream>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include <cmath>
 #include <thread>
 #include <condition_variable>
@@ -22,8 +23,6 @@
 #include <geos/geom/LineString.h>
 #include <geos/geom/Point.h>
 
-#include "matplotlibcpp.h"
-
 #include "contrem.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
@@ -34,8 +33,6 @@ using namespace geos::algorithm;
 using namespace hlrg;
 
 namespace {
-
-	std::mutex _pltmtx;		///<! A mutex to protect the plot library.
 
 	std::unique_ptr<Reader> getReader(const std::string& file, bool transpose, int headerRows, int minCol, int maxCol, int idCol) {
 		std::unique_ptr<Reader> rdr;
@@ -213,6 +210,7 @@ namespace {
 
 	class QConfig {
 	public:
+		Plotter* plotter;
 		Contrem* contrem;
 		std::list<input> inqueue;
 		std::list<output> outqueue;
@@ -260,7 +258,7 @@ namespace {
 		}
 
 		input in;
-		while(true) {
+		while(config->contrem->running) {
 			{
 				std::unique_lock<std::mutex> lk(config->inmtx);
 				// If the input is empty or the output is too large, pause.
@@ -272,6 +270,9 @@ namespace {
 				in = config->inqueue.front();
 				config->inqueue.pop_front();
 			}
+
+			if(!config->contrem->running)
+				break;
 
 			// If there's a mask, check it. Skip if necessary.
 			if(hasRoi && mask->getInt(in.c, in.r) <= 0)
@@ -292,6 +293,9 @@ namespace {
 			// Create an output pixel to hold computed values.
 			output out(in);
 
+			if(!config->contrem->running)
+				break;
+
 			// Compute the hull, assign area to the output.
 			std::vector<line> lines = convexHull(pts, out.area);
 
@@ -309,6 +313,9 @@ namespace {
 				if(!found)
 					throw std::runtime_error("Failed to find an intersection point.");
 			}
+
+			if(!config->contrem->running)
+				break;
 
 			// Calculate the cr and crm, and get the max value and index.
 			out.maxCrm = 0;
@@ -346,6 +353,9 @@ namespace {
 
 			out.slope = ((n - 2) * sxy - sx * sy) / ((n - 2) * sxx - sx * sx);
 			out.yint = (sy - out.slope * sx) / (n - 2);
+
+			if(!config->contrem->running)
+				break;
 
 			// We were going to do interpolation for adjacent maxima, but put it off.
 			// Kopăcková, V., & Koucká, L. (2017). Integration of absorption feature information from visible to
@@ -432,6 +442,9 @@ namespace {
 		if(!isdir(plotdir) && !makedir(plotdir))
 			throw std::runtime_error("Failed to create plot directory.");
 
+		if(!config->contrem->running)
+			return;
+
 		char* meta;
 		std::unordered_map<std::string, std::unique_ptr<Writer>> writer;
 
@@ -472,8 +485,12 @@ namespace {
 		std::fill(maxima.begin(), maxima.end(), 0);
 		std::fill(valid.begin(), valid.end(), 0);
 
+		// Keeps track of the number of unique completed rows
+		// for progress tracking.
+		std::unordered_set<int> rowTracker;
+
 		output out;
-		while(true) {
+		while(config->contrem->running) {
 
 			{
 				// Get an item from the queue.
@@ -486,8 +503,13 @@ namespace {
 				config->outqueue.pop_front();
 			}
 
+			rowTracker.insert(out.r);
+
 			// Write the slope/y-int information.
 			hulls << out.c << "," << out.r << "," << out.slope << "," << out.yint << "\n";
+
+			if(!config->contrem->running)
+				break;
 
 			// Populate the lists for plotting/aggregating.
 			for(const outpoint& o : out.data) {
@@ -498,23 +520,20 @@ namespace {
 				w.push_back(o.w);
 			}
 
+			if(!config->contrem->running)
+				break;
+
 			// If appropriate plot the normalized spectrum.
 			if(true){
 				std::string plotfile = plotdir + "/hull_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
-				std::lock_guard<std::mutex> lk(_pltmtx);
-				namespace plt = matplotlibcpp;
+				std::string title = "Normalized Continuum Removal, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
 				std::vector<double> rx = {w.front(), w.back()};
 				std::vector<double> ry = {w.front() * out.slope + out.yint, w.back() * out.slope + out.yint};
-				if(!plt::fignum_exists(111))
-					plt::figure(111);
-				plt::figure_size(600, 400);
-				plt::named_plot("Normalized, Continuum Removed", w, crnm);
-				plt::named_plot("Regression", rx, ry);
-				plt::title(std::string("Normalized Continuum Removal, ") + std::to_string(out.c) + "," + std::to_string(out.r));
-				plt::legend();
-				plt::save(plotfile);
-				plt::close();
+				config->contrem->plotter().queue(plotfile, title, w, crnm, rx, ry);
 			}
+
+			if(!config->contrem->running)
+				break;
 
 			// The number of equal maxima.
 			maxima[out.r * cols + out.c] = out.maxCount > 1 ? 0 : 1;
@@ -525,11 +544,11 @@ namespace {
 			// Data for a single hull.
 			hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm, out.maxWl, (double) out.maxCount, out.slope, out.yint};
 
-			writer["writerss"]->write(ss, out.c, out.r, 1, 1, 1, 1);
-			writer["writerch"]->write(ch, out.c, out.r, 1, 1, 1, 1);
-			writer["writercr"]->write(cr, out.c, out.r, 1, 1, 1, 1);
-			writer["writercrnm"]->write(crnm, out.c, out.r, 1, 1, 1, 1);
-			writer["writerhull"]->write(hull, out.c, out.r, 1, 1, 1, 1);
+			writer["writerss"]->write(ss, out.c, out.r, 1, 1, 1, 1, out.id);
+			writer["writerch"]->write(ch, out.c, out.r, 1, 1, 1, 1, out.id);
+			writer["writercr"]->write(cr, out.c, out.r, 1, 1, 1, 1, out.id);
+			writer["writercrnm"]->write(crnm, out.c, out.r, 1, 1, 1, 1, out.id);
+			writer["writerhull"]->write(hull, out.c, out.r, 1, 1, 1, 1, out.id);
 
 			ss.clear();
 			ch.clear();
@@ -537,17 +556,25 @@ namespace {
 			crnm.clear();
 			w.clear();
 
+			config->contrem->setProgress((double) rowTracker.size() / config->rows * 0.95);
+
 			config->incv.notify_one();
 		}
 
-		writer["writermax"]->write(maxima, 0, 0, cols, rows);
-		writer["writervalid"]->write(valid, 0, 0, cols, rows);
+		writer["writermax"]->write(maxima, 0, 0, cols, rows, 0, 0, out.id);
+		writer["writervalid"]->write(valid, 0, 0, cols, rows, 0, 0, out.id);
 		writer["writerhull"]->writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "yint"});
 	}
 
 }
 
 void Contrem::run(ContremListener* listener) {
+
+	m_progress = 0;
+	m_listener = listener;
+
+	if(m_listener)
+		m_listener->started(this);
 
 	QConfig qconfig;
 	qconfig.contrem = this;
@@ -587,7 +614,7 @@ void Contrem::run(ContremListener* listener) {
 	int bands = reader->bands();
 	int cols, row;
 	std::string id;
-	while(reader->next(id, buf, cols, row)) {
+	while(running && reader->next(id, buf, cols, row)) {
 
 		{
 			// Read out the input objects and add to the queue.
@@ -601,6 +628,9 @@ void Contrem::run(ContremListener* listener) {
 				}
 				qconfig.inqueue.push_back(in);
 			}
+
+			if(m_listener)
+				m_listener->update(this);
 		}
 
 		// Notify the input processor.
@@ -612,18 +642,39 @@ void Contrem::run(ContremListener* listener) {
 			qconfig.readcv.wait(lk);
 	}
 
+	m_progress += .02;
+
+	if(m_listener)
+		m_listener->stopped(this);
+
 	// Let the processor threads finish.
 	qconfig.inRunning = false;
 	qconfig.incv.notify_all();
 	for(std::thread& t : t0)
 		t.join();
 
+	m_progress += .02;
+
 	// Let the output thread finish.
 	qconfig.outRunning = false;
 	qconfig.outcv.notify_all();
 	t1.join();
+
+	m_progress = 1;
+	if(m_listener)
+		m_listener->finished(this);
+}
+
+void Contrem::setProgress(double p) {
+	m_progress = p;
+	if(m_listener)
+		m_listener->update(this);
 }
 
 double Contrem::progress() const {
-	return 0;
+	return m_progress;
+}
+
+Plotter& Contrem::plotter() {
+	return m_plotter;
 }

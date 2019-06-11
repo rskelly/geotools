@@ -171,10 +171,6 @@ GDALWriter::~GDALWriter() {
 CSVWriter::CSVWriter(const std::string& filename, const std::vector<double>& wavelengths,
 		const std::vector<std::string>& bandNames, const std::string& unit) {
 
-	int err;
-	if((err = makedir(filename)))
-		throw std::runtime_error("Could not create directory for " + filename + "; " + std::to_string(err));
-
 	m_output.open(filename);
 	m_output << "id";
 

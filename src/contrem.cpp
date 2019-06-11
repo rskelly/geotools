@@ -20,32 +20,37 @@
 #include "ui/contrem_ui.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
+#include "plotter.hpp"
 
 using namespace hlrg;
 
-int runWithGui(int argc, char **argv) {
-	class ContremApp : public QApplication {
-	public:
-		ContremApp(int &argc, char **argv) : QApplication(argc, argv) {}
-		bool notify(QObject *receiver, QEvent *e) {
-			try {
-				return QApplication::notify(receiver, e);
-			} catch(const std::exception &ex) {
-				QMessageBox err;
-				err.setText("Error");
-				err.setInformativeText(QString(ex.what()));
-				err.exec();
-				return false;
-			}
-		}
-	};
+class ContremApp : public QApplication {
+public:
+	Plotter* plotter;
+	ContremApp(int &argc, char **argv) :
+		QApplication(argc, argv),
+		plotter(nullptr) {}
 
-	ContremApp q(argc, argv);
-	ContremForm form(&q);
+	bool notify(QObject *receiver, QEvent *e) {
+		try {
+			if(plotter)
+				plotter->step();
+			return QApplication::notify(receiver, e);
+		} catch(const std::exception &ex) {
+			QMessageBox err;
+			err.setText("Error");
+			err.setInformativeText(QString(ex.what()));
+			err.exec();
+			return false;
+		}
+	}
+};
+
+int runWithGui(ContremApp& app, ContremForm& form) {
 	QDialog qform;
 	form.setupUi(&qform);
 	qform.show();
-	return q.exec();
+	return app.exec();
 }
 
 
@@ -177,8 +182,19 @@ int main(int argc, char** argv) {
 
 	} else {
 */
-		return runWithGui(argc, argv);
+	ContremApp app(argc, argv);
+	ContremForm form(&app);
+	app.plotter = &(form.contrem().plotter());
 
+	return runWithGui(app, form);
+
+	/*
+	Plotter& plotter = form.contrem().plotter();
+	while(running || plotter.hasItems()) {
+		plotter.step();
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+*/
 	//}
 
 	return 0;

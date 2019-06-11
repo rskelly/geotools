@@ -74,6 +74,10 @@ ContremForm::ContremForm(QApplication* app) :
 	m_app(app) {
 }
 
+Contrem& ContremForm::contrem() {
+	return m_contrem;
+}
+
 void ContremForm::setupUi(QDialog* form) {
 	Ui::ContremForm::setupUi(form);
 	m_form = form;
@@ -84,6 +88,16 @@ void ContremForm::setupUi(QDialog* form) {
 	for(FileType type : OUTPUT_TYPES)
 		outputTypes << fileTypeAsString(type).c_str();
 	cboOutputType->addItems(outputTypes);
+
+	runWidgets = {
+		txtROIFile, btnROI, txtSpectraFile, btnSpectra, spnWLHeaderRows, spnWLFirstCol, spnWLLastCol,
+		spnWLIDCol, chkWLTranspose, txtOutputFile, cboOutputType, btnOutput, cboMinWL, cboMaxWL,
+		btnRun
+	};
+
+	stopWidgets = {
+		btnCancel
+	};
 
 	connect(txtROIFile, SIGNAL(textChanged(QString)), this, SLOT(txtROIFileChanged(QString)));
 	connect(btnROI, SIGNAL(clicked()), this, SLOT(btnROIClicked()));
@@ -302,27 +316,17 @@ void ContremForm::btnOutputClicked() {
 }
 
 void ContremForm::runState() {
-	btnRun->setEnabled(false);
-	btnCancel->setEnabled(true);
-	txtROIFile->setEnabled(false);
-	btnROI->setEnabled(false);
-	txtSpectraFile->setEnabled(false);
-	btnSpectra->setEnabled(false);
-	txtOutputFile->setEnabled(false);
-	btnOutput->setEnabled(false);
-	cboOutputType->setEnabled(false);
+	for(QWidget* w : stopWidgets)
+		w->setEnabled(false);
+	for(QWidget* w : runWidgets)
+		w->setEnabled(true);
 }
 
 void ContremForm::stopState() {
-	btnRun->setEnabled(true);
-	btnCancel->setEnabled(false);
-	txtROIFile->setEnabled(true);
-	btnROI->setEnabled(true);
-	txtSpectraFile->setEnabled(true);
-	btnSpectra->setEnabled(true);
-	txtOutputFile->setEnabled(true);
-	btnOutput->setEnabled(true);
-	cboOutputType->setEnabled(true);
+	for(QWidget* w : stopWidgets)
+		w->setEnabled(true);
+	for(QWidget* w : runWidgets)
+		w->setEnabled(false);
 }
 
 void ContremForm::run() {
@@ -372,14 +376,14 @@ void ContremForm::convUpdate(Contrem* conv) {
 	progressBar->setValue(conv->progress() * 100);
 }
 
-void ContremForm::convStopped(Contrem*) {
-	progressBar->setValue(0);
+void ContremForm::convStopped(Contrem* conv) {
+	progressBar->setValue(conv->progress() * 100);
 	stopState();
 	checkRun();
 }
 
-void ContremForm::convFinished(Contrem*) {
-	progressBar->setValue(100);
+void ContremForm::convFinished(Contrem* conv) {
+	progressBar->setValue(conv->progress() * 100);
 	QMessageBox::information(this, "Finished", "Processing is finished.");
 	stopState();
 	checkRun();

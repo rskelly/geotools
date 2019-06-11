@@ -28,6 +28,9 @@ private:
 
 	Contrem m_contrem;					///<! Contrem processor object.
 
+	std::vector<QWidget*> runWidgets;
+	std::vector<QWidget*> stopWidgets;
+
 	std::thread m_thread;				///<! Processor thread.
 
 	void updateSpectraType();
@@ -46,6 +49,8 @@ public:
 	 * \param app The application.
 	 */
 	ContremForm(QApplication* app);
+
+	Contrem& contrem();
 
 	/**
 	 * Set up the user interface.

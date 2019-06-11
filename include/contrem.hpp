@@ -9,6 +9,7 @@
 #define _CONTREM_HPP_
 
 #include "reader.hpp"
+#include "plotter.hpp"
 
 namespace hlrg {
 
@@ -79,6 +80,11 @@ public:
  * Performs the continuum removal process.
  */
 class Contrem {
+private:
+	ContremListener* m_listener;
+	Plotter m_plotter;
+	double m_progress;
+
 public:
 	std::string output;			///<! The output file.
 	FileType outputType;		///<! The output file type.
@@ -110,6 +116,10 @@ public:
 	 * @return The current processing progress as a double from 0 to 1.
 	 */
 	double progress() const;
+
+	void setProgress(double progress);
+
+	Plotter& plotter();
 
 };
 
