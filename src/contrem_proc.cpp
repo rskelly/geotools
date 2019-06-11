@@ -348,6 +348,9 @@ namespace {
 			double sxy = 0, sx = 0, sy = 0, sxx = 0;
 			size_t n = out.data.size();
 
+			out.area = 0;
+			out.larea = 0;
+
 			// Calculate the other ch metrics.
 			for(size_t i = 0; i < n; ++i) {
 				outpoint& pt = out.data[i];
@@ -362,6 +365,27 @@ namespace {
 				// Count the values equal to max; will flag those with >1.
 				if(pt.crm == out.maxCrm)
 					++out.maxCount;
+
+				// Compute the left and overall spectrum area.
+				if(i < n - 1) {
+					double ww = out.data[i + 1].w - out.data[i].w;
+					double a = ((out.data[i].crn + out.data[i + 1].crn) * ww) / 2.0; // Add the heights, times the width, divide by two.
+					out.area += a;
+					if((int) i <= maxIdx)
+						out.larea += a;
+				}
+			}
+
+			// Compute the rest of the numbers.
+			if(out.area == 0 || out.larea == 0 || out.larea == out.area) {
+				// If the left or right area is zero, or the total is zero, we have a problem.
+				out.larea = 0;
+				out.area = 0;
+				out.symmetry = 0;
+				out.rarea = 0;
+			} else {
+				out.rarea = out.area - out.larea;
+				out.symmetry = out.larea / out.rarea;
 			}
 
 			out.slope = ((n - 2) * sxy - sx * sy) / ((n - 2) * sxx - sx * sx);
@@ -375,31 +399,6 @@ namespace {
 			// longwave infrared spectral ranges for mineral mapping. Remote Sensing, 9(10), 8–13. https://doi.org/10.3390/rs9101006
 			// If there are  >2 maxima, or the distance between them is > than the configured
 			// interp distance, flag the cell and move on. Otherwise, interpolate.
-
-			// Calculate the split hull; add two corner points to make the hull full.
-			pts.assign(in.data.begin(), in.data.begin() + maxIdx);
-
-			if(pts.size() > 1) {
-				pts.emplace_back(pts[pts.size() - 1].w, 0.0);
-				pts.emplace_back(pts[0].w, 0.0);
-
-				// Compute the hull, assign area to the left output.
-				lines = convexHull(pts, out.larea);
-			} else {
-				out.larea = 0;
-			}
-
-			// Compute the rest of the numbers.
-			if(out.area == 0 || out.larea == 0 || out.larea == out.area) {
-				// If the left or right area is zero, or the total is zero, we
-				out.larea = 0;
-				out.area = 0;
-				out.symmetry = 0;
-				out.rarea = 0;
-			} else {
-				out.rarea = out.area - out.larea;
-				out.symmetry = out.larea / out.rarea;
-			}
 
 			{
 				// Send to output queue and notify.
