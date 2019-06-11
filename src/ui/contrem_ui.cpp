@@ -85,7 +85,6 @@ void ContremForm::setupUi(QDialog* form) {
 	progressBar->setValue(0);
 
 	QStringList outputTypes;
-	outputTypes << "";
 	for(FileType type : OUTPUT_TYPES)
 		outputTypes << fileTypeAsString(type).c_str();
 	cboOutputType->addItems(outputTypes);
@@ -156,14 +155,35 @@ void ContremForm::setupUi(QDialog* form) {
 }
 
 void ContremForm::checkRun() {
-	/*
-	bool a = !m_roiFile.empty() && QFile(m_roiFile.c_str()).exists();
-	bool b = !m_spectraFile.empty() && QFile(m_spectraFile.c_str()).exists();
-	QFileInfo dir(m_outputFile.c_str());
-	bool c = !m_outputFile.empty() && dir.dir().exists();
+	FileType stype = getFileType(m_contrem.spectra);
+	bool s = stype != CSV;
+	txtROIFile->setEnabled(s);
+	btnROI->setEnabled(s);
+	txtSamplePoints->setEnabled(s);
+	btnSamplePoints->setEnabled(s);
+	bool a = m_contrem.roi.empty() || isfile(m_contrem.roi);
+	bool b = !m_contrem.spectra.empty() && isfile(m_contrem.spectra);
+	bool d = m_contrem.samplePoints.empty() || isfile(m_contrem.samplePoints);
+	bool c = !m_contrem.output.empty();
+	bool e = stype == CSV && m_contrem.outputType != CSV;
+	bool f = m_contrem.outputType == Unknown || m_contrem.outputType == 0;
 	btnRun->setEnabled(a && b && c && d);
-	*/
-	btnRun->setEnabled(true);
+	QStringList hints;
+	if(!a)
+		hints << "The ROI file is given, but doesn't exist.";
+	if(!b)
+		hints << "The spectra file is not given, or doesn't exist.";
+	if(!c)
+		hints << "The output file is not given.";
+	if(!d)
+		hints << "The sample points file is given, but doesn't exist.";
+	if(!e)
+		hints << "CSV input with raster output makes no sense.";
+	if(!f)
+		hints << "The output type is not valid.";
+
+	lstHints->clear();
+	lstHints->addItems(hints);
 }
 
 void ContremForm::spnMinWLColChanged(int col) {
@@ -260,6 +280,7 @@ void ContremForm::enableSpectraOptions(const std::string& spectra) {
 	spnWLFirstCol->setEnabled(enable);
 	spnWLLastCol->setEnabled(enable);
 	spnWLHeaderRows->setEnabled(enable);
+	spnWLIDCol->setEnabled(enable);
 	chkWLTranspose->setEnabled(enable);
 }
 
@@ -284,6 +305,7 @@ void ContremForm::txtOutputFileChanged(QString filename) {
 
 void ContremForm::cboOutputTypeChanged(QString value) {
 	m_contrem.outputType = fileTypeFromString(value.toStdString());
+	m_settings.setValue(LAST_OUTPUT_TYPE, (int) m_contrem.outputType);
 	checkRun();
 }
 

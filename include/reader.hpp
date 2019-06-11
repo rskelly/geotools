@@ -202,6 +202,8 @@ public:
 
 	bool next(std::string& id, std::vector<double>& buf, int& cols, int& row);
 
+	bool next(std::vector<double>& buf, int band, int& cols, int& row);
+
 	 ~GDALReader();
 };
 

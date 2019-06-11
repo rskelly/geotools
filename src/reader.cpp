@@ -125,6 +125,7 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 	if(!(m_ds = (GDALDataset*) GDALOpen(filename.c_str(), GA_ReadOnly)))
 		throw std::invalid_argument("Failed to open dataset.");
 
+	m_minIdx = m_maxIdx = 1;
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();
@@ -221,6 +222,26 @@ bool GDALReader::next(std::string& id, std::vector<double>& buf, int& cols, int&
 		if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + i - m_minIdx), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
 			return false;
 	}
+
+	++m_row;
+
+	return true;
+}
+
+bool GDALReader::next(std::vector<double>& buf, int band, int& cols, int& row) {
+
+	if(m_row >= m_rows)
+		return false;
+
+	cols = m_cols;
+	row = m_row;
+
+	buf.resize(m_cols);
+	std::fill(buf.begin(), buf.end(), 0);
+
+	GDALRasterBand* bd = m_ds->GetRasterBand(band);
+	if(CE_None != bd->RasterIO(GF_Read, 0, m_row, m_cols, 1, buf.data(), m_cols, 1, GDT_Float64, 0, 0, 0))
+		return false;
 
 	++m_row;
 

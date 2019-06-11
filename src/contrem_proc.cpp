@@ -222,7 +222,7 @@ namespace {
 		std::condition_variable readcv;
 		bool inRunning;
 		bool outRunning;
-
+		bool useROI;						///<! If the spectra file is the right type, the ROI can be used.
 		int cols;
 		int rows;
 		int bands;
@@ -244,12 +244,21 @@ namespace {
 
 		// Check for a mask file.
 		bool hasRoi = false;
-		std::unique_ptr<GDALReader> mask;
+		int cols = 1;
+		std::vector<bool> mask;
 		{
 			std::string roi = config->contrem->roi;
-			if(!roi.empty() && isfile(roi)) {
+			if(config->useROI && !roi.empty() && isfile(roi)) {
 				try {
-					mask.reset(new GDALReader(roi));
+					GDALReader rdr(roi);
+					int row;
+					std::string id;
+					std::vector<double> buf(rdr.cols());
+					mask.resize(rdr.cols() * rdr.rows());
+					while(rdr.next(buf, 1, cols, row)) {
+						for(int i = 0; i < cols; ++i)
+							mask[row * cols + i] = buf[i] != 0;
+					}
 					hasRoi = true;
 				} catch(const std::exception& ex) {
 					std::cerr << "Could not open mask: " << ex.what() << "\n";
@@ -259,6 +268,7 @@ namespace {
 
 		input in;
 		while(config->contrem->running) {
+			std::this_thread::yield();
 			{
 				std::unique_lock<std::mutex> lk(config->inmtx);
 				// If the input is empty or the output is too large, pause.
@@ -275,8 +285,11 @@ namespace {
 				break;
 
 			// If there's a mask, check it. Skip if necessary.
-			if(hasRoi && mask->getInt(in.c, in.r) <= 0)
+			if(hasRoi && !mask[in.r * cols + in.c]) {
+				config->outcv.notify_one();
+				config->readcv.notify_one();
 				continue;
+			}
 
 			// Adjust <=0 intensities to MIN_VALUE. This enables the creation
 			// of a hull even though the area of the hull will be zero for practical purposes.
@@ -469,8 +482,8 @@ namespace {
 		}
 
 		// Each row is a string of coords which can be turned into a hull.
-		std::ofstream hulls(outfile + "_hulls.csv");
-		hulls << "col,row,slope,yint\n";
+		//std::ofstream hulls(outfile + "_hulls.csv");
+		//hulls << "id,col,row,slope,yint\n";
 
 		std::vector<double> ss;
 		std::vector<double> ch;
@@ -479,8 +492,8 @@ namespace {
 		std::vector<double> hull;
 		std::vector<double> w;
 
-		std::vector<int> maxima(cols * rows);
-		std::vector<int> valid(cols * rows);
+		std::vector<int> maxima(1);
+		std::vector<int> valid(1);
 
 		std::fill(maxima.begin(), maxima.end(), 0);
 		std::fill(valid.begin(), valid.end(), 0);
@@ -506,7 +519,7 @@ namespace {
 			rowTracker.insert(out.r);
 
 			// Write the slope/y-int information.
-			hulls << out.c << "," << out.r << "," << out.slope << "," << out.yint << "\n";
+			//hulls << out.id << "," << out.c << "," << out.r << "," << out.slope << "," << out.yint << "\n";
 
 			if(!config->contrem->running)
 				break;
@@ -536,10 +549,10 @@ namespace {
 				break;
 
 			// The number of equal maxima.
-			maxima[out.r * cols + out.c] = out.maxCount > 1 ? 0 : 1;
+			maxima[0] = out.maxCount > 1 ? 0 : 1;
 
 			// A hull is valid if the area, left area and right area are non-zero.
-			valid[out.r * cols + out.c] = out.area > 0 && out.rarea > 0 && out.larea > 0;
+			valid[0] = out.area > 0 && out.rarea > 0 && out.larea > 0;
 
 			// Data for a single hull.
 			hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm, out.maxWl, (double) out.maxCount, out.slope, out.yint};
@@ -549,6 +562,8 @@ namespace {
 			writer["writercr"]->write(cr, out.c, out.r, 1, 1, 1, 1, out.id);
 			writer["writercrnm"]->write(crnm, out.c, out.r, 1, 1, 1, 1, out.id);
 			writer["writerhull"]->write(hull, out.c, out.r, 1, 1, 1, 1, out.id);
+			writer["writermax"]->write(maxima, out.c, out.r, 1, 1, 1, 1, out.id);
+			writer["writervalid"]->write(valid, out.c, out.r, 1, 1, 1, 1, out.id);
 
 			ss.clear();
 			ch.clear();
@@ -561,8 +576,6 @@ namespace {
 			config->incv.notify_one();
 		}
 
-		writer["writermax"]->write(maxima, 0, 0, cols, rows, 0, 0, out.id);
-		writer["writervalid"]->write(valid, 0, 0, cols, rows, 0, 0, out.id);
 		writer["writerhull"]->writeStats(outfile + "_agg_stats.csv", {"hull_area", "hull_left_area", "hull_right_area", "hull_symmetry", "max_crm", "max_crm_wl", "max_count", "slope", "yint"});
 	}
 
@@ -576,19 +589,15 @@ void Contrem::run(ContremListener* listener) {
 	if(m_listener)
 		m_listener->started(this);
 
-	QConfig qconfig;
-	qconfig.contrem = this;
-
 	std::unique_ptr<Reader> reader = getReader(spectra, wlTranspose, wlHeaderRows, wlMinCol, wlMaxCol, wlIDCol);
-
 	reader->setBandRange(minWl, maxWl);
 
+	QConfig qconfig;
+	qconfig.contrem = this;
 	qconfig.cols = reader->cols();
 	qconfig.rows = reader->rows();
 	qconfig.bands = reader->bands();
-
-	// A buffer for input data. Stores a row from a raster, or a single "pixel" from a table.
-	std::vector<double> buf(qconfig.cols * reader->bands());
+	qconfig.useROI = getFileType(spectra) != CSV;
 
 	// A list of wavelengths.
 	qconfig.wavelengths = reader->getWavelengths();
@@ -596,6 +605,9 @@ void Contrem::run(ContremListener* listener) {
 
 	qconfig.inRunning = true;
 	qconfig.outRunning = true;
+
+	// A buffer for input data. Stores a row from a raster, or a single "pixel" from a table.
+	std::vector<double> buf(qconfig.cols * reader->bands());
 
 	// A list of wavelengths as strings for labelling.
 	std::vector<std::string> wavelengthMeta;
