@@ -23,7 +23,7 @@ public:
 	PlotJob(const std::string& filename, const std::string& title,
 			const std::vector<double>& x, const std::vector<double>& y,
 			const std::vector<double>& regx, const std::vector<double>& regy) :
-		filename(filename), title(title), x(x), y(y), regx(x), regy(y) {
+		filename(filename), title(title), x(x), y(y), regx(regx), regy(regy) {
 	}
 };
 

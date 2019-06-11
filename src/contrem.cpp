@@ -53,6 +53,29 @@ int runWithGui(ContremApp& app, ContremForm& form) {
 	return app.exec();
 }
 
+int main(int argc, char** argv) {
+
+	ContremApp app(argc, argv);
+	ContremForm form(&app);
+	app.plotter = &(form.contrem().plotter());
+
+	return runWithGui(app, form);
+
+	/*
+	Plotter& plotter = form.contrem().plotter();
+	while(running || plotter.hasItems()) {
+		plotter.step();
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+*/
+	//}
+
+	return 0;
+}
+
+
+/*
+
 
 
 class DummyListener : public ContremListener {
@@ -94,7 +117,7 @@ void usage() {
 }
 
 int main(int argc, char** argv) {
-
+*/
 	/*
 	if(argc > 1) {
 
@@ -182,20 +205,3 @@ int main(int argc, char** argv) {
 
 	} else {
 */
-	ContremApp app(argc, argv);
-	ContremForm form(&app);
-	app.plotter = &(form.contrem().plotter());
-
-	return runWithGui(app, form);
-
-	/*
-	Plotter& plotter = form.contrem().plotter();
-	while(running || plotter.hasItems()) {
-		plotter.step();
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-*/
-	//}
-
-	return 0;
-}
