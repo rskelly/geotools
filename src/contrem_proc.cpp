@@ -64,8 +64,15 @@ namespace {
 		double y0;
 		double x1;
 		double y1;
+
+		line() : line(0, 0, 0, 0) {}
+
 		line(double x0, double y0, double x1, double y1) :
 			x0(x0), y0(y0), x1(x1), y1(y1) {}
+
+		double length() const {
+			return std::sqrt(std::pow(x0 - x1, 2.0) + std::pow(y0 - y1, 2.0));
+		}
 	};
 
 	/**
@@ -136,7 +143,11 @@ namespace {
 		double slope;					///<! The slope of the regression line through the crnm points.
 		double yint;					///<! The y-intercept of the regression.
 		int maxCount; 					///<! The number of equal maximum values.
+		int maxIdx;						///<! The index of the first maximum.
+
 		std::vector<outpoint> data;		///<! The output data.
+		std::vector<double> hullx;
+		std::vector<double> hully;
 
 		output() : output("", 0, 0) {}
 
@@ -149,7 +160,72 @@ namespace {
 			area(0), larea(0), rarea(0), symmetry(0),
 			maxCrm(0), maxWl(0),
 			slope(0), yint(0),
-			maxCount(0) {}
+			maxCount(0),
+			maxIdx(0) {}
+
+		void compute(const std::vector<line>& lines) {
+			maxCrm = 0;
+			maxIdx = 0;
+			int i = 0;
+			for(outpoint& pt : data) {
+				pt.cr = pt.ss / pt.ch;		// Continuum removal -- intensity proportional to height of hull.
+				pt.crm = 1 - pt.cr;			// Mirrored continuum removal.
+				if(pt.crm > maxCrm) {
+					// There may be more than one equal max; it'll be flagged at a later step
+					maxCrm = pt.crm;
+					maxWl = pt.w;
+					maxIdx = i;
+				}
+				++i;
+			}
+
+			double sxy = 0, sx = 0, sy = 0, sxx = 0;
+			size_t n = data.size();
+
+			area = 0;
+			larea = 0;
+
+			// Calculate the other ch metrics.
+			for(size_t i = 0; i < n; ++i) {
+				outpoint& pt = data[i];
+				pt.crn = pt.crm / maxCrm;	// Normalized continuum removal -- normalized against maximum mirrored cr.
+				pt.crnm = 1 - pt.crn;			// Mirrored normalized continuum removal.
+				if(i > 0 && i < n - 1) {
+					sxy += pt.w * pt.crnm;
+					sx += pt.w;
+					sy += pt.crnm;
+					sxx += pt.w * pt.w;
+				}
+				// Count the values equal to max; will flag those with >1.
+				if(pt.crm == maxCrm)
+					++maxCount;
+
+				// Compute the left and overall spectrum area.
+				if(i < n - 1) {
+					double ww = data[i + 1].w - data[i].w;
+					double a = ((data[i].crn + data[i + 1].crn) * ww) / 2.0; // Add the heights, times the width, divide by two.
+					area += a;
+					if((int) i <= maxIdx)
+						larea += a;
+				}
+			}
+
+			// Compute the rest of the numbers.
+			if(area == 0 || larea == 0 || larea == area) {
+				// If the left or right area is zero, or the total is zero, we have a problem.
+				larea = 0;
+				area = 0;
+				symmetry = 0;
+				rarea = 0;
+			} else {
+				rarea = area - larea;
+				symmetry = larea / rarea;
+			}
+
+			slope = ((n - 2) * sxy - sx * sy) / ((n - 2) * sxx - sx * sx);
+			yint = (sy - slope * sx) / (n - 2);
+
+		}
 	};
 
 	/**
@@ -171,7 +247,7 @@ namespace {
 	/**
 	 * Compute the convex hull around the points and return the line segments.
 	 */
-	std::vector<line> convexHull(const std::vector<inpoint>& in, double& area) {
+	std::vector<line> convexHull(const std::vector<inpoint>& in, double* area = nullptr) {
 
 		const GeometryFactory::unique_ptr gf = GeometryFactory::create();
 
@@ -185,7 +261,8 @@ namespace {
 		Polygon* hull = dynamic_cast<Polygon*>(mp->convexHull());
 
 		// Get the area for output.
-		area = hull->getArea();
+		if(area != nullptr)
+			*area = hull->getArea();
 
 		// Extract the line segments.
 		std::vector<line> lines;
@@ -236,6 +313,52 @@ namespace {
 			return names;
 		}
 	};
+
+	/**
+	 * Return a list of lines depending on configuration.
+	 * 1) If a hull is desired.
+	 * 2) If the longest segment of a hull is desired.
+	 * 3) If a straight line from start to end of spectrum.
+	 *
+	 * \param config The QConfig object.
+	 * \param pts The list of input points.
+	 * \return A list of lines.
+	 */
+	std::vector<line> getLines(QConfig* config, std::vector<inpoint>& pts) {
+
+		std::vector<line> lines;
+
+		if(config->contrem->doHull) {
+
+			pts.emplace_back(pts.back().w, 0.0);
+			pts.emplace_back(pts.front().w, 0.0);
+
+			// Compute the hull.
+			lines = convexHull(pts);
+
+			if(config->contrem->doHullLongestSeg) {
+				// If required, take the longest segment out of the hull and use it for normalization.
+				size_t idx = 0;
+				double len = 0;
+				for(size_t i = 0; i < lines.size(); ++i) {
+					if(lines[i].length() > len) {
+						len = lines[i].length();
+						idx = i;
+					}
+				}
+				lines[0] = std::move(lines[idx]);
+				lines.resize(1);
+			}
+
+		} else {
+
+			// Use a single line from the first to the last point on the spectrum.
+			lines.emplace_back(pts.front().w, pts.front().ss, pts.back().w, pts.back().ss);
+
+		}
+
+		return lines;
+	}
 
 	/**
 	 * Process the input queue.
@@ -300,96 +423,50 @@ namespace {
 
 			// Add two corner points to complete the hull.
 			std::vector<inpoint> pts(in.data.begin(), in.data.end());
-			pts.emplace_back(pts[pts.size() - 1].w, 0.0);
-			pts.emplace_back(pts[0].w, 0.0);
+
+			// Get the linework for normalization.
+			std::vector<line> lines = getLines(config, pts);
 
 			// Create an output pixel to hold computed values.
 			output out(in);
 
+
 			if(!config->contrem->running)
 				break;
 
-			// Compute the hull, assign area to the output.
-			std::vector<line> lines = convexHull(pts, out.area);
+			// Store the points of the convex hull/line in case plotting is desired.
+			if(config->contrem->plotOrig) {
+				out.hullx.clear();
+				out.hully.clear();
+				for(line& l : lines) {
+					out.hullx.push_back(l.x0);
+					out.hully.push_back(l.y0);
+				}
+				out.hullx.push_back(lines.back().x1);
+				out.hully.push_back(lines.back().y1);
+			}
 
 			// Find the intersection point for each wavelength.
-			for(inpoint& pt : in.data) {
-				bool found = false;
+			// If an intersection isn't found, discard the point (this may
+			// occur if the single line from the hull is used.
+			for(inpoint& pt : pts) {
 				for(line& l : lines) {
 					double ch = interpolate(pt.w, l.x0, l.y0, l.x1, l.y1);
 					if(!std::isnan(ch)) {
 						out.data.emplace_back(pt, ch);
-						found = true;
 						break;
 					}
 				}
-				if(!found)
-					throw std::runtime_error("Failed to find an intersection point.");
 			}
+
+			if(out.data.size() < 2)
+				throw std::runtime_error("The list of input points is too small.");
 
 			if(!config->contrem->running)
 				break;
 
-			// Calculate the cr and crm, and get the max value and index.
-			out.maxCrm = 0;
-			int maxIdx = 0, i = 0;
-			for(outpoint& pt : out.data) {
-				pt.cr = pt.ss / pt.ch;		// Continuum removal -- intensity proportional to height of hull.
-				pt.crm = 1 - pt.cr;			// Mirrored continuum removal.
-				if(pt.crm > out.maxCrm) {
-					// There may be more than one equal max; it'll be flagged at a later step
-					out.maxCrm = pt.crm;
-					out.maxWl = pt.w;
-					maxIdx = i;
-				}
-				++i;
-			}
-
-			double sxy = 0, sx = 0, sy = 0, sxx = 0;
-			size_t n = out.data.size();
-
-			out.area = 0;
-			out.larea = 0;
-
-			// Calculate the other ch metrics.
-			for(size_t i = 0; i < n; ++i) {
-				outpoint& pt = out.data[i];
-				pt.crn = pt.crm / out.maxCrm;	// Normalized continuum removal -- normalized against maximum mirrored cr.
-				pt.crnm = 1 - pt.crn;			// Mirrored normalized continuum removal.
-				if(i > 0 && i < n - 1) {
-					sxy += pt.w * pt.crnm;
-					sx += pt.w;
-					sy += pt.crnm;
-					sxx += pt.w * pt.w;
-				}
-				// Count the values equal to max; will flag those with >1.
-				if(pt.crm == out.maxCrm)
-					++out.maxCount;
-
-				// Compute the left and overall spectrum area.
-				if(i < n - 1) {
-					double ww = out.data[i + 1].w - out.data[i].w;
-					double a = ((out.data[i].crn + out.data[i + 1].crn) * ww) / 2.0; // Add the heights, times the width, divide by two.
-					out.area += a;
-					if((int) i <= maxIdx)
-						out.larea += a;
-				}
-			}
-
-			// Compute the rest of the numbers.
-			if(out.area == 0 || out.larea == 0 || out.larea == out.area) {
-				// If the left or right area is zero, or the total is zero, we have a problem.
-				out.larea = 0;
-				out.area = 0;
-				out.symmetry = 0;
-				out.rarea = 0;
-			} else {
-				out.rarea = out.area - out.larea;
-				out.symmetry = out.larea / out.rarea;
-			}
-
-			out.slope = ((n - 2) * sxy - sx * sy) / ((n - 2) * sxx - sx * sx);
-			out.yint = (sy - out.slope * sx) / (n - 2);
+			// Calculate the cr and crm, etc., and get the max value and index.
+			out.compute(lines);
 
 			if(!config->contrem->running)
 				break;
@@ -536,12 +613,21 @@ namespace {
 				break;
 
 			// If appropriate plot the normalized spectrum.
-			if(true){
-				std::string plotfile = plotdir + "/hull_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
-				std::string title = "Normalized Continuum Removal, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
-				std::vector<double> rx = {w.front(), w.back()};
-				std::vector<double> ry = {w.front() * out.slope + out.yint, w.back() * out.slope + out.yint};
-				config->contrem->plotter().queue(plotfile, title, w, crnm, rx, ry);
+			if(config->contrem->plotNormReg){
+				std::string plotfile = plotdir + "/norm_reg_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
+				std::string title = "Normalized Spectrum, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
+				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
+				items.emplace_back("Normalized Spectrum", w, crnm);
+				items.emplace_back("Regression", std::vector<double>({w.front(), w.back()}), std::vector<double>({w.front() * out.slope + out.yint, w.back() * out.slope + out.yint}));
+				config->contrem->plotter().queue(plotfile, title, items);
+			}
+			if(config->contrem->plotOrig){
+				std::string plotfile = plotdir + "/orig_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
+				std::string title = "Original Spectrum + Hull, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
+				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
+				items.emplace_back("Original Spectrum", w, ss);
+				items.emplace_back("Convex Hull", out.hullx, out.hully);
+				config->contrem->plotter().queue(plotfile, title, items);
 			}
 
 			if(!config->contrem->running)

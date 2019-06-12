@@ -10,6 +10,7 @@
 
 #include <mutex>
 #include <list>
+#include <tuple>
 
 #include "matplotlibcpp.h"
 
@@ -18,12 +19,12 @@ namespace hlrg {
 class PlotJob {
 public:
 	std::string filename, title;
-	std::vector<double> x, y, regx, regy;
+	std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
+
 	PlotJob() {}
 	PlotJob(const std::string& filename, const std::string& title,
-			const std::vector<double>& x, const std::vector<double>& y,
-			const std::vector<double>& regx, const std::vector<double>& regy) :
-		filename(filename), title(title), x(x), y(y), regx(regx), regy(regy) {
+			const std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>>& items) :
+		filename(filename), title(title), items(items) {
 	}
 };
 
@@ -40,10 +41,9 @@ public:
 	}
 
 	void queue(const std::string& filename, const std::string& title,
-			const std::vector<double>& x, const std::vector<double>& y,
-			const std::vector<double>& regx, const std::vector<double>& regy) {
+			const std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>>& items) {
 		std::lock_guard<std::mutex> lk(m_qmtx);
-		m_queue.emplace_back(filename, title, x, y, regx, regy);
+		m_queue.emplace_back(filename, title, items);
 	}
 
 	void plot(const PlotJob& job) {
@@ -51,29 +51,19 @@ public:
 		namespace plt = matplotlibcpp;
 		plt::figure(111);
 		plt::figure_size(600, 400);
-		plt::named_plot("Normalized, Continuum Removed", job.x, job.y);
-		plt::named_plot("Regression", job.regx, job.regy);
+		for(const auto& item : job.items)
+			plt::named_plot(std::get<0>(item), std::get<1>(item), std::get<2>(item));
 		plt::title(job.title);
 		plt::legend();
 		plt::save(job.filename);
 		plt::close();
 	}
 
-	void step() {
-		PlotJob job;
-		bool hasJob = false;
+	void process() {
 		while(!m_queue.empty()) {
-			{
-				std::lock_guard<std::mutex> lk(m_qmtx);
-				if(!m_queue.empty()) {
-					job = std::move(m_queue.front());
-					hasJob = true;
-					m_queue.pop_front();
-				}
-			}
-			if(hasJob)
-				plot(job);
-			hasJob = false;
+			PlotJob& job = m_queue.front();
+			plot(job);
+			m_queue.pop_front();
 		}
 	}
 };

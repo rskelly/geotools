@@ -59,7 +59,11 @@ int main(int argc, char** argv) {
 	ContremForm form(&app);
 	app.plotter = &(form.contrem().plotter());
 
-	return runWithGui(app, form);
+	int ret = runWithGui(app, form);
+
+	app.plotter->process();
+
+	return ret;
 }
 
 
