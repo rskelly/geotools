@@ -20,7 +20,7 @@ enum FileType {
 	SHP,
 	CSV,
 	SQLITE,
-	Unknown
+	UnknownFileType
 };
 
 /**
@@ -30,6 +30,13 @@ enum DataType {
 	Byte,
 	Int32,
 	Float32
+};
+
+enum NormMethod {
+	ConvexHull,
+	ConvexHullLongestSeg,
+	Line,
+	UnknownNormMethod
 };
 
 /**
@@ -100,11 +107,9 @@ public:
 	bool wlTranspose;
 	int wlIDCol;
 
-	bool doHull;						///<! If true, compute the hull for continuum removal. Otherwise use a line.
-	bool doHullLongestSeg;				///<! If doHull is true, use only the longest segment and truncate the spectrum at its ends.
-	bool plotOrig;						///<! Plot the original spectrum and hull.
-	bool plotNormReg;					///<! Plot the normalized continuum removed spectrum and regression line.
-
+	bool plotOrig;				///<! Plot the original spectrum and hull.
+	bool plotNorm;				///<! Plot the normalized continuum removed spectrum and regression line.
+	NormMethod normMethod;		///<! The normalization method.
 	int threads;				///<! The number of threads to use.
 	bool running;
 

@@ -16,6 +16,8 @@ namespace hlrg {
 
 	constexpr std::array<FileType, 3> OUTPUT_TYPES = {GTiff, ENVI, CSV};			///<! Allowed output types for results.
 
+	constexpr std::array<NormMethod, 3> NORM_METHODS = {ConvexHull, ConvexHullLongestSeg, Line};
+
 	FileType getFileType(const std::string& filename);
 
 	/**
@@ -29,6 +31,10 @@ namespace hlrg {
 	std::string fileTypeAsString(hlrg::FileType type);
 
 	hlrg::FileType fileTypeFromString(const std::string& type);
+
+	hlrg::NormMethod normMethodFromString(const std::string& method);
+
+	std::string normMethodAsString(hlrg::NormMethod method);
 
 	bool isnonzero(const double& v);
 

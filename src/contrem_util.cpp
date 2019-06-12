@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <sstream>
+#include <regex>
 
 #include <gdal_priv.h>
 
@@ -37,7 +38,7 @@ FileType hlrg::getFileType(const std::string& filename) {
 		GDALDataset* ds = static_cast<GDALDataset*>(GDALOpenEx(filename.c_str(), GDAL_OF_READONLY, 0, 0, 0));
 		if(ds) {
 			std::string drv(ds->GetDriverName());
-			FileType type = Unknown;
+			FileType type = UnknownFileType;
 			if(drv == "GTiff") {
 				type = GTiff;
 			} else if(drv == "ENVI") {
@@ -51,7 +52,7 @@ FileType hlrg::getFileType(const std::string& filename) {
 			return type;
 		}
 	}
-	return Unknown;
+	return UnknownFileType;
 }
 
 /**
@@ -109,10 +110,35 @@ hlrg::FileType hlrg::fileTypeFromString(const std::string& type) {
 	} else if(type == "CSV") {
 		return CSV;
 	} else {
-		return Unknown;
+		return UnknownFileType;
 	}
 }
 
+std::string hlrg::normMethodAsString(hlrg::NormMethod method) {
+	switch(method) {
+	case ConvexHull:
+		return "Convex Hull";
+	case ConvexHullLongestSeg:
+		return "Convex Hull, Longest Segment";
+	case Line:
+		return "Line";
+	case UnknownNormMethod:
+	default:
+		return "Unknown";
+	}
+}
+
+hlrg::NormMethod hlrg::normMethodFromString(const std::string& method) {
+	if(method == normMethodAsString(ConvexHull)) {
+		return ConvexHull;
+	} else if(method == normMethodAsString(ConvexHullLongestSeg)) {
+		return ConvexHullLongestSeg;
+	} else if(method == normMethodAsString(Line)) {
+		return Line;
+	} else {
+		return UnknownNormMethod;
+	}
+}
 
 bool hlrg::isnonzero(const double& v) {
 	return v != 0;
@@ -154,8 +180,6 @@ bool hlrg::makedir(const std::string& filename) {
 	}
 	return true;
 }
-
-#include <regex>
 
 std::string hlrg::sanitize(const std::string& str) {
 	std::regex repl("([^0-9A-Za-z]+)");

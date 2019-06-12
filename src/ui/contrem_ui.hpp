@@ -137,6 +137,10 @@ public slots:
 	void cboMinWLChanged(int);
 	void cboMaxWLChanged(int);
 
+	void cboNormMethodChanged(QString);
+	void chkPlotOrigChanged(bool);
+	void chkPlotNormChanged(bool);
+
 	void btnRunClicked();
 	void btnCancelClicked();
 	void btnHelpClicked();

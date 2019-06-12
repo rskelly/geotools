@@ -39,6 +39,9 @@ namespace {
 	constexpr const char* LAST_BUFFER = "lastBuffer";
 	constexpr const char* LAST_THREADS = "lastThreads";
 	constexpr const char* LAST_DIR = "lastDir";
+	constexpr const char* LAST_NORM_METHOD = "lastNormMethod";
+	constexpr const char* LAST_PLOT_NORM = "lastPlotNorm";
+	constexpr const char* LAST_PLOT_ORIG = "lastPlotOrig";
 
 	double nearestWl(double v, const std::map<int, double>& map) {
 		if(map.empty())
@@ -89,9 +92,14 @@ void ContremForm::setupUi(QDialog* form) {
 		outputTypes << fileTypeAsString(type).c_str();
 	cboOutputType->addItems(outputTypes);
 
+	QStringList normMethods;
+	for(NormMethod method : NORM_METHODS)
+		normMethods << normMethodAsString(method).c_str();
+	cboNormMethod->addItems(normMethods);
+
 	runWidgets = {
 		txtROIFile, btnROI, txtSamplePoints, btnSamplePoints, txtSpectraFile, btnSpectra, spnWLHeaderRows, spnWLFirstCol, spnWLLastCol,
-		spnWLIDCol, chkWLTranspose, txtOutputFile, cboOutputType, btnOutput, cboMinWL, cboMaxWL,
+		spnWLIDCol, chkWLTranspose, txtOutputFile, cboOutputType, btnOutput, cboMinWL, cboMaxWL, cboNormMethod, chkPlotNorm, chkPlotOrig,
 		btnRun
 	};
 
@@ -119,6 +127,10 @@ void ContremForm::setupUi(QDialog* form) {
 	connect(cboMinWL, SIGNAL(currentIndexChanged(int)), this, SLOT(cboMinWLChanged(int)));
 	connect(cboMaxWL, SIGNAL(currentIndexChanged(int)), this, SLOT(cboMaxWLChanged(int)));
 
+	connect(cboNormMethod, SIGNAL(currentTextChanged(QString)), this, SLOT(cboNormMethodChanged(QString)));
+	connect(chkPlotOrig, SIGNAL(toggled(bool)), this, SLOT(chkPlotOrigChanged(bool)));
+	connect(chkPlotNorm, SIGNAL(toggled(bool)), this, SLOT(chkPlotNormChanged(bool)));
+
 	connect(btnRun, SIGNAL(clicked()), this, SLOT(btnRunClicked()));
 	connect(btnCancel, SIGNAL(clicked()), this, SLOT(btnCancelClicked()));
 	connect(btnHelp, SIGNAL(clicked()), this, SLOT(btnHelpClicked()));
@@ -142,6 +154,9 @@ void ContremForm::setupUi(QDialog* form) {
 	m_contrem.maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
 	m_contrem.threads = 4; //m_settings.value(LAST_THREADS, 1).toInt();
 	m_contrem.samplePoints = m_settings.value(LAST_SAMPLE_POINTS, "").toString().toStdString();
+	m_contrem.plotNorm = m_settings.value(LAST_PLOT_NORM, false).toBool();
+	m_contrem.plotOrig = m_settings.value(LAST_PLOT_ORIG, false).toBool();
+	m_contrem.normMethod = (NormMethod) m_settings.value(LAST_NORM_METHOD, ConvexHull).toInt();
 
 	txtROIFile->setText(QString(m_contrem.roi.c_str()));
 	txtSamplePoints->setText(QString(m_contrem.samplePoints.c_str()));
@@ -152,6 +167,9 @@ void ContremForm::setupUi(QDialog* form) {
 	spnWLLastCol->setValue(m_contrem.wlMaxCol);
 	spnWLHeaderRows->setValue(m_contrem.wlHeaderRows);
 	chkWLTranspose->setChecked(m_contrem.wlTranspose);
+	chkPlotNorm->setChecked(m_contrem.plotNorm);
+	chkPlotOrig->setChecked(m_contrem.plotOrig);
+	cboNormMethod->setCurrentText(QString(normMethodAsString(m_contrem.normMethod).c_str()));
 }
 
 void ContremForm::checkRun() {
@@ -166,7 +184,7 @@ void ContremForm::checkRun() {
 	bool d = m_contrem.samplePoints.empty() || isfile(m_contrem.samplePoints);
 	bool c = !m_contrem.output.empty();
 	bool e = stype == CSV && m_contrem.outputType != CSV;
-	bool f = m_contrem.outputType == Unknown || m_contrem.outputType == 0;
+	bool f = m_contrem.outputType == UnknownFileType || m_contrem.outputType == 0;
 	btnRun->setEnabled(a && b && c && d);
 	QStringList hints;
 	if(!a)
@@ -355,6 +373,21 @@ void ContremForm::btnOutputClicked() {
 	QFileInfo dir(filename);
 	m_settings.setValue(LAST_DIR, dir.dir().absolutePath());
 	txtOutputFile->setText(filename);
+}
+
+void ContremForm::cboNormMethodChanged(QString str) {
+	m_settings.setValue(LAST_NORM_METHOD, normMethodFromString(str.toStdString()));
+	checkRun();
+}
+
+void ContremForm::chkPlotOrigChanged(bool on) {
+	m_settings.setValue(LAST_PLOT_ORIG, on);
+	checkRun();
+}
+
+void ContremForm::chkPlotNormChanged(bool on) {
+	m_settings.setValue(LAST_PLOT_NORM, on);
+	checkRun();
 }
 
 void ContremForm::runState() {
