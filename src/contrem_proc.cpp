@@ -367,30 +367,6 @@ namespace {
 	 */
 	void processQueue(QConfig* config) {
 
-		// Check for a mask file.
-		bool hasRoi = false;
-		int cols = 1;
-		std::vector<bool> mask;
-		{
-			std::string roi = config->contrem->roi;
-			if(config->useROI && !roi.empty() && isfile(roi)) {
-				try {
-					GDALReader rdr(roi);
-					int row;
-					std::string id;
-					std::vector<double> buf(rdr.cols());
-					mask.resize(rdr.cols() * rdr.rows());
-					while(rdr.next(buf, 1, cols, row)) {
-						for(int i = 0; i < cols; ++i)
-							mask[row * cols + i] = buf[i] != 0;
-					}
-					hasRoi = true;
-				} catch(const std::exception& ex) {
-					std::cerr << "Could not open mask: " << ex.what() << "\n";
-				}
-			}
-		}
-
 		input in;
 		while(config->contrem->running) {
 			std::this_thread::yield();
@@ -408,13 +384,6 @@ namespace {
 
 			if(!config->contrem->running)
 				break;
-
-			// If there's a mask, check it. Skip if necessary.
-			if(hasRoi && !mask[in.r * cols + in.c]) {
-				config->outcv.notify_one();
-				config->readcv.notify_one();
-				continue;
-			}
 
 			// Adjust <=0 intensities to MIN_VALUE. This enables the creation
 			// of a hull even though the area of the hull will be zero for practical purposes.
@@ -709,6 +678,31 @@ void Contrem::run(ContremListener* listener) {
 	// Start the output thread.
 	std::thread t1(writeQueue, &qconfig);
 
+	// Check for a mask file.
+	bool hasRoi = false;
+	std::vector<bool> mask;
+	{
+		int cols = 1;
+		{
+			if(qconfig.useROI && !roi.empty() && isfile(roi)) {
+				try {
+					GDALReader rdr(roi);
+					int row;
+					std::string id;
+					std::vector<double> buf(rdr.cols());
+					mask.resize(rdr.cols() * rdr.rows());
+					while(rdr.next(buf, 1, cols, row)) {
+						for(int i = 0; i < cols; ++i)
+							mask[row * cols + i] = buf[i] > 0;
+					}
+					hasRoi = true;
+				} catch(const std::exception& ex) {
+					std::cerr << "Could not open mask: " << ex.what() << "\n";
+				}
+			}
+		}
+	}
+
 	// Read through the buffer and populate the input queue.
 	int bands = reader->bands();
 	int cols, row;
@@ -719,6 +713,11 @@ void Contrem::run(ContremListener* listener) {
 			// Read out the input objects and add to the queue.
 			std::lock_guard<std::mutex> lk(qconfig.inmtx);
 			for(int c = 0; c < cols; ++c) {
+
+				// If there's a mask, check it. Skip if necessary.
+				if(hasRoi && !mask[row * cols + c])
+					continue;
+
 				input in(id, c, row);
 				for(int b = 0; b < bands; ++b) {
 					double v = buf[c * bands + b];

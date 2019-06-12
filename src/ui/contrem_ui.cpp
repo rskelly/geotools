@@ -152,7 +152,7 @@ void ContremForm::setupUi(QDialog* form) {
 	m_contrem.outputType = (FileType) m_settings.value(LAST_OUTPUT_TYPE, ENVI).toInt();
 	m_contrem.minWl = m_settings.value(LAST_MIN_WL, 0).toDouble();
 	m_contrem.maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
-	m_contrem.threads = 4; //m_settings.value(LAST_THREADS, 1).toInt();
+	m_contrem.threads = 1; //m_settings.value(LAST_THREADS, 1).toInt();
 	m_contrem.samplePoints = m_settings.value(LAST_SAMPLE_POINTS, "").toString().toStdString();
 	m_contrem.plotNorm = m_settings.value(LAST_PLOT_NORM, false).toBool();
 	m_contrem.plotOrig = m_settings.value(LAST_PLOT_ORIG, false).toBool();
@@ -183,7 +183,7 @@ void ContremForm::checkRun() {
 	bool b = !m_contrem.spectra.empty() && isfile(m_contrem.spectra);
 	bool d = m_contrem.samplePoints.empty() || isfile(m_contrem.samplePoints);
 	bool c = !m_contrem.output.empty();
-	bool e = stype == CSV && m_contrem.outputType != CSV;
+	bool e = !(stype == CSV && m_contrem.outputType != CSV);
 	bool f = m_contrem.outputType == UnknownFileType || m_contrem.outputType == 0;
 	btnRun->setEnabled(a && b && c && d);
 	QStringList hints;
