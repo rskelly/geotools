@@ -331,11 +331,12 @@ namespace {
 		NormMethod method = config->contrem->normMethod;
 		if(method == NormMethod::ConvexHull || method == ConvexHullLongestSeg) {
 
-			pts.emplace_back(pts.back().w, 0.0);
-			pts.emplace_back(pts.front().w, 0.0);
+			std::vector<inpoint> _pts(pts);
+			_pts.emplace_back(pts.back().w, 0.0);
+			_pts.emplace_back(pts.front().w, 0.0);
 
 			// Compute the hull.
-			lines = convexHull(pts);
+			lines = convexHull(_pts);
 
 			if(method == ConvexHullLongestSeg) {
 				// If required, take the longest segment out of the hull and use it for normalization.
@@ -453,7 +454,7 @@ namespace {
 			for(inpoint& pt : pts) {
 				for(line& l : lines) {
 					double ch = interpolate(pt.w, l.x0, l.y0, l.x1, l.y1);
-					if(!std::isnan(ch)) {
+					if(!std::isnan(ch) && pt.ss != 0) {
 						out.data.emplace_back(pt, ch);
 						break;
 					}
@@ -615,7 +616,7 @@ namespace {
 
 			// If appropriate plot the normalized spectrum.
 			if(config->contrem->plotNorm){
-				std::string plotfile = plotdir + "/norm_reg_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
+				std::string plotfile = plotdir + "/norm_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
 				std::string title = "Normalized Spectrum, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
 				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 				items.emplace_back("Normalized Spectrum", w, crnm);

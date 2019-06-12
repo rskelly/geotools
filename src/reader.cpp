@@ -707,9 +707,9 @@ bool CSVReader::next(std::string& id, std::vector<double>& buf, int& cols, int& 
 	cols = 1;
 	row = m_idx;
 
-	std::vector<double> data(m_maxWlCol - m_minWlCol + 1);
-	for(int i = m_minWlCol; i <= m_maxWlCol; ++i)
-		data[i] = atof(m_data[m_idx][i].c_str());
+	std::vector<double> data(m_maxIdx - m_minIdx + 1);
+	for(int i = m_minIdx; i <= m_maxIdx; ++i)
+		data[i - m_minIdx] = atof(m_data[m_idx][i].c_str());
 	buf.assign(data.begin(), data.end());
 
 	id = m_data[m_idx][m_idCol];
