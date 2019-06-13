@@ -16,8 +16,8 @@
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMessageBox>
 
-#include "contrem.hpp"
 #include "ui/contrem_ui.hpp"
+#include "contrem.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
 #include "plotter.hpp"

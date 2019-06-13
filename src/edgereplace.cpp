@@ -12,28 +12,32 @@
 #include <vector>
 #include <iostream>
 
-inline void replaceFloat(float* buf, int imgWidth, int edgeWidth, float replace) {
-	for(int i = 0; i < edgeWidth; ++i) {
-		buf[i] = replace;
-		buf[imgWidth - edgeWidth + i] = replace;
+namespace {
+
+	inline void replaceFloat(float* buf, int imgWidth, int edgeWidth, float replace) {
+		for(int i = 0; i < edgeWidth; ++i) {
+			buf[i] = replace;
+			buf[imgWidth - edgeWidth + i] = replace;
+		}
 	}
-}
 
-inline void replaceUInt16(unsigned short* buf, int imgWidth, int edgeWidth, unsigned short replace) {
-	for(int i = 0; i < edgeWidth; ++i) {
-		buf[i] = replace;
-		buf[imgWidth - edgeWidth + i] = replace;
+	inline void replaceUInt16(unsigned short* buf, int imgWidth, int edgeWidth, unsigned short replace) {
+		for(int i = 0; i < edgeWidth; ++i) {
+			buf[i] = replace;
+			buf[imgWidth - edgeWidth + i] = replace;
+		}
 	}
-}
 
-inline void trimFloat(float* buf, int imgWidth, int edgeWidth) {
-	for(int i = edgeWidth; i < imgWidth - edgeWidth; ++i)
-		buf[i - edgeWidth] = buf[i];
-}
+	inline void trimFloat(float* buf, int imgWidth, int edgeWidth) {
+		for(int i = edgeWidth; i < imgWidth - edgeWidth; ++i)
+			buf[i - edgeWidth] = buf[i];
+	}
 
-inline void trimUInt16(unsigned short* buf, int imgWidth, int edgeWidth) {
-	for(int i = edgeWidth; i < imgWidth - edgeWidth; ++i)
-		buf[i - edgeWidth] = buf[i];
+	inline void trimUInt16(unsigned short* buf, int imgWidth, int edgeWidth) {
+		for(int i = edgeWidth; i < imgWidth - edgeWidth; ++i)
+			buf[i - edgeWidth] = buf[i];
+	}
+
 }
 
 int main(int argc, char** argv) {

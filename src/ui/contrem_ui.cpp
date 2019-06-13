@@ -13,8 +13,8 @@
 #include <QtWidgets/QMessageBox>
 
 #include "contrem_ui.hpp"
+#include "util.hpp"
 #include "contrem.hpp"
-#include "contrem_util.hpp"
 
 namespace {
 

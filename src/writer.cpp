@@ -18,8 +18,9 @@
 #include <gdal_priv.h>
 
 #include "writer.hpp"
+
+#include "util.hpp"
 #include "stats.hpp"
-#include "contrem_util.hpp"
 
 using namespace hlrg;
 

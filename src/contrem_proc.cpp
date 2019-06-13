@@ -23,10 +23,10 @@
 #include <geos/geom/LineString.h>
 #include <geos/geom/Point.h>
 
+#include "util.hpp"
 #include "contrem.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
-#include "contrem_util.hpp"
 
 using namespace geos::geom;
 using namespace geos::algorithm;

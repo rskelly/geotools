@@ -15,8 +15,8 @@
 
 #include <gdal_priv.h>
 
+#include "util.hpp"
 #include "reader.hpp"
-#include "contrem_util.hpp"
 
 using namespace hlrg;
 

@@ -18,30 +18,32 @@
 
 using namespace hlrg;
 
-constexpr double PI = 3.1415926535;
+namespace {
 
-/**
- * Compute the inverse of the Gaussian: retrieve the x that would give
- * the given y. X is returned as an absolute distance from x0.
- *
- * @param sigma The standard deviation of the function.
- * @param y The value of y for which to find x.
- * @param x0 The mean x.
- */
-inline double invGaussian(double sigma, double y, double x0) {
-	return sigma * std::sqrt(-2.0 * std::log(y * sigma * std::sqrt(2.0 * PI))) + x0;
-}
+	/**
+	 * Compute the inverse of the Gaussian: retrieve the x that would give
+	 * the given y. X is returned as an absolute distance from x0.
+	 *
+	 * @param sigma The standard deviation of the function.
+	 * @param y The value of y for which to find x.
+	 * @param x0 The mean x.
+	 */
+	inline double invGaussian(double sigma, double y, double x0) {
+		return sigma * std::sqrt(-2.0 * std::log(y * sigma * std::sqrt(2.0 * M_PI))) + x0;
+	}
 
-/**
- * Compute the value of the Gaussian function for a given mean (x0) and
- * x, given sigma and magnitude 1.
- *
- * @param sigma The standard deviation of the function.
- * @param x The current x.
- * @param x0 The mean (expected) x.
- */
-inline double gaussian(double sigma, double x, double x0) {
-	return  1.0 / (sigma * std::sqrt(2.0 * PI)) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
+	/**
+	 * Compute the value of the Gaussian function for a given mean (x0) and
+	 * x, given sigma and magnitude 1.
+	 *
+	 * @param sigma The standard deviation of the function.
+	 * @param x The current x.
+	 * @param x0 The mean (expected) x.
+	 */
+	inline double gaussian(double sigma, double x, double x0) {
+		return  1.0 / (sigma * std::sqrt(2.0 * M_PI)) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
+	}
+
 }
 
 Kernel::Kernel(double wl, double fwhm, double threshold) :

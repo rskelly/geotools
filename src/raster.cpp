@@ -10,49 +10,44 @@
 
 using namespace hlrg;
 
+namespace {
 
-GDALDataType _gtype(DataType type) {
-	switch(type) {
-	case UInt16: return GDT_UInt16;
-	case Int16: return  GDT_Int16;
-	case UInt32: return GDT_UInt32;
-	case Int32: return GDT_Int32;
-	case Float32: return GDT_Float32;
-	case Float64: return GDT_Float64;
-	case Byte: return GDT_Byte;
+	GDALDataType asGDALType(DataType type) {
+		switch(type) {
+		case UInt16: return GDT_UInt16;
+		case Int16: return  GDT_Int16;
+		case UInt32: return GDT_UInt32;
+		case Int32: return GDT_Int32;
+		case Float32: return GDT_Float32;
+		case Float64: return GDT_Float64;
+		case Byte: return GDT_Byte;
+		}
+		throw std::runtime_error("Unknown type.");
 	}
-	throw std::runtime_error("Unknown type.");
+
+	template <class T>
+	GDALDataType asGDALType(T v) {
+		size_t t = typeid(T).hash_code();
+		if(t == typeid(char).hash_code()) {
+			return GDT_Byte;
+		} else if(t == typeid(int).hash_code()) {
+			return GDT_Int32;
+		} else if(t == typeid(unsigned int).hash_code()) {
+			return GDT_UInt32;
+		} else if(t == typeid(float).hash_code()) {
+			return GDT_Float32;
+		} else if(t == typeid(double).hash_code()) {
+			return GDT_Float64;
+		} else if(t == typeid(short).hash_code()) {
+			return GDT_Int16;
+		} else if(t == typeid(unsigned short).hash_code()) {
+			return GDT_UInt16;
+		}
+		throw std::runtime_error("Unknown type.");
+	}
+
 }
 
-template <class T>
-GDALDataType _ttype(T v) {
-	size_t t = typeid(T).hash_code();
-	if(t == typeid(char).hash_code()) {
-		return GDT_Byte;
-	} else if(t == typeid(int).hash_code()) {
-		return GDT_Int32;
-	} else if(t == typeid(unsigned int).hash_code()) {
-		return GDT_UInt32;
-	} else if(t == typeid(float).hash_code()) {
-		return GDT_Float32;
-	} else if(t == typeid(double).hash_code()) {
-		return GDT_Float64;
-	} else if(t == typeid(short).hash_code()) {
-		return GDT_Int16;
-	} else if(t == typeid(unsigned short).hash_code()) {
-		return GDT_UInt16;
-	}
-	throw std::runtime_error("Unknown type.");
-}
-/*
-template GDALDataType _ttype(int v);
-template GDALDataType _ttype(unsigned int v);
-template GDALDataType _ttype(short v);
-template GDALDataType _ttype(unsigned short v);
-template GDALDataType _ttype(char v);
-template GDALDataType _ttype(float v);
-template GDALDataType _ttype(double v);
-*/
 Raster::Raster(const std::string& filename) :
 	m_ds(nullptr),
 	m_bands(0),
@@ -84,7 +79,7 @@ Raster::Raster(const std::string& filename, int cols, int rows, int bands, int s
 
 	GDALDriverManager* dm = GetGDALDriverManager();
 	GDALDriver* drv = dm->GetDriverByName("ENVI");
-	GDALDataType gtype = _gtype(type);
+	GDALDataType gtype = asGDALType(type);
 	if(!(m_ds = (GDALDataset*) drv->Create(filename.c_str(), cols, rows, bands, gtype, &op0)))
 		throw std::invalid_argument("Failed to create dataset.");
 
@@ -117,7 +112,7 @@ GDALRasterBand* Raster::band(int b) const {
 template <class T>
 bool Raster::next(std::vector<T>& buf) {
 	T tmp = 0;
-	GDALDataType gtype = _ttype(tmp);
+	GDALDataType gtype = asGDALType(tmp);
 	buf.resize(m_bands * m_cols);
 	std::fill(buf.begin(), buf.end(), 0);
 	if(++m_row < m_rows) {
@@ -134,7 +129,7 @@ bool Raster::next(std::vector<T>& buf) {
 template <class T>
 bool Raster::write(std::vector<T>& buf, int row) {
 	T tmp = 0;
-	GDALDataType gtype = _ttype(tmp);
+	GDALDataType gtype = asGDALType(tmp);
 	if(row < 0 || row >= m_rows)
 		return false;
 	for(int i = 1; i <= m_bands; ++i) {
@@ -148,7 +143,7 @@ bool Raster::write(std::vector<T>& buf, int row) {
 template <class T>
 bool Raster::get(std::vector<T>& buf, int row) {
 	T tmp = 0;
-	GDALDataType gtype = _ttype(tmp);
+	GDALDataType gtype = asGDALType(tmp);
 	buf.resize(m_bands * m_cols);
 	std::fill(buf.begin(), buf.end(), 0);
 	if(row < 0 || row >= m_rows)

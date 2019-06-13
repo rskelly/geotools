@@ -5,8 +5,8 @@
  *      Author: rob
  */
 
-#ifndef INCLUDE_CONTREM_UTIL_HPP_
-#define INCLUDE_CONTREM_UTIL_HPP_
+#ifndef INCLUDE_UTIL_HPP_
+#define INCLUDE_UTIL_HPP_
 
 #include <array>
 
@@ -66,4 +66,4 @@ namespace hlrg {
 
 } // hlrg
 
-#endif /* INCLUDE_CONTREM_UTIL_HPP_ */
+#endif /* INCLUDE_UTIL_HPP_ */

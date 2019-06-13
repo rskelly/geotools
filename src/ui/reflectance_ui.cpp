@@ -14,25 +14,15 @@
 #include <QtGui/QDesktopServices>
 #include <QtWidgets/QMessageBox>
 
-#include "../../include/reflectance.hpp"
 #include "reflectance_ui.hpp"
+#include "reflectance.hpp"
+#include "util.hpp"
 
 using namespace hlrg;
 
 namespace {
 
-	bool _fexists(const std::string& filename) {
-		if(filename.empty())
-			return false;
-		std::ifstream f(filename);
-		return f.good();
-	}
-
-	void _popup(const std::string& title, const std::string& message) {
-
-	}
-
-	void _process(ReflectanceListener* listener,
+	void process(ReflectanceListener* listener,
 			const std::string* imuGps, double imuUTCOffset,
 			const std::string* rawRad,
 			const std::string* frameIdx,
@@ -99,10 +89,10 @@ void ReflectanceForm::setupUi(QDialog* form) {
 }
 
 void ReflectanceForm::checkRun() {
-	bool a = _fexists(m_imuGps);
-	bool b = _fexists(m_frameIdx);
-	bool c = _fexists(m_rawRad);
-	bool d = _fexists(m_irradConv);
+	bool a = isfile(m_imuGps);
+	bool b = isfile(m_frameIdx);
+	bool c = isfile(m_rawRad);
+	bool d = isfile(m_irradConv);
 	btnRun->setEnabled(a && b && c && d);
 }
 
@@ -112,7 +102,7 @@ void ReflectanceForm::run() {
 		runState();
 		if(m_thread.joinable())
 			m_thread.join();
-		m_thread = std::thread(_process, static_cast<ReflectanceListener*>(this),
+		m_thread = std::thread(process, static_cast<ReflectanceListener*>(this),
 				&m_imuGps, m_imuUTCOffset,
 				&m_rawRad,
 				&m_frameIdx,

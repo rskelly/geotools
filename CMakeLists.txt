@@ -42,22 +42,25 @@ project (contrem)
 # Configure directories###################################################################################
 
 include_directories(BEFORE SYSTEM ./include /usr/local/include /usr/include 
-	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} 
+	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS}
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}) 
 link_directories(. /usr/local/lib /usr/lib)
 
 # Build support libraries ################################################################################
 
-add_executable (contrem src/contrem_util.cpp src/contrem.cpp src/ui/contrem_ui.cpp src/reader.cpp src/writer.cpp src/contrem_proc.cpp src/stats.cpp)
-target_include_directories(contrem PUBLIC contrem_autogen/include ${PYTHON_INCLUDE_DIRS})
-target_link_libraries (contrem ${GDAL_LIBRARY} ${GEOS_LIBRARY} Qt5::Widgets ${PYTHON_LIBRARIES})
+add_library (geotools_util src/util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp)
+target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES})
+
+add_executable (contrem src/contrem.cpp src/ui/contrem_ui.cpp src/contrem_proc.cpp)
+target_include_directories(contrem PUBLIC contrem_autogen/include)
+target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geotools_util)
 
 add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
-target_link_libraries (convolve Qt5::Widgets)
+target_link_libraries (convolve Qt5::Widgets geotools_util)
 
-add_executable (reflectance src/reflectance.cpp src/reader.cpp src/raster.cpp src/ui/reflectance_ui.cpp)
-target_link_libraries (reflectance gdal Qt5::Widgets)
+add_executable (reflectance src/reflectance.cpp src/ui/reflectance_ui.cpp)
+target_link_libraries (reflectance Qt5::Widgets geotools_util)
 
 add_executable (edgereplace src/edgereplace.cpp)
 
