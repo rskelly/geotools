@@ -15,8 +15,10 @@
 
 #include "ui_convolve.h"
 #include "convolve.hpp"
+#include "util.hpp"
 
 using namespace hlrg::convolve;
+using namespace hlrg::util;
 
 namespace hlrg {
 namespace convolve {
@@ -31,6 +33,7 @@ private:
 	std::string m_spectraDelim;
 	std::string m_outputFile;
 	std::string m_outputDelim;
+	FileType m_outputType;
 	double m_inputScale;
 	double m_tolerance;
 	double m_bandShift;
@@ -42,6 +45,9 @@ private:
 	Convolve* m_convolve;
 	QDialog* m_form;
 	QApplication* m_app;
+
+	std::vector<QWidget*> runWidgets;	///<! Widgets which are active in the run state.
+	std::vector<QWidget*> stopWidgets;	///<! Widgets which are active in stopped state.
 
 	std::thread m_thread;
 	bool m_running;
@@ -74,6 +80,7 @@ public slots:
 	void spnTimeColChanged(int);
 	void txtOutputChanged(QString);
 	void cboOutputDelimChanged(QString);
+	void cboOutputTypeChanged(QString);
 	void spnInputScaleChanged(double);
 	void spnToleranceChanged(double);
 	void spnBandShiftChanged(double);
