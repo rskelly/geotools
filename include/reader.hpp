@@ -19,6 +19,7 @@
 #include "bintree.hpp"
 
 namespace hlrg {
+namespace reader {
 
 constexpr double MIN_VALUE = 0.000001; // Note: Can't use this; screws up hull std::numeric_limits<double>::min();
 constexpr double WL_SCALE = 100000;
@@ -260,8 +261,8 @@ public:
  */
 class FrameIndexReader {
 private:
-	BinTree<long, int>* m_frames;
-	BinTree<int, long>* m_times;
+	hlrg::ds::BinTree<long, int>* m_frames;
+	hlrg::ds::BinTree<int, long>* m_times;
 public:
 
 	/**
@@ -351,8 +352,8 @@ public:
 class IMUGPSReader {
 private:
 	std::ifstream m_in;
-	BinTree<long, IMUGPSRow*>* m_gpsTimesT;
-	BinTree<long, IMUGPSRow*>* m_utcTimesT;
+	hlrg::ds::BinTree<long, IMUGPSRow*>* m_gpsTimesT;
+	hlrg::ds::BinTree<long, IMUGPSRow*>* m_utcTimesT;
 	std::vector<IMUGPSRow*> m_rows;
 	size_t m_lastIndex;
 
@@ -493,6 +494,7 @@ public:
 
 };
 
+} // reader
 } // hlrg
 
 #endif /* READER_HPP_ */

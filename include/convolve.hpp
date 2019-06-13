@@ -1,5 +1,5 @@
 /*
- * convolver.hpp
+ * convolve.hpp
  *
  *  Created on: Jul 12, 2018
  *      Author: rob
@@ -12,6 +12,7 @@
 #include <fstream>
 
 namespace hlrg {
+namespace convolve {
 
 /**
  * The kernel class holds the step values, plus the min
@@ -404,44 +405,44 @@ public:
 /**
  * Forward declaration.
  */
-class Convolver;
+class Convolve;
 
 /**
  * An interface that provides implementors with the ability to receive
- * notifications from the Convolver.
+ * notifications from the Convolve.
  */
-class ConvolverListener {
+class ConvolveListener {
 public:
 
 	/**
 	 * Called when the convolution has started.
 	 *
-	 * @param A Convolver.
+	 * @param A Convolve.
 	 */
-	virtual void started(Convolver*) = 0;
+	virtual void started(Convolve*) = 0;
 
 	/**
 	 * Called when the convolution status has updated.
 	 *
-	 * @param A Convolver.
+	 * @param A Convolve.
 	 */
-	virtual void update(Convolver*) = 0;
+	virtual void update(Convolve*) = 0;
 
 	/**
 	 * Called when the convolution has stopped.
 	 *
-	 * @param A Convolver.
+	 * @param A Convolve.
 	 */
-	virtual void stopped(Convolver*) = 0;
+	virtual void stopped(Convolve*) = 0;
 
 	/**
 	 * Called when the convolution has finished.
 	 *
-	 * @param A Convolver.
+	 * @param A Convolve.
 	 */
-	virtual void finished(Convolver*) = 0;
+	virtual void finished(Convolve*) = 0;
 
-	virtual ~ConvolverListener() {}
+	virtual ~ConvolveListener() {}
 };
 
 
@@ -449,16 +450,16 @@ public:
  * Performs the convolution of a spectral file using Gaussian kernels
  * parameterized from a band definition file.
  */
-class Convolver {
+class Convolve {
 private:
 	double m_progress;	///<! The current progress, between 0 and 1.
 
 public:
 
 	/**
-	 * Run the convolver on the given files. The listener will receive callbacks.
+	 * Run the convolve on the given files. The listener will receive callbacks.
 	 *
-	 * @param listener A ConvolverListener to receive updates.
+	 * @param listener A ConvolveListener to receive updates.
 	 * @param bandDef The band definition file.
 	 * @param bandDefDelim The delimiter for the data file.
 	 * @param spectra The spectral data file.
@@ -474,7 +475,7 @@ public:
 	 * @param bandShift If given and non-zero, will cause the input band designations to be shifted by the given amount.
 	 * @param running A reference to a boolean that is true so long as the processor should keep running.
 	 */
-	void run(ConvolverListener& listener,
+	void run(ConvolveListener& listener,
 			const std::string& bandDef, const std::string& bandDefDelim,
 			const std::string& spectra, const std::string& spectraDelim,
 			int spectraFirstRow, int spectraFirstCol,
@@ -490,6 +491,7 @@ public:
 	double progress() const;
 };
 
+} // convolve
 } // hlrg
 
 #endif /* INCLUDE_CONVOLVE_HPP_ */

@@ -16,6 +16,7 @@
 #include "contrem.hpp"
 
 namespace hlrg {
+namespace writer {
 
 /**
  * An abstract class used to write values and statistics in a standard way.
@@ -173,6 +174,7 @@ public:
 	~CSVWriter();
 };
 
+} // writer
 } // hlrg
 
 #endif /* WRITER_HPP_ */

@@ -48,7 +48,7 @@ link_directories(. /usr/local/lib /usr/lib)
 
 # Build support libraries ################################################################################
 
-add_library (geotools_util src/util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp)
+add_library (geotools_util src/util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp src/plotter.cpp)
 target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES})
 
 add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)

@@ -17,7 +17,8 @@
 
 #include "reader.hpp"
 
-using namespace hlrg;
+using namespace hlrg::reader;
+using namespace hlrg::ds;
 
 namespace {
 

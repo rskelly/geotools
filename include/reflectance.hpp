@@ -11,6 +11,7 @@
 #include <string>
 
 namespace hlrg {
+namespace reflectance {
 
 class Reflectance;
 
@@ -57,6 +58,7 @@ public:
 };
 
 
+} // reflectance
 } // hlrg
 
 

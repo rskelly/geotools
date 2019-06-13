@@ -9,6 +9,7 @@
 #define INCLUDE_BINTREE_HPP_
 
 namespace hlrg {
+namespace ds {
 
 /**
  * This is a simple binary tree which can be treated like a map, or
@@ -178,6 +179,7 @@ public:
 	}
 };
 
+} // ds
 } // hlrg
 
 #endif /* INCLUDE_BINTREE_HPP_ */

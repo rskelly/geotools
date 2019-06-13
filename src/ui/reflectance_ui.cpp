@@ -18,7 +18,8 @@
 #include "reflectance.hpp"
 #include "util.hpp"
 
-using namespace hlrg;
+using namespace hlrg::reflectance;
+using namespace hlrg::util;
 
 namespace {
 
@@ -38,8 +39,8 @@ namespace {
 		}
 	}
 
-
 }
+
 ReflectanceForm::ReflectanceForm(Reflectance* ts, QApplication* app) :
 		m_imuUTCOffset(0),
 		m_irradUTCOffset(0),

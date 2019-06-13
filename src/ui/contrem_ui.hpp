@@ -16,20 +16,22 @@
 #include "ui_contrem.h"
 #include "contrem.hpp"
 
-using namespace hlrg;
+using namespace hlrg::contrem;
+
+namespace hlrg {
+namespace contrem {
 
 class ContremForm : public QDialog, public Ui::ContremForm, public ContremListener {
 	Q_OBJECT
 private:
 
-	QSettings m_settings;
-	QDialog* m_form;
-	QApplication* m_app;
-
+	QSettings m_settings;				///<! Persistent settings object.
+	QDialog* m_form;					///<! Form object.
+	QApplication* m_app;				///<! Main application.
 	Contrem m_contrem;					///<! Contrem processor object.
 
-	std::vector<QWidget*> runWidgets;
-	std::vector<QWidget*> stopWidgets;
+	std::vector<QWidget*> runWidgets;	///<! Widgets which are active in the run state.
+	std::vector<QWidget*> stopWidgets;	///<! Widgets which are active in stopped state.
 
 	std::thread m_thread;				///<! Processor thread.
 
@@ -152,5 +154,8 @@ public slots:
 	void convFinished(Contrem*);
 
 };
+
+} // contrem
+} // hlrg
 
 #endif /* SRC_UI_CONVOLVE_UI_HPP_ */

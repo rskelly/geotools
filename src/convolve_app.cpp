@@ -14,7 +14,7 @@
 #include "ui/convolve_ui.hpp"
 #include "convolve.hpp"
 
-using namespace hlrg;
+using namespace hlrg::convolve;
 
 int runWithGui(int argc, char **argv) {
 	class ConvolveApp : public QApplication {
@@ -34,7 +34,7 @@ int runWithGui(int argc, char **argv) {
 	};
 
 	ConvolveApp q(argc, argv);
-	Convolver conv;
+	Convolve conv;
 	ConvolveForm form(&conv, &q);
 	QDialog qform;
 	form.setupUi(&qform);
@@ -42,22 +42,22 @@ int runWithGui(int argc, char **argv) {
 	return q.exec();
 }
 
-class DummyListener : public ConvolverListener {
+class DummyListener : public ConvolveListener {
 public:
-	void started(Convolver* conv) {
+	void started(Convolve* conv) {
 		std::cout << "Running ";
 	}
-	void update(Convolver* conv) {
+	void update(Convolve* conv) {
 		int p = (int) (conv->progress() * 100);
 		if(p % 25 == 0)
 			std::cout << " " << p << "% ";
 		if(p % 10 == 0)
 			std::cout << ".";
 	}
-	void stopped(Convolver* conv) {
+	void stopped(Convolve* conv) {
 		std::cout << " Stopped.\n";
 	}
-	void finished(Convolver* conv) {
+	void finished(Convolve* conv) {
 		std::cout << " Done.\n";
 	}
 };
@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
 			std::string spectra = files[1];
 			std::string output = files[2];
 
-			Convolver conv;
+			Convolve conv;
 			DummyListener listener;
 			bool running = true;
 			conv.run(listener, bandDef, bandDelim, spectra, specDelim, firstRow, firstCol, dateCol, timeCol, output, outputDelim, inputScale, threshold, shift, running);

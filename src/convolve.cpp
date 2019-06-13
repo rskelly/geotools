@@ -1,5 +1,5 @@
 /*
- * convolver.cpp
+ * convolve.cpp
  *
  *  Created on: Jul 12, 2018
  *      Author: rob
@@ -16,7 +16,7 @@
 
 #include "convolve.hpp"
 
-using namespace hlrg;
+using namespace hlrg::convolve;
 
 namespace {
 
@@ -423,7 +423,7 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 		spec.bands[i++].setWl(p.second.wl);
 }
 
-void Convolver::run(ConvolverListener& listener,
+void Convolve::run(ConvolveListener& listener,
 		const std::string& bandDef,
 		const std::string& bandDefDelim,
 		const std::string& spectra,
@@ -489,7 +489,7 @@ void Convolver::run(ConvolverListener& listener,
 	listener.finished(this);
 }
 
-double Convolver::progress() const {
+double Convolve::progress() const {
 	return m_progress;
 }
 

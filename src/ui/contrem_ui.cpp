@@ -16,6 +16,9 @@
 #include "util.hpp"
 #include "contrem.hpp"
 
+using namespace hlrg::contrem;
+using namespace hlrg::reader;
+
 namespace {
 
 	constexpr const char* LAST_ROI = "lastROI";
@@ -69,6 +72,38 @@ namespace {
 
 	void trun(ContremListener* form, Contrem* contrem) {
 		contrem->run(form);
+	}
+
+	/**
+	 * Return a map containing pairs where the int is the 1-based band index,
+	 * and the float is the wavelength. Attempts to load from raster metadata
+	 * or table header. If these fail, will attempt to load from first column
+	 * of presumably transposed table.
+	 */
+	std::map<int, double> loadWavelengths(const Contrem& contrem) {
+		std::map<int, double> map;
+		switch(getFileType(contrem.spectra)) {
+		case FileType::GTiff:
+		case FileType::ENVI:
+			{
+				GDALReader rdr(contrem.spectra);
+				for(const auto& it : rdr.getBandMap())
+					map[it.second] = (double) it.first / WL_SCALE;
+			}
+			break;
+		case FileType::CSV:
+			{
+				CSVReader rdr(contrem.spectra, contrem.wlTranspose, contrem.wlHeaderRows, contrem.wlMinCol, contrem.wlMaxCol, contrem.wlIDCol);
+				for(const auto& it : rdr.getBandMap())
+					map[it.second] = (double) it.first / WL_SCALE;
+			}
+			break;
+		case FileType::SHP:
+		case FileType::ROI:
+		default:
+			throw std::runtime_error("Invalid file type: " + contrem.spectra);
+		}
+		return map;
 	}
 
 }
@@ -149,14 +184,14 @@ void ContremForm::setupUi(QDialog* form) {
 	m_contrem.wlTranspose = m_settings.value(LAST_WL_TRANSPOSE, 1).toBool();
 	m_contrem.wlIDCol = m_settings.value(LAST_WL_ID_COL, -1).toInt();
 	m_contrem.output = m_settings.value(LAST_OUTPUT, "").toString().toStdString();
-	m_contrem.outputType = (FileType) m_settings.value(LAST_OUTPUT_TYPE, ENVI).toInt();
+	m_contrem.outputType = (FileType) m_settings.value(LAST_OUTPUT_TYPE, (int) FileType::ENVI).toInt();
 	m_contrem.minWl = m_settings.value(LAST_MIN_WL, 0).toDouble();
 	m_contrem.maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
 	m_contrem.threads = 1; //m_settings.value(LAST_THREADS, 1).toInt();
 	m_contrem.samplePoints = m_settings.value(LAST_SAMPLE_POINTS, "").toString().toStdString();
 	m_contrem.plotNorm = m_settings.value(LAST_PLOT_NORM, false).toBool();
 	m_contrem.plotOrig = m_settings.value(LAST_PLOT_ORIG, false).toBool();
-	m_contrem.normMethod = (NormMethod) m_settings.value(LAST_NORM_METHOD, ConvexHull).toInt();
+	m_contrem.normMethod = (NormMethod) m_settings.value(LAST_NORM_METHOD, (int) NormMethod::ConvexHull).toInt();
 
 	txtROIFile->setText(QString(m_contrem.roi.c_str()));
 	txtSamplePoints->setText(QString(m_contrem.samplePoints.c_str()));
@@ -174,7 +209,7 @@ void ContremForm::setupUi(QDialog* form) {
 
 void ContremForm::checkRun() {
 	FileType stype = getFileType(m_contrem.spectra);
-	bool s = stype != CSV;
+	bool s = stype != FileType::CSV;
 	txtROIFile->setEnabled(s);
 	btnROI->setEnabled(s);
 	txtSamplePoints->setEnabled(s);
@@ -183,8 +218,8 @@ void ContremForm::checkRun() {
 	bool b = !m_contrem.spectra.empty() && isfile(m_contrem.spectra);
 	bool d = m_contrem.samplePoints.empty() || isfile(m_contrem.samplePoints);
 	bool c = !m_contrem.output.empty();
-	bool e = !(stype == CSV && m_contrem.outputType != CSV);
-	bool f = m_contrem.outputType == UnknownFileType || m_contrem.outputType == 0;
+	bool e = !(stype == FileType::CSV && m_contrem.outputType != FileType::CSV);
+	bool f = m_contrem.outputType == FileType::Unknown;
 	btnRun->setEnabled(a && b && c && d);
 	QStringList hints;
 	if(!a)
@@ -284,7 +319,7 @@ void ContremForm::updateWavelengths() {
 }
 
 void ContremForm::enableSpectraOptions(const std::string& spectra) {
-	bool enable = CSV == getFileType(spectra);
+	bool enable = FileType::CSV == getFileType(spectra);
 	if(enable) {
 		bool transpose;
 		int header, minCol, maxCol, idCol;
@@ -376,7 +411,7 @@ void ContremForm::btnOutputClicked() {
 }
 
 void ContremForm::cboNormMethodChanged(QString str) {
-	m_settings.setValue(LAST_NORM_METHOD, normMethodFromString(str.toStdString()));
+	m_settings.setValue(LAST_NORM_METHOD, (int) normMethodFromString(str.toStdString()));
 	checkRun();
 }
 

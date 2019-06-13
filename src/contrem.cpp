@@ -14,6 +14,7 @@
 #include <cmath>
 #include <thread>
 #include <condition_variable>
+#include <algorithm>
 
 #include <geos/algorithm/ConvexHull.h>
 #include <geos/geom/Coordinate.h>
@@ -30,7 +31,9 @@
 
 using namespace geos::geom;
 using namespace geos::algorithm;
-using namespace hlrg;
+using namespace hlrg::contrem;
+using namespace hlrg::reader;
+using namespace hlrg::writer;
 
 namespace {
 
@@ -38,17 +41,17 @@ namespace {
 		std::unique_ptr<Reader> rdr;
 		FileType type = getFileType(file);
 		switch(type) {
-		case CSV:
+		case FileType::CSV:
 			rdr.reset(new CSVReader(file, transpose, headerRows, minCol, maxCol, idCol));
 			break;
-		case GTiff:
-		case ENVI:
+		case FileType::GTiff:
+		case FileType::ENVI:
 			rdr.reset(new GDALReader(file));
 			break;
-		case ROI:
-		case SHP:
-		case SQLITE:
-		case UnknownFileType:
+		case FileType::ROI:
+		case FileType::SHP:
+		case FileType::SQLITE:
+		case FileType::Unknown:
 		default:
 			throw std::runtime_error("Unknown file type for " + file);
 		}
@@ -347,7 +350,7 @@ namespace {
 		std::vector<line> lines;
 
 		NormMethod method = config->contrem->normMethod;
-		if(method == NormMethod::ConvexHull || method == ConvexHullLongestSeg) {
+		if(method == NormMethod::ConvexHull || method == NormMethod::ConvexHullLongestSeg) {
 
 			std::vector<inpoint> _pts(pts);
 			_pts.emplace_back(pts.back().w, 0.0);
@@ -356,7 +359,7 @@ namespace {
 			// Compute the hull.
 			lines = convexHull(_pts);
 
-			if(method == ConvexHullLongestSeg) {
+			if(method == NormMethod::ConvexHullLongestSeg) {
 				// If required, take the longest segment out of the hull and use it for normalization.
 				size_t idx = 0;
 				double len = 0;
@@ -495,17 +498,17 @@ namespace {
 
 		std::string ext;
 		switch(outfileType) {
-		case ENVI:
+		case FileType::ENVI:
 			ext = "";
 			break;
-		case GTiff:
+		case FileType::GTiff:
 			ext = ".tif";
 			break;
-		case CSV:
+		case FileType::CSV:
 			ext = ".csv";
 			break;
 		default:
-			throw std::invalid_argument("Unknown output type: " + outfileType);
+			throw std::invalid_argument("Unknown output type: " + fileTypeAsString(outfileType));
 		}
 
 		// Remove the extension if there is one.
@@ -526,7 +529,7 @@ namespace {
 		char* meta;
 		std::unordered_map<std::string, std::unique_ptr<Writer>> writer;
 
-		if(outfileType == CSV) {
+		if(outfileType == FileType::CSV) {
 			writer["writerss"].reset(new CSVWriter(outfile + "_ss" + ext, wavelengths, bandNames));
 			writer["writerch"].reset(new CSVWriter(outfile + "_ch" + ext, wavelengths, bandNames));
 			writer["writercr"].reset(new CSVWriter(outfile + "_cr" + ext, wavelengths, bandNames));
@@ -604,7 +607,7 @@ namespace {
 				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 				items.emplace_back("Normalized Spectrum", w, crnm);
 				items.emplace_back("Regression", std::vector<double>({w.front(), w.back()}), std::vector<double>({w.front() * out.slope + out.yint, w.back() * out.slope + out.yint}));
-				config->contrem->plotter().queue(plotfile, title, items);
+				config->contrem->plotter().enqueue(plotfile, title, items);
 			}
 			if(config->contrem->plotOrig){
 				std::string plotfile = plotdir + "/orig_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
@@ -612,7 +615,7 @@ namespace {
 				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 				items.emplace_back("Original Spectrum", w, ss);
 				items.emplace_back("Convex Hull", out.hullx, out.hully);
-				config->contrem->plotter().queue(plotfile, title, items);
+				config->contrem->plotter().enqueue(plotfile, title, items);
 			}
 
 			if(!config->contrem->running)
@@ -667,7 +670,7 @@ void Contrem::run(ContremListener* listener) {
 	qconfig.cols = reader->cols();
 	qconfig.rows = reader->rows();
 	qconfig.bands = reader->bands();
-	qconfig.useROI = getFileType(spectra) != CSV;
+	qconfig.useROI = getFileType(spectra) != FileType::CSV;
 
 	// A list of wavelengths.
 	qconfig.wavelengths = reader->getWavelengths();
@@ -712,11 +715,11 @@ void Contrem::run(ContremListener* listener) {
 	}
 
 	switch(getFileType(spectra)) {
-	case CSV:
+	case FileType::CSV:
 		qconfig.statusCount = reader->rows();
 		break;
-	case GTiff:
-	case ENVI:
+	case FileType::GTiff:
+	case FileType::ENVI:
 		if(hasRoi) {
 			qconfig.statusCount = std::count(mask.begin(), mask.end(), true);
 		} else {

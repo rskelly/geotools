@@ -10,60 +10,83 @@
 
 #include <array>
 
-#include "contrem.hpp"
-
 namespace hlrg {
+namespace util {
 
-	constexpr std::array<FileType, 3> OUTPUT_TYPES = {GTiff, ENVI, CSV};			///<! Allowed output types for results.
+/**
+ * Input and output file types.
+ */
+enum class FileType {
+	GTiff,
+	ENVI,
+	ROI,
+	SHP,
+	CSV,
+	SQLITE,
+	Unknown
+};
 
-	constexpr std::array<NormMethod, 3> NORM_METHODS = {ConvexHull, ConvexHullLongestSeg, Line};
+/**
+ * Enumeration containing common data types.
+ */
+enum class DataType {
+	Byte,
+	Int32,
+	Float32
+};
 
-	FileType getFileType(const std::string& filename);
+/**
+ * Normalization methods.
+ */
+enum class NormMethod {
+	ConvexHull,
+	ConvexHullLongestSeg,
+	Line,
+	Unknown
+};
 
-	/**
-	 * Return a map containing pairs where the int is the 1-based band index,
-	 * and the float is the wavelength. Attempts to load from raster metadata
-	 * or table header. If these fail, will attempt to load from first column
-	 * of presumably transposed table.
-	 */
-	std::map<int, double> loadWavelengths(const Contrem& contrem);
+constexpr std::array<FileType, 3> OUTPUT_TYPES = {FileType::GTiff, FileType::ENVI, FileType::CSV};			///<! Allowed output types for results.
 
-	std::string fileTypeAsString(hlrg::FileType type);
+constexpr std::array<NormMethod, 3> NORM_METHODS = {NormMethod::ConvexHull, NormMethod::ConvexHullLongestSeg, NormMethod::Line};
 
-	hlrg::FileType fileTypeFromString(const std::string& type);
+FileType getFileType(const std::string& filename);
 
-	hlrg::NormMethod normMethodFromString(const std::string& method);
+std::string fileTypeAsString(FileType type);
 
-	std::string normMethodAsString(hlrg::NormMethod method);
+FileType fileTypeFromString(const std::string& type);
 
-	bool isnonzero(const double& v);
+NormMethod normMethodFromString(const std::string& method);
 
-	/**
-	 * Return true if it's a dir and it exists.
-	 */
-	bool isdir(const std::string& path);
+std::string normMethodAsString(NormMethod method);
 
-	/**
-	 * Return true if it's a file and it exists.
-	 */
-	bool isfile(const std::string& path);
+bool isnonzero(const double& v);
 
-	/**
-	 * Remove the directory or file.
-	 */
-	bool rem(const std::string& dir);
+/**
+ * Return true if it's a dir and it exists.
+ */
+bool isdir(const std::string& path);
 
-	/**
-	 * Recursively make the directory.
-	 */
-	bool makedir(const std::string& filename);
+/**
+ * Return true if it's a file and it exists.
+ */
+bool isfile(const std::string& path);
 
-	/**
-	 * Remove non-alphanumeric characters and replace with underscores.
-	 */
-	std::string sanitize(const std::string& str);
+/**
+ * Remove the directory or file.
+ */
+bool rem(const std::string& dir);
 
+/**
+ * Recursively make the directory.
+ */
+bool makedir(const std::string& filename);
 
+/**
+ * Remove non-alphanumeric characters and replace with underscores.
+ */
+std::string sanitize(const std::string& str);
+
+} // util
 } // hlrg
 
 #endif /* INCLUDE_UTIL_HPP_ */

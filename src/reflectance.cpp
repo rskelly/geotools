@@ -21,73 +21,78 @@
 #include "raster.hpp"
 #include "ui/reflectance_ui.hpp"
 
+using namespace hlrg::reflectance;
+using namespace hlrg::reader;
 
-namespace hlrg {
+namespace {
 
-class DummyListener : public ReflectanceListener {
-private:
-	int lastP;
-public:
-	void started(Reflectance* r) {
-		lastP = -1;
-		std::cout << "Running ";
-	}
-
-	void update(Reflectance* r) {
-		int p = (int) (r->progress() * 100);
-		if(p != lastP) {
-			if(p % 25 == 0)
-				std::cout << " " << p << "% ";
-			if(p % 10 == 0)
-				std::cout << ".";
-			lastP = p;
+	class DummyListener : public ReflectanceListener {
+	private:
+		int lastP;
+	public:
+		void started(Reflectance* r) {
+			lastP = -1;
+			std::cout << "Running ";
 		}
+
+		void update(Reflectance* r) {
+			int p = (int) (r->progress() * 100);
+			if(p != lastP) {
+				if(p % 25 == 0)
+					std::cout << " " << p << "% ";
+				if(p % 10 == 0)
+					std::cout << ".";
+				lastP = p;
+			}
+		}
+
+		void stopped(Reflectance* r) {
+			std::cout << " Stopped.\n";
+		}
+
+		void finished(Reflectance* r) {
+			std::cout << " Done.\n";
+		}
+
+		void exception(Reflectance* r, const std::exception& ex) {
+			std::cerr << ex.what() << "\n";
+		}
+
+		~DummyListener() {}
+	};
+
+	/**
+	 * Average the values in the given vector.
+	 */
+	double _avg(std::vector<uint16_t>& buf) {
+		uint32_t sum = 0;
+		for(uint16_t v : buf)
+			sum += v;
+		return (double) sum / buf.size();
 	}
 
-	void stopped(Reflectance* r) {
-		std::cout << " Stopped.\n";
+	/**
+	 * Average the values in the given vector.
+	 */
+	double _avg(std::vector<double>& buf) {
+		double sum = 0;
+		for(double v : buf)
+			sum += v;
+		return (double) sum / buf.size();
 	}
 
-	void finished(Reflectance* r) {
-		std::cout << " Done.\n";
+	std::string _ts2str(long ts) {
+		ts /= 1000;
+		char buf[32];
+		struct tm* dt = localtime(&ts);
+		strftime(buf, 32, "%Y/%m/%d %H:%M:%S", dt);
+		std::stringstream ss;
+		ss << buf << "." << ts % 1000;
+		return ss.str();
 	}
 
-	void exception(Reflectance* r, const std::exception& ex) {
-		std::cerr << ex.what() << "\n";
-	}
-
-	~DummyListener() {}
-};
-
-/**
- * Average the values in the given vector.
- */
-double _avg(std::vector<uint16_t>& buf) {
-	uint32_t sum = 0;
-	for(uint16_t v : buf)
-		sum += v;
-	return (double) sum / buf.size();
 }
 
-/**
- * Average the values in the given vector.
- */
-double _avg(std::vector<double>& buf) {
-	double sum = 0;
-	for(double v : buf)
-		sum += v;
-	return (double) sum / buf.size();
-}
-
-std::string _ts2str(long ts) {
-	ts /= 1000;
-	char buf[32];
-	struct tm* dt = localtime(&ts);
-	strftime(buf, 32, "%Y/%m/%d %H:%M:%S", dt);
-	std::stringstream ss;
-	ss << buf << "." << ts % 1000;
-	return ss.str();
-}
 
 void Reflectance::run(ReflectanceListener& listener,
 		const std::string& imuGps, double imuUTCOffset,
@@ -280,9 +285,6 @@ int runWithGui(int argc, char **argv) {
 	return q.exec();
 }
 
-} // hlrg
-
-
 void usage() {
 	std::cout << "Usage: reflectance [<options>]\n"
 			<< " -i 	The IMUGPS file.\n"
@@ -298,7 +300,7 @@ int main(int argc, char** argv) {
 
 	if(argc <= 1) {
 
-		hlrg::runWithGui(argc, argv);
+		runWithGui(argc, argv);
 
 	} else {
 
@@ -356,8 +358,8 @@ int main(int argc, char** argv) {
 		}
 
 		bool running = true;
-		hlrg::Reflectance refl;
-		hlrg::DummyListener listener;
+		Reflectance refl;
+		DummyListener listener;
 		refl.run(listener, imuGps, imuUTCOffset, rawRad, frameIdx, irradConv, irradUTCOffset, reflOut, running);
 
 	}

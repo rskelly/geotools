@@ -8,24 +8,22 @@
 #ifndef INCLUDE_PLOTTER_HPP_
 #define INCLUDE_PLOTTER_HPP_
 
-#include <mutex>
 #include <list>
 #include <tuple>
-
-#include "matplotlibcpp.h"
+#include <mutex>
 
 namespace hlrg {
+namespace util {
 
 class PlotJob {
 public:
 	std::string filename, title;
 	std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 
-	PlotJob() {}
+	PlotJob();
 	PlotJob(const std::string& filename, const std::string& title,
-			const std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>>& items) :
-		filename(filename), title(title), items(items) {
-	}
+			const std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>>& items);
+
 };
 
 class Plotter {
@@ -36,38 +34,18 @@ private:
 
 public:
 
-	bool hasItems() const {
-		return !m_queue.empty();
-	}
+	bool hasItems() const;
 
-	void queue(const std::string& filename, const std::string& title,
-			const std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>>& items) {
-		std::lock_guard<std::mutex> lk(m_qmtx);
-		m_queue.emplace_back(filename, title, items);
-	}
+	void enqueue(const std::string& filename, const std::string& title,
+			const std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>>& items);
 
-	void plot(const PlotJob& job) {
-		std::lock_guard<std::mutex> lk(m_pltmtx);
-		namespace plt = matplotlibcpp;
-		plt::figure(111);
-		plt::figure_size(600, 400);
-		for(const auto& item : job.items)
-			plt::named_plot(std::get<0>(item), std::get<1>(item), std::get<2>(item));
-		plt::title(job.title);
-		plt::legend();
-		plt::save(job.filename);
-		plt::close();
-	}
+	void plot(const PlotJob& job);
 
-	void process() {
-		while(!m_queue.empty()) {
-			PlotJob& job = m_queue.front();
-			plot(job);
-			m_queue.pop_front();
-		}
-	}
+	void process();
+
 };
 
-}
+} // util
+} // hlrg
 
 #endif /* INCLUDE_PLOTTER_HPP_ */

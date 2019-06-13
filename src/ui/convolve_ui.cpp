@@ -14,7 +14,7 @@
 
 #include "convolve_ui.hpp"
 
-using namespace hlrg;
+using namespace hlrg::convolve;
 
 namespace {
 
@@ -40,7 +40,7 @@ namespace {
 
 }
 
-ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
+ConvolveForm::ConvolveForm(Convolve* convolve, QApplication* app) :
 	m_bandDefDelim(","),
 	m_spectraDelim(","),
 	m_outputDelim(","),
@@ -49,7 +49,7 @@ ConvolveForm::ConvolveForm(Convolver* convolver, QApplication* app) :
 	m_bandShift(0),
 	m_firstRow(0), m_firstCol(0),
 	m_dateCol(-1), m_timeCol(-1),
-	m_convolver(convolver),
+	m_convolve(convolve),
 	m_form(nullptr),
 	m_app(app),
 	m_running(false) {
@@ -89,10 +89,10 @@ void ConvolveForm::setupUi(QDialog* form) {
 	connect(btnHelp, SIGNAL(clicked()), this, SLOT(btnHelpClicked()));
 	connect(btnClose, SIGNAL(clicked()), this, SLOT(btnCloseClicked()));
 
-	connect(this, SIGNAL(started(Convolver*)), this, SLOT(convStarted(Convolver*)));
-	connect(this, SIGNAL(stopped(Convolver*)), this, SLOT(convStopped(Convolver*)));
-	connect(this, SIGNAL(update(Convolver*)), this, SLOT(convUpdate(Convolver*)));
-	connect(this, SIGNAL(finished(Convolver*)), this, SLOT(convFinished(Convolver*)));
+	connect(this, SIGNAL(started(Convolve*)), this, SLOT(convStarted(Convolve*)));
+	connect(this, SIGNAL(stopped(Convolve*)), this, SLOT(convStopped(Convolve*)));
+	connect(this, SIGNAL(update(Convolve*)), this, SLOT(convUpdate(Convolve*)));
+	connect(this, SIGNAL(finished(Convolve*)), this, SLOT(convFinished(Convolve*)));
 
 	txtBandDef->setText(m_settings.value("lastBandDef", "").toString());
 	cboBandDefDelim->setCurrentText(formatDelim(m_settings.value(lastBandDelim, ",").toString().toStdString()).c_str());
@@ -221,7 +221,7 @@ void ConvolveForm::btnOutputClicked() {
 	txtOutput->setText(filename);
 }
 
-void _run(ConvolveForm* form, Convolver* conv,
+void _run(ConvolveForm* form, Convolve* conv,
 		const std::string* bandDef, std::string* bandDefDelim,
 		const std::string* spectra, std::string* spectraDelim,
 		int firstRow, int firstCol, int dateCol, int timeCol,
@@ -281,7 +281,7 @@ void ConvolveForm::run() {
 	runState();
 	if(!m_running) {
 		m_running = true;
-		m_thread = std::thread(_run, this, m_convolver,
+		m_thread = std::thread(_run, this, m_convolve,
 				&m_bandDefFile, &m_bandDefDelim,
 				&m_spectraFile, &m_spectraDelim,
 				m_firstRow, m_firstCol, m_dateCol, m_timeCol,
@@ -325,21 +325,21 @@ void ConvolveForm::btnCloseClicked() {
 	m_app->quit();
 }
 
-void ConvolveForm::convStarted(Convolver*) {
+void ConvolveForm::convStarted(Convolve*) {
 	progressBar->setValue(0);
 }
 
-void ConvolveForm::convUpdate(Convolver* conv) {
+void ConvolveForm::convUpdate(Convolve* conv) {
 	progressBar->setValue(conv->progress() * 100);
 }
 
-void ConvolveForm::convStopped(Convolver*) {
+void ConvolveForm::convStopped(Convolve*) {
 	progressBar->setValue(0);
 	stopState();
 	checkRun();
 }
 
-void ConvolveForm::convFinished(Convolver*) {
+void ConvolveForm::convFinished(Convolve*) {
 	progressBar->setValue(100);
 	QMessageBox::information(this, "Finished", "Processing is finished.");
 	stopState();

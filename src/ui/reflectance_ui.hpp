@@ -16,10 +16,10 @@
 #include "ui_reflectance.h"
 #include "reflectance.hpp"
 
-
 namespace hlrg {
+namespace reflectance {
 
-class ReflectanceForm : public QDialog, public Ui::ReflectanceForm, hlrg::ReflectanceListener {
+class ReflectanceForm : public QDialog, public Ui::ReflectanceForm, ReflectanceListener {
 	Q_OBJECT
 private:
 	QSettings m_settings;
@@ -85,6 +85,7 @@ public slots:
 
 };
 
+} // reflectance
 } // hlrg
 
 #endif /* SRC_UI_REFLECTANCE_UI_HPP_ */

@@ -16,9 +16,12 @@
 #include "ui_convolve.h"
 #include "convolve.hpp"
 
-using namespace hlrg;
+using namespace hlrg::convolve;
 
-class ConvolveForm : public QDialog, public Ui::ConvolveForm, public ConvolverListener {
+namespace hlrg {
+namespace convolve {
+
+class ConvolveForm : public QDialog, public Ui::ConvolveForm, public ConvolveListener {
 	Q_OBJECT
 private:
 	QSettings m_settings;
@@ -36,7 +39,7 @@ private:
 	int m_dateCol;
 	int m_timeCol;
 
-	Convolver* m_convolver;
+	Convolve* m_convolve;
 	QDialog* m_form;
 	QApplication* m_app;
 
@@ -44,7 +47,7 @@ private:
 	bool m_running;
 
 public:
-	ConvolveForm(Convolver* convolver, QApplication* app);
+	ConvolveForm(Convolve* convolve, QApplication* app);
 	void setupUi(QDialog* form);
 	void checkRun();
 
@@ -55,10 +58,10 @@ public:
 	void stopState();
 
 signals:
-	void started(Convolver*);
-	void update(Convolver*);
-	void stopped(Convolver*);
-	void finished(Convolver*);
+	void started(Convolve*);
+	void update(Convolve*);
+	void stopped(Convolve*);
+	void finished(Convolve*);
 
 public slots:
 	void txtBandDefChanged(QString);
@@ -82,12 +85,15 @@ public slots:
 	void btnHelpClicked();
 	void btnCloseClicked();
 
-	void convStarted(Convolver*);
-	void convStopped(Convolver*);
-	void convUpdate(Convolver*);
-	void convFinished(Convolver*);
+	void convStarted(Convolve*);
+	void convStopped(Convolve*);
+	void convUpdate(Convolve*);
+	void convFinished(Convolve*);
 
 	void handleException(const std::exception& ex);
 };
+
+} // convolve
+} // hlrg
 
 #endif /* SRC_UI_CONVOLVE_UI_HPP_ */

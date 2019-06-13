@@ -22,7 +22,8 @@
 #include "util.hpp"
 #include "stats.hpp"
 
-using namespace hlrg;
+using namespace hlrg::writer;
+using namespace hlrg::util;
 
 
 GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int rows, int bands,
@@ -33,9 +34,9 @@ GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int
 
 	GDALDataType gtype;
 	switch(dataType) {
-	case Byte: gtype = GDT_Byte; break;
-	case Int32: gtype = GDT_Int32; break;
-	case Float32: gtype = GDT_Float32; break;
+	case DataType::Byte: gtype = GDT_Byte; break;
+	case DataType::Int32: gtype = GDT_Int32; break;
+	case DataType::Float32: gtype = GDT_Float32; break;
 	default:
 		throw std::invalid_argument("Invalid data type.");
 	}
@@ -43,10 +44,11 @@ GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int
 	GDALAllRegister();
 	CPLSetConfigOption("GDAL_PAM_ENABLED", "NO");
 
+	std::string typeStr = fileTypeAsString(type);
 	GDALDriverManager* gm = GetGDALDriverManager();
-	GDALDriver* drv = gm->GetDriverByName(fileTypeAsString(type).c_str());
+	GDALDriver* drv = gm->GetDriverByName(typeStr.c_str());
 	if(!drv)
-		throw std::runtime_error("Driver not found: " + type);
+		throw std::runtime_error("Driver not found: " + typeStr);
 
 	CPLStringList options;
 	options.SetNameValue("INTERLEAVE", interleave.c_str());
