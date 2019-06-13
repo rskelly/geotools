@@ -51,11 +51,11 @@ link_directories(. /usr/local/lib /usr/lib)
 add_library (geotools_util src/util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp)
 target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES})
 
-add_executable (contrem src/contrem.cpp src/ui/contrem_ui.cpp src/contrem_proc.cpp)
+add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
 target_include_directories(contrem PUBLIC contrem_autogen/include)
 target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geotools_util)
 
-add_executable (convolve src/convolve.cpp src/convolver.cpp src/ui/convolve_ui.cpp)
+add_executable (convolve src/convolve_app.cpp src/convolve.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
 target_link_libraries (convolve Qt5::Widgets geotools_util)
 
