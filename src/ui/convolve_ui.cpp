@@ -45,14 +45,14 @@ namespace {
 	}
 
 	void runner(ConvolveForm* form, Convolve* conv,
-			const std::string* bandDef, std::string* bandDefDelim,
-			const std::string* spectra, std::string* spectraDelim,
+			const std::string* bandDef, const std::string* bandDefDelim,
+			const std::string* spectra, const std::string* spectraDelim,
 			int firstRow, int firstCol, int dateCol, int timeCol,
-			const std::string* output, std::string* outputDelim,
+			const std::string* output, const std::string* outputDelim, FileType outputType,
 			double inputScale, double tolerance, double bandShift, bool* running) {
 		try {
 			conv->run(*form, *bandDef, *bandDefDelim, *spectra, *spectraDelim, firstRow, firstCol, dateCol, timeCol,
-					*output, *outputDelim, inputScale, tolerance, bandShift, *running);
+					*output, *outputDelim, outputType, inputScale, tolerance, bandShift, *running);
 		} catch(const std::exception& ex) {
 			form->handleException(ex);
 		}
@@ -88,6 +88,14 @@ void ConvolveForm::setupUi(QDialog* form) {
 
 	runWidgets = {
 			btnCancel
+	};
+
+	csvInputWidgets = {
+			cboSpectraDelim, spnFirstCol, spnFirstRow, spnDateCol, spnTimeCol
+	};
+
+	csvOutputWidgets = {
+			cboOutputDelim
 	};
 
 	QStringList outputTypes;
@@ -143,7 +151,17 @@ void ConvolveForm::setupUi(QDialog* form) {
 
 }
 
+void ConvolveForm::updateCSVWidgets() {
+	bool e = FileType::CSV == getFileType(m_spectraFile);
+	for(QWidget* w : csvInputWidgets)
+		w->setEnabled(e);
+	bool f = FileType::CSV == getFileType(m_outputFile);
+	for(QWidget* w : csvOutputWidgets)
+		w->setEnabled(f);
+}
+
 void ConvolveForm::checkRun() {
+	updateCSVWidgets();
 	bool a = !m_bandDefFile.empty() && QFile(m_bandDefFile.c_str()).exists();
 	bool b = !m_spectraFile.empty() && QFile(m_spectraFile.c_str()).exists();
 	QFileInfo dir(m_outputFile.c_str());
@@ -272,6 +290,7 @@ void ConvolveForm::stopState() {
 		w->setEnabled(true);
 	for(QWidget* w : runWidgets)
 		w->setEnabled(false);
+	updateCSVWidgets();
 }
 
 void ConvolveForm::run() {
@@ -282,7 +301,7 @@ void ConvolveForm::run() {
 				&m_bandDefFile, &m_bandDefDelim,
 				&m_spectraFile, &m_spectraDelim,
 				m_firstRow, m_firstCol, m_dateCol, m_timeCol,
-				&m_outputFile, &m_outputDelim,
+				&m_outputFile, &m_outputDelim, m_outputType,
 				m_inputScale, m_tolerance, m_bandShift, &m_running);
 	}
 	if(!m_thread.joinable())

@@ -46,11 +46,18 @@ private:
 	QDialog* m_form;
 	QApplication* m_app;
 
-	std::vector<QWidget*> runWidgets;	///<! Widgets which are active in the run state.
-	std::vector<QWidget*> stopWidgets;	///<! Widgets which are active in stopped state.
+	std::vector<QWidget*> runWidgets;		///<! Widgets which are active in the run state.
+	std::vector<QWidget*> stopWidgets;		///<! Widgets which are active in stopped state.
+	std::vector<QWidget*> csvInputWidgets;	///<! Widgets which are active when the spectra file is a CSV.
+	std::vector<QWidget*> csvOutputWidgets; ///<! Widgets which are active when the output file is a CSV.
 
 	std::thread m_thread;
 	bool m_running;
+
+	/**
+	 * Set the enabled state of CSV-related widgets depending on what types of file are selected.
+	 */
+	void updateCSVWidgets();
 
 public:
 	ConvolveForm(Convolve* convolve, QApplication* app);

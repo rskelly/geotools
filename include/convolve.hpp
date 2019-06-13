@@ -11,6 +11,10 @@
 #include <string>
 #include <fstream>
 
+#include "util.hpp"
+
+using namespace hlrg::util;
+
 namespace hlrg {
 namespace convolve {
 
@@ -478,9 +482,8 @@ public:
 	void run(ConvolveListener& listener,
 			const std::string& bandDef, const std::string& bandDefDelim,
 			const std::string& spectra, const std::string& spectraDelim,
-			int spectraFirstRow, int spectraFirstCol,
-			int spectraDateCol, int spectraTimeCol,
-			const std::string& output, const std::string& outputDelim,
+			int spectraFirstRow, int spectraFirstCol, int spectraDateCol, int spectraTimeCol,
+			const std::string& output, const std::string& outputDelim, FileType outputType,
 			double inputScale, double tolerance, double bandShift, bool& running);
 
 	/**

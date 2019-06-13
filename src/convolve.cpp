@@ -424,14 +424,11 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 }
 
 void Convolve::run(ConvolveListener& listener,
-		const std::string& bandDef,
-		const std::string& bandDefDelim,
-		const std::string& spectra,
-		const std::string& spectraDelim,
+		const std::string& bandDef, const std::string& bandDefDelim,
+		const std::string& spectra, const std::string& spectraDelim,
 		int spectraFirstRow, int spectraFirstCol,
 		int spectraDateCol, int spectraTimeCol,
-		const std::string& output,
-		const std::string& outputDelim,
+		const std::string& output, const std::string& outputDelim, FileType outputType,
 		double inputScale, double tolerance, double bandShift, bool& running) {
 
 	// Notify a listener.

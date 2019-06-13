@@ -91,6 +91,7 @@ int main(int argc, char** argv) {
 			std::string bandDelim = ",";
 			std::string specDelim = ",";
 			std::string outputDelim = ",";
+			FileType outputType = FileType::CSV;
 			int firstRow = 0;
 			int firstCol = 0;
 			int dateCol = -1;
@@ -130,7 +131,7 @@ int main(int argc, char** argv) {
 			Convolve conv;
 			DummyListener listener;
 			bool running = true;
-			conv.run(listener, bandDef, bandDelim, spectra, specDelim, firstRow, firstCol, dateCol, timeCol, output, outputDelim, inputScale, threshold, shift, running);
+			conv.run(listener, bandDef, bandDelim, spectra, specDelim, firstRow, firstCol, dateCol, timeCol, output, outputDelim, outputType, inputScale, threshold, shift, running);
 		}
 	} else {
 		return runWithGui(argc, argv);

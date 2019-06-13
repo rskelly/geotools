@@ -29,7 +29,7 @@ FileType hlrg::util::getFileType(const std::string& filename) {
 			std::transform(ext0.begin(), ext0.end(), std::back_inserter(ext), ::tolower);
 		}
 	}
-	if(ext == ".csv") {
+	if(ext == ".csv" || ext == ".txt") {
 		return FileType::CSV;
 	} else if(ext == ".roi") {
 		return FileType::ROI;
