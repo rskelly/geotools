@@ -5,8 +5,8 @@
  *      Author: rob
  */
 
-#ifndef INCLUDE_CONVOLVER_HPP_
-#define INCLUDE_CONVOLVER_HPP_
+#ifndef INCLUDE_CONVOLVE_HPP_
+#define INCLUDE_CONVOLVE_HPP_
 
 #include <string>
 #include <fstream>
@@ -492,4 +492,4 @@ public:
 
 } // hlrg
 
-#endif /* INCLUDE_CONVOLVER_HPP_ */
+#endif /* INCLUDE_CONVOLVE_HPP_ */

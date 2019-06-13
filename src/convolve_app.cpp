@@ -11,8 +11,8 @@
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMessageBox>
 
-#include "convolver.hpp"
 #include "ui/convolve_ui.hpp"
+#include "convolve.hpp"
 
 using namespace hlrg;
 
@@ -76,8 +76,6 @@ void usage() {
 			<< " -tc 	Timestamp column index (zero-based). (Default -1).\n"
 			<< "    Run without arguments to use the gui.\n";
 }
-
-#include "convolver.hpp"
 
 int main(int argc, char** argv) {
 

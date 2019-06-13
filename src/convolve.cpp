@@ -14,7 +14,7 @@
 #include <string>
 #include <limits>
 
-#include "convolver.hpp"
+#include "convolve.hpp"
 
 using namespace hlrg;
 

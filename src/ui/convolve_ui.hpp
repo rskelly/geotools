@@ -14,7 +14,7 @@
 #include <QtCore/QSettings>
 
 #include "ui_convolve.h"
-#include "convolver.hpp"
+#include "convolve.hpp"
 
 using namespace hlrg;
 
