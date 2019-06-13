@@ -73,6 +73,14 @@ namespace {
 		double length() const {
 			return std::sqrt(std::pow(x0 - x1, 2.0) + std::pow(y0 - y1, 2.0));
 		}
+
+		double slope() const {
+			return (y1 - y0) / (x1 - x0);
+		}
+
+		double yint() const {
+			return -slope() * x0;
+		}
 	};
 
 	/**
@@ -138,7 +146,7 @@ namespace {
 		double larea; 					///<! Left hull area.
 		double rarea; 					///<! Right hull area.
 		double symmetry; 				///<! Ratio of left/right hull areas.
-		double maxCrm; 					///<! Maximum normalized mirrored continuum removal.
+		double maxDepth; 				///<! Maximum depth w/r/t line.
 		double maxWl; 					///<! Wavelength at the maxCrm value.
 		double slope;					///<! The slope of the regression line through the crnm points.
 		double yint;					///<! The y-intercept of the regression.
@@ -158,23 +166,26 @@ namespace {
 			id(id),
 			c(c), r(r),
 			area(0), larea(0), rarea(0), symmetry(0),
-			maxCrm(0), maxWl(0),
+			maxDepth(0), maxWl(0),
 			slope(0), yint(0),
 			maxCount(0),
 			maxIdx(0) {}
 
 		void compute(const std::vector<line>& lines) {
-			maxCrm = 0;
 			maxIdx = 0;
+			maxDepth = 0;
 			int i = 0;
+			double dif;
 			for(outpoint& pt : data) {
 				pt.cr = pt.ss / pt.ch;		// Continuum removal -- intensity proportional to height of hull.
 				pt.crm = 1 - pt.cr;			// Mirrored continuum removal.
-				if(pt.crm > maxCrm) {
-					// There may be more than one equal max; it'll be flagged at a later step
-					maxCrm = pt.crm;
-					maxWl = pt.w;
+				if((dif = pt.ch - pt.ss) > maxDepth) {
+					maxDepth = dif;
 					maxIdx = i;
+					maxWl = pt.w;
+					++maxCount;
+				} else if(dif == maxDepth) {
+					++maxCount;
 				}
 				++i;
 			}
@@ -188,7 +199,7 @@ namespace {
 			// Calculate the other ch metrics.
 			for(size_t i = 0; i < n; ++i) {
 				outpoint& pt = data[i];
-				pt.crn = pt.crm / maxCrm;	// Normalized continuum removal -- normalized against maximum mirrored cr.
+				pt.crn = pt.crm / maxDepth;		// Normalized continuum removal -- normalized against maximum depth.
 				pt.crnm = 1 - pt.crn;			// Mirrored normalized continuum removal.
 				if(i > 0 && i < n - 1) {
 					sxy += pt.w * pt.crnm;
@@ -196,9 +207,6 @@ namespace {
 					sy += pt.crnm;
 					sxx += pt.w * pt.w;
 				}
-				// Count the values equal to max; will flag those with >1.
-				if(pt.crm == maxCrm)
-					++maxCount;
 
 				// Compute the left and overall spectrum area.
 				if(i < n - 1) {
@@ -222,8 +230,17 @@ namespace {
 				symmetry = larea / rarea;
 			}
 
-			slope = ((n - 2) * sxy - sx * sy) / ((n - 2) * sxx - sx * sx);
-			yint = (sy - slope * sx) / (n - 2);
+			double maxLen = 0, len;
+			size_t lineIdx = 0;
+			for(size_t i = 0; i < lines.size(); ++i) {
+				if((len = lines[i].length()) > maxLen) {
+					maxLen = len;
+					lineIdx = i;
+				}
+			}
+
+			slope = lines[lineIdx].slope();
+			yint = lines[lineIdx].yint();
 
 		}
 	};
@@ -303,6 +320,7 @@ namespace {
 		int cols;
 		int rows;
 		int bands;
+		int statusCount;					///<! Count for status counter. CSV: number of rows; Raster: number of pixels; Masked: number of unmasked pixels.
 		std::vector<double> wavelengths;
 		std::vector<std::string> bandNames;
 
@@ -545,9 +563,8 @@ namespace {
 		std::fill(maxima.begin(), maxima.end(), 0);
 		std::fill(valid.begin(), valid.end(), 0);
 
-		// Keeps track of the number of unique completed rows
-		// for progress tracking.
-		std::unordered_set<int> rowTracker;
+		// Keeps track of the number of unique completed items for progress tracking.
+		int count = 0;
 
 		output out;
 		while(config->contrem->running) {
@@ -563,10 +580,7 @@ namespace {
 				config->outqueue.pop_front();
 			}
 
-			rowTracker.insert(out.r);
-
-			// Write the slope/y-int information.
-			//hulls << out.id << "," << out.c << "," << out.r << "," << out.slope << "," << out.yint << "\n";
+			++count;
 
 			if(!config->contrem->running)
 				break;
@@ -611,7 +625,7 @@ namespace {
 			valid[0] = out.area > 0 && out.rarea > 0 && out.larea > 0;
 
 			// Data for a single hull.
-			hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxCrm, out.maxWl, (double) out.maxCount, out.slope, out.yint};
+			hull = {out.area, out.larea, out.rarea, out.symmetry, out.maxDepth, out.maxWl, (double) out.maxCount, out.slope, out.yint};
 
 			writer["writerss"]->write(ss, out.c, out.r, 1, 1, 1, 1, out.id);
 			writer["writerch"]->write(ch, out.c, out.r, 1, 1, 1, 1, out.id);
@@ -627,7 +641,7 @@ namespace {
 			crnm.clear();
 			w.clear();
 
-			config->contrem->setProgress((double) rowTracker.size() / config->rows * 0.95);
+			config->contrem->setProgress((double) count / config->statusCount * 0.95);
 
 			config->incv.notify_one();
 		}
@@ -662,9 +676,6 @@ void Contrem::run(ContremListener* listener) {
 	qconfig.inRunning = true;
 	qconfig.outRunning = true;
 
-	// A buffer for input data. Stores a row from a raster, or a single "pixel" from a table.
-	std::vector<double> buf(qconfig.cols * reader->bands());
-
 	// A list of wavelengths as strings for labelling.
 	std::vector<std::string> wavelengthMeta;
 	for(double w : qconfig.wavelengths)
@@ -682,26 +693,42 @@ void Contrem::run(ContremListener* listener) {
 	bool hasRoi = false;
 	std::vector<bool> mask;
 	{
-		int cols = 1;
-		{
-			if(qconfig.useROI && !roi.empty() && isfile(roi)) {
-				try {
-					GDALReader rdr(roi);
-					int row;
-					std::string id;
-					std::vector<double> buf(rdr.cols());
-					mask.resize(rdr.cols() * rdr.rows());
-					while(rdr.next(buf, 1, cols, row)) {
-						for(int i = 0; i < cols; ++i)
-							mask[row * cols + i] = buf[i] > 0;
-					}
-					hasRoi = true;
-				} catch(const std::exception& ex) {
-					std::cerr << "Could not open mask: " << ex.what() << "\n";
+		if(qconfig.useROI && !roi.empty() && isfile(roi)) {
+			try {
+				GDALReader rdr(roi);
+				int row, cols = 1;
+				std::string id;
+				std::vector<double> buf(rdr.cols());
+				mask.resize(rdr.cols() * rdr.rows());
+				while(rdr.next(buf, 1, cols, row)) {
+					for(int i = 0; i < cols; ++i)
+						mask[row * cols + i] = buf[i] > 0;
 				}
+				hasRoi = true;
+			} catch(const std::exception& ex) {
+				std::cerr << "Could not open mask: " << ex.what() << "\n";
 			}
 		}
 	}
+
+	switch(getFileType(spectra)) {
+	case CSV:
+		qconfig.statusCount = reader->rows();
+		break;
+	case GTiff:
+	case ENVI:
+		if(hasRoi) {
+			qconfig.statusCount = std::count(mask.begin(), mask.end(), true);
+		} else {
+			qconfig.statusCount = reader->rows() * reader->cols();
+		}
+		break;
+	default:
+		break;
+	}
+
+	// A buffer for input data. Stores a row from a raster, or a single "pixel" from a table.
+	std::vector<double> buf(qconfig.cols * reader->bands());
 
 	// Read through the buffer and populate the input queue.
 	int bands = reader->bands();
