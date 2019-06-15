@@ -179,6 +179,11 @@ class GDALReader : public Reader {
 private:
 	GDALDataset* m_ds;
 
+	size_t m_mappedSize;		///<! The size of mapped memory for remapping an interleaved raster to a list of spectra.
+	size_t m_mappedMinBand;		///<! The first mapped band (1-based).
+	double* m_mapped;			///<! The pointer to mapped memory for remapping an interleaved raster to a list of spectra.
+	int m_mappedBands;			///<! The number of bands mapped into memory.
+
 	void loadBandMap();
 
 public:
@@ -188,6 +193,60 @@ public:
 	 * \param filename The filename of a GDAL data source.
 	 */
 	GDALReader(const std::string& filename);
+
+	/**
+	 * Remap the raster into a memory-mapped list of spectra, organized by
+	 * row/col/band. This is freed when the reader is destroyed.
+	 *
+	 * \param minWl the minimum wavelength of the mapped region.
+	 * \param maxWl the maximum wavelength of the mapped region.
+	 */
+	void remap(double minWl, double maxWl);
+
+	/**
+	 * Remap the raster into a memory-mapped list of spectra, organized by
+	 * row/col/band. This is freed when the reader is destroyed.
+	 *
+	 * \param minBand the first band of the mapped region.
+	 * \param maxBand the last band of the mapped region.
+	 */
+	void remap(int minBand, int maxBand);
+
+	/**
+	 * Remap the raster into a memory-mapped list of spectra, organized by
+	 * row/col/band. This is freed when the reader is destroyed.
+	 */
+	void remap();
+
+	/**
+	 * Get the value of the mapped spectrum at the column and row for the given wavelength.
+	 *
+	 * \param col The column.
+	 * \param row The row.
+	 * \param wl The wavelength.
+	 * \return The intensity value. NaN if out of range.
+	 */
+	double mapped(int col, int row, double wl);
+
+	/**
+	 * Get the value of the mapped spectrum at the column and row for the given wavelength.
+	 *
+	 * \param col The column.
+	 * \param row The row.
+	 * \param The band (1-based).
+	 * \return The intensity value. NaN if out of range.
+	 */
+	double mapped(int col, int row, int band);
+
+	/**
+	 * Get the entire mapped spectrum at the given column and row.
+	 *
+	 * \param col The column.
+	 * \param row The row.
+	 * \param values A vector to contain the spectrum.
+	 * \return True if successful.
+	 */
+	bool mapped(int col, int row, std::vector<double>& values);
 
 	int toCol(double x);
 

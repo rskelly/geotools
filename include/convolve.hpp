@@ -10,10 +10,13 @@
 
 #include <string>
 #include <fstream>
+#include <memory>
 
 #include "util.hpp"
+#include "reader.hpp"
 
 using namespace hlrg::util;
+using namespace hlrg::reader;
 
 namespace hlrg {
 namespace convolve {
@@ -256,6 +259,13 @@ private:
 	int m_firstCol;									///<! The first column of data.
 	int m_dateCol;									///<! The date column (or -1 if not used.)
 	int m_timeCol;									///<! The timestamp column (or -1 if not used.)
+
+	std::unique_ptr<GDALReader> m_raster;
+	size_t m_rasterIdx;
+
+	bool loadCSV(const std::string& filename, const std::string& delimiter);
+
+	bool loadRaster(const std::string& filename);
 
 public:
 	std::vector<Band> bands;						///<! A list of the bands. This changes as the file is read through.

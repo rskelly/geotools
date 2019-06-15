@@ -184,13 +184,35 @@ Spectrum::Spectrum(int firstRow, int firstCol, int dateCol, int timeCol) :
 		m_count(0),
 		m_firstRow(firstRow), m_firstCol(firstCol),
 		m_dateCol(dateCol), m_timeCol(timeCol),
-		time(0) {}
+		time(0),
+		m_rasterIdx(0) {}
 
 Spectrum::Spectrum() : Spectrum(0, 0, -1, -1) {}
 
 bool Spectrum::load(const std::string& filename, const std::string& delimiter) {
 	// Clear any existing bands list.
 	bands.clear();
+	if(getFileType(filename) == FileType::CSV) {
+		return loadCSV(filename, delimiter);
+	} else {
+		return loadRaster(filename);
+	}
+}
+
+bool Spectrum::loadRaster(const std::string& filename) {
+
+	m_raster.reset(new GDALReader(filename));
+	m_raster->remap();
+	std::vector<double> bandRange = m_raster->getBandRange();
+	for(double b : bandRange)
+		bands.emplace_back(b, 0);
+	m_count = m_raster->cols() * m_raster->rows();
+
+	return true;
+}
+
+bool Spectrum::loadCSV(const std::string& filename, const std::string& delimiter) {
+
 	// Open the input file for reading.
 	m_input.open(filename, std::ios::in);
 	// Set the delimiter
@@ -247,46 +269,54 @@ size_t Spectrum::count() const {
 }
 
 bool Spectrum::next() {
-	// No buffer was read on the previous read. We're done.
-	if(m_buf.empty())
-		return false;
 
-	// Read the date string.
-	{
-		std::stringstream ss(m_buf);
-		for(int c = 0; c <= m_dateCol; ++c)
-			std::getline(ss, date, m_delim);
-	}
+	if(m_raster.get()) {
 
-	// Read the timestamp.
-	{
-		std::stringstream ss(m_buf);
-		std::string part;
-		for(int c = 0; c <= m_timeCol; ++c)
-			std::getline(ss, part, m_delim);
-		time = std::strtol(part.c_str(), nullptr, 10);
-	}
+		return m_rasterIdx < m_count;
 
-	// Read the data.
-	{
-		size_t i = 0;
-		std::stringstream ss(m_buf);
-		std::string part;
-		for(int c = 0; c < m_firstCol; ++c)
-			std::getline(ss, part, m_delim);
-		while(std::getline(ss, part, m_delim))
-			bands[i++].setValue(std::strtod(part.c_str(), nullptr));
-	}
-
-	// Read the next buffer. If it fails, we'll find out on the next call to next.
-	if(!m_input.eof() && m_input.good()) {
-		std::getline(m_input, m_buf);
-		if(!m_buf.empty() && std::string::npos == m_buf.find(m_delim))
-			throw std::runtime_error("The selected delimiter wasn't found in this file.");
 	} else {
-		m_buf = "";
+
+		// No buffer was read on the previous read. We're done.
+		if(m_buf.empty())
+			return false;
+
+		// Read the date string.
+		{
+			std::stringstream ss(m_buf);
+			for(int c = 0; c <= m_dateCol; ++c)
+				std::getline(ss, date, m_delim);
+		}
+
+		// Read the timestamp.
+		{
+			std::stringstream ss(m_buf);
+			std::string part;
+			for(int c = 0; c <= m_timeCol; ++c)
+				std::getline(ss, part, m_delim);
+			time = std::strtol(part.c_str(), nullptr, 10);
+		}
+
+		// Read the data.
+		{
+			size_t i = 0;
+			std::stringstream ss(m_buf);
+			std::string part;
+			for(int c = 0; c < m_firstCol; ++c)
+				std::getline(ss, part, m_delim);
+			while(std::getline(ss, part, m_delim))
+				bands[i++].setValue(std::strtod(part.c_str(), nullptr));
+		}
+
+		// Read the next buffer. If it fails, we'll find out on the next call to next.
+		if(!m_input.eof() && m_input.good()) {
+			std::getline(m_input, m_buf);
+			if(!m_buf.empty() && std::string::npos == m_buf.find(m_delim))
+				throw std::runtime_error("The selected delimiter wasn't found in this file.");
+		} else {
+			m_buf = "";
+		}
+		return true;
 	}
-	return true;
 }
 
 void Spectrum::setup(Spectrum& spec) {

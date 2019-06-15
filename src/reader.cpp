@@ -5,6 +5,8 @@
  *      Author: rob
  */
 
+#include <sys/mman.h>
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -12,6 +14,7 @@
 #include <chrono>
 #include <list>
 #include <iomanip>
+#include <cstring>
 
 #include <gdal_priv.h>
 
@@ -119,7 +122,9 @@ int Reader::bands() const {
 }
 
 GDALReader::GDALReader(const std::string& filename) : Reader(),
-		m_ds(nullptr) {
+		m_ds(nullptr),
+		m_mappedSize(0),
+		m_mapped(nullptr) {
 
 	GDALAllRegister();
 
@@ -133,6 +138,54 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 
 	loadBandMap();
 }
+
+void GDALReader::remap() {
+	remap(1, m_bands);
+}
+
+void GDALReader::remap(double minWl, double maxWl) {
+	int iminWl = (int) (minWl * WL_SCALE);
+	int imaxWl = (int) (maxWl * WL_SCALE);
+	remap(m_bandMap[iminWl], m_bandMap[imaxWl]);
+}
+
+void GDALReader::remap(int minBand, int maxBand) {
+	m_mappedMinBand = minBand;
+	m_mappedBands = (maxBand - minBand) + 1;
+	m_mappedSize = m_cols * m_rows * m_mappedBands * sizeof(double);
+	m_mapped = (double*) mmap(0, m_mappedSize, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, 0, 0);
+	std::vector<double> buf(m_cols);
+	for(int i = minBand, b = 0; i <= maxBand; ++i, ++b) {
+		GDALRasterBand* band = m_ds->GetRasterBand(i);
+		for(int r = 0; r < m_rows; ++r) {
+			if(CE_None != band->RasterIO(GF_Read, 0, r, m_cols, 1, buf.data(), m_cols, 1, GDT_Float64, 0, 0, 0))
+				throw std::runtime_error("Failed to read row for remap.");
+			for(int c = 0; c < m_cols; ++i)
+				m_mapped[r * m_cols * m_mappedBands + c * m_cols + b] = buf[c];
+		}
+	}
+}
+
+double GDALReader::mapped(int col, int row, double wl) {
+	return mapped(col, row, m_bandMap[(int) (wl * WL_SCALE)]);
+}
+
+double GDALReader::mapped(int col, int row, int band) {
+	size_t idx = row * m_cols * m_mappedBands + col * m_cols + (band - m_mappedMinBand);
+	if(idx >= m_mappedSize)
+		return std::nan("");
+	return m_mapped[idx];
+}
+
+bool GDALReader::mapped(int col, int row, std::vector<double>& values) {
+	size_t idx = row * m_cols * m_mappedBands + col * m_cols;
+	if(idx + m_mappedBands > m_mappedSize)
+		return false;
+	values.resize(m_mappedBands);
+	std::memcpy(values.data(), m_mapped + idx, m_mappedBands * sizeof(double));
+	return true;
+}
+
 
 void GDALReader::loadBandMap() {
 	std::map<int, int> bandMap;
@@ -251,6 +304,8 @@ bool GDALReader::next(std::vector<double>& buf, int band, int& cols, int& row) {
 
 GDALReader::~GDALReader() {
 	GDALClose(m_ds);
+	if(m_mapped)
+		munmap(m_mapped, m_mappedSize);
 }
 
 
