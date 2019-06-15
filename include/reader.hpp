@@ -17,6 +17,7 @@
 #include <gdal_priv.h>
 
 #include "bintree.hpp"
+#include "util.hpp"
 
 namespace hlrg {
 namespace reader {
@@ -29,13 +30,14 @@ constexpr double WL_SCALE = 100000;
  */
 class Reader {
 protected:
-	int m_cols;		///<! Number of columns.
-	int m_rows; 	///<! Number of rows.
-	int m_bands;	///<! Number of bands.
+	std::string m_filename;
+	int m_cols;								///<! Number of columns.
+	int m_rows; 							///<! Number of rows.
+	int m_bands;							///<! Number of bands.
 
-	int m_col;		///<! Current column for iteration.
-	int m_row;		///<! Current row for iteration.
-	int m_bufSize;	///<! The buffer size.
+	int m_col;								///<! Current column for iteration.
+	int m_row;								///<! Current row for iteration.
+	int m_bufSize;							///<! The buffer size.
 
 	std::map<int, int> m_bandMap;			///<! A index-to-band mapping.
 	std::vector<std::string> m_bandNames;	///<! A list of band names; possibly for storing a representation of the band wavelength, etc.
@@ -45,10 +47,18 @@ protected:
 	int m_maxIdx;							///<! Maximum band index.
 
 public:
+
 	/**
 	 * Default constructor.
 	 */
 	Reader();
+
+	/**
+	 * Return the FileType represented by this reader.
+	 *
+	 * \return The FileType represented by this reader.
+	 */
+	hlrg::util::FileType fileType() const;
 
 	/**
 	 * Fill the buffer with the next available row of data. Data will be stored sequentially by band,
@@ -58,10 +68,11 @@ public:
 	 * \param[out] id A string to hold the identifier for the item, if there is one.
 	 * \param[out] buf A buffer to store the pixels and bands of a row, in band-sequential order.
 	 * \param[out] cols A reference to a value that will be updated with the number of columns in the buffer.
+	 * \param[out] col A reference to the column index that was read.
 	 * \param[out] row A reference to the row index that was read.
 	 * \return True if the row was read successfully.
 	 */
-	virtual bool next(std::string& id, std::vector<double>& buf, int& cols, int& row) = 0;
+	virtual bool next(std::string& id, std::vector<double>& buf, int& cols, int& col, int& row) = 0;
 
 	/**
 	 * Set the size of the buffer for reading.
@@ -260,9 +271,9 @@ public:
 
 	float getFloat(int col, int row);
 
-	bool next(std::string& id, std::vector<double>& buf, int& cols, int& row);
+	bool next(std::string& id, std::vector<double>& buf, int& cols, int& col, int& row);
 
-	bool next(std::vector<double>& buf, int band, int& cols, int& row);
+	bool next(std::vector<double>& buf, int band, int& cols, int& col, int& row);
 
 	 ~GDALReader();
 };
@@ -549,7 +560,7 @@ public:
 
 	void reset();
 
-	bool next(std::string& id, std::vector<double>& buf, int& cols, int& row);
+	bool next(std::string& id, std::vector<double>& buf, int& cols, int& col, int& row);
 
 };
 

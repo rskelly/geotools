@@ -72,8 +72,7 @@ private:
 
 public:
 	std::string output;						///<! The output file.
-	hlrg::util::FileType x;
-	FileType outputType;		///<! The output file type.
+	FileType outputType;					///<! The output file type.
 	std::string extension;					///<! The output extension.
 	std::string roi;						///<! The mask/ROI; Raster format.
 	std::string spectra;					///<! The input spectra; raster or CSV.
@@ -87,7 +86,7 @@ public:
 	int wlIDCol;							///<! A column used as an identifier (a string).
 	bool plotOrig;							///<! Plot the original spectrum and hull.
 	bool plotNorm;							///<! Plot the normalized continuum removed spectrum and regression line.
-	util::NormMethod normMethod;		///<! The normalization method.
+	NormMethod normMethod;					///<! The normalization method.
 	int threads;							///<! The number of threads to use.
 	bool running;							///<! True if the process is running. Setting this to false causes shutdown.
 

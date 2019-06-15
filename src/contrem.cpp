@@ -664,6 +664,11 @@ void Contrem::run(ContremListener* listener) {
 
 	std::unique_ptr<Reader> reader = getReader(spectra, wlTranspose, wlHeaderRows, wlMinCol, wlMaxCol, wlIDCol);
 	reader->setBandRange(minWl, maxWl);
+	if(reader->fileType() != FileType::CSV) {
+		GDALReader* rdp = static_cast<GDALReader*>(reader.get());
+		if(rdp)
+			rdp->remap(minWl, maxWl);
+	}
 
 	QConfig qconfig;
 	qconfig.contrem = this;
@@ -699,11 +704,11 @@ void Contrem::run(ContremListener* listener) {
 		if(qconfig.useROI && !roi.empty() && isfile(roi)) {
 			try {
 				GDALReader rdr(roi);
-				int row, cols = 1;
+				int col, row, cols = 1;
 				std::string id;
 				std::vector<double> buf(rdr.cols());
 				mask.resize(rdr.cols() * rdr.rows());
-				while(rdr.next(buf, 1, cols, row)) {
+				while(rdr.next(buf, 1, cols, col, row)) {
 					for(int i = 0; i < cols; ++i)
 						mask[row * cols + i] = buf[i] > 0;
 				}
@@ -735,27 +740,25 @@ void Contrem::run(ContremListener* listener) {
 
 	// Read through the buffer and populate the input queue.
 	int bands = reader->bands();
-	int cols, row;
+	int cols, col, row;
 	std::string id;
-	while(running && reader->next(id, buf, cols, row)) {
+	while(running && reader->next(id, buf, cols, col, row)) {
 
 		{
 			// Read out the input objects and add to the queue.
 			std::lock_guard<std::mutex> lk(qconfig.inmtx);
-			for(int c = 0; c < cols; ++c) {
 
-				// If there's a mask, check it. Skip if necessary.
-				if(hasRoi && !mask[row * cols + c])
-					continue;
+			// If there's a mask, check it. Skip if necessary.
+			if(hasRoi && !mask[row * cols + col])
+				continue;
 
-				input in(id, c, row);
-				for(int b = 0; b < bands; ++b) {
-					double v = buf[c * bands + b];
-					double w = qconfig.wavelengths[b];
-					in.data.emplace_back(w, v);
-				}
-				qconfig.inqueue.push_back(in);
+			input in(id, col, row);
+			for(int b = 0; b < bands; ++b) {
+				double v = buf[b];
+				double w = qconfig.wavelengths[b];
+				in.data.emplace_back(w, v);
 			}
+			qconfig.inqueue.push_back(in);
 
 			if(m_listener)
 				m_listener->update(this);

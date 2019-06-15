@@ -19,9 +19,11 @@
 #include <gdal_priv.h>
 
 #include "reader.hpp"
+#include "util.hpp"
 
 using namespace hlrg::reader;
 using namespace hlrg::ds;
+using namespace hlrg::util;
 
 namespace {
 
@@ -45,6 +47,10 @@ Reader::Reader() :
 	m_bufSize(256),
 	m_minWl(0), m_maxWl(0),
 	m_minIdx(0), m_maxIdx(0) {
+}
+
+FileType Reader::fileType() const {
+	return getFileType(m_filename);
 }
 
 void Reader::setBufSize(int bufSize) {
@@ -102,6 +108,12 @@ std::vector<double> Reader::getWavelengths() const {
 }
 
 std::vector<std::string> Reader::getBandNames() const {
+	std::vector<std::string> names;
+	if(m_maxIdx > 0 && m_maxIdx > m_minIdx) {
+		for(auto p = std::next(m_bandNames.begin(), m_minIdx - 1); p != std::next(m_bandNames.begin(), m_maxIdx); ++p)
+			names.push_back(*p);
+		return names;
+	}
 	return m_bandNames;
 }
 
@@ -153,14 +165,16 @@ void GDALReader::remap(int minBand, int maxBand) {
 	m_mappedMinBand = minBand;
 	m_mappedBands = (maxBand - minBand) + 1;
 	m_mappedSize = m_cols * m_rows * m_mappedBands * sizeof(double);
-	m_mapped = (double*) mmap(0, m_mappedSize, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, 0, 0);
+	m_mapped = (double*) mmap(0, m_mappedSize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+	if((long) m_mapped == -1)
+		throw std::runtime_error("Failed to remap.");
 	std::vector<double> buf(m_cols);
 	for(int i = minBand, b = 0; i <= maxBand; ++i, ++b) {
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
 		for(int r = 0; r < m_rows; ++r) {
 			if(CE_None != band->RasterIO(GF_Read, 0, r, m_cols, 1, buf.data(), m_cols, 1, GDT_Float64, 0, 0, 0))
 				throw std::runtime_error("Failed to read row for remap.");
-			for(int c = 0; c < m_cols; ++i)
+			for(int c = 0; c < m_cols; ++c)
 				m_mapped[r * m_cols * m_mappedBands + c * m_cols + b] = buf[c];
 		}
 	}
@@ -254,50 +268,80 @@ float GDALReader::getFloat(int col, int row) {
 	return buf[0];
 }
 
-bool GDALReader::next(std::string& id, std::vector<double>& buf, int& cols, int& row) {
+bool GDALReader::next(std::string& id, std::vector<double>& buf, int& cols, int& col, int& row) {
 
 	id = "";
+	cols = m_cols;
+	col = m_col;
+	row = m_row;
 
 	if(m_row >= m_rows)
 		return false;
 
-	int numBands = m_maxIdx - m_minIdx + 1;
+	if(m_mapped) {
 
-	cols = m_cols;
-	row = m_row;
-
-	buf.resize(m_cols * numBands);
-	std::fill(buf.begin(), buf.end(), 0);
-
-	double* data = (double*) buf.data();
-	for(int i = m_minIdx; i <= m_maxIdx; ++i) {
-		//std::cerr << "band " << i << "\n";
-		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + i - m_minIdx), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
+		if(!mapped(m_row, m_col, buf))
 			return false;
-	}
 
-	++m_row;
+		if(++m_col >= m_cols) {
+			m_col = 0;
+			++m_row;
+		}
+
+	} else {
+
+		int numBands = m_maxIdx - m_minIdx + 1;
+
+		buf.resize(m_cols * numBands);
+		std::fill(buf.begin(), buf.end(), 0);
+
+		double* data = (double*) buf.data();
+		for(int i = m_minIdx; i <= m_maxIdx; ++i) {
+			//std::cerr << "band " << i << "\n";
+			GDALRasterBand* band = m_ds->GetRasterBand(i);
+			if(CE_None != band->RasterIO(GF_Read, 0, m_row, m_cols, 1, (void*) (data + i - m_minIdx), m_cols, 1, GDT_Float64, numBands * sizeof(double), 0, 0))
+				return false;
+		}
+
+		++m_row;
+	}
 
 	return true;
 }
 
-bool GDALReader::next(std::vector<double>& buf, int band, int& cols, int& row) {
+bool GDALReader::next(std::vector<double>& buf, int band, int& cols, int& col, int& row) {
 
 	if(m_row >= m_rows)
 		return false;
 
 	cols = m_cols;
+	col = m_col;
 	row = m_row;
 
-	buf.resize(m_cols);
-	std::fill(buf.begin(), buf.end(), 0);
+	if(m_mapped) {
 
-	GDALRasterBand* bd = m_ds->GetRasterBand(band);
-	if(CE_None != bd->RasterIO(GF_Read, 0, m_row, m_cols, 1, buf.data(), m_cols, 1, GDT_Float64, 0, 0, 0))
-		return false;
+		std::vector<double> _buf;
+		if(!mapped(m_row, m_col, _buf))
+			return false;
+		buf.resize(1);
+		buf[0] = _buf[0];
 
-	++m_row;
+		if(++m_col >= m_cols) {
+			m_col = 0;
+			++m_row;
+		}
+
+	} else {
+
+		buf.resize(m_cols);
+		std::fill(buf.begin(), buf.end(), 0);
+
+		GDALRasterBand* bd = m_ds->GetRasterBand(band);
+		if(CE_None != bd->RasterIO(GF_Read, 0, m_row, m_cols, 1, buf.data(), m_cols, 1, GDT_Float64, 0, 0, 0))
+			return false;
+
+		++m_row;
+	}
 
 	return true;
 }
@@ -756,11 +800,12 @@ void CSVReader::transpose() {
 	m_rows = m_data.size();
 }
 
-bool CSVReader::next(std::string& id, std::vector<double>& buf, int& cols, int& row) {
+bool CSVReader::next(std::string& id, std::vector<double>& buf, int& cols, int& col, int& row) {
 	if(m_idx >= m_rows)
 		return false;
 
 	cols = 1;
+	col = 0;
 	row = m_idx;
 
 	std::vector<double> data(m_maxIdx - m_minIdx + 1);
