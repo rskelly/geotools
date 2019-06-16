@@ -708,7 +708,7 @@ void Contrem::run(ContremListener* listener) {
 				std::string id;
 				std::vector<double> buf(rdr.cols());
 				mask.resize(rdr.cols() * rdr.rows());
-				while(rdr.next(buf, 1, cols, col, row)) {
+				while(running && rdr.next(buf, 1, cols, col, row)) {
 					for(int i = 0; i < cols; ++i)
 						mask[row * cols + i] = buf[i] > 0;
 				}
