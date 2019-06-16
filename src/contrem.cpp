@@ -607,7 +607,7 @@ namespace {
 				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 				items.emplace_back("Normalized Spectrum", w, crnm);
 				items.emplace_back("Regression", std::vector<double>({w.front(), w.back()}), std::vector<double>({w.front() * out.slope + out.yint, w.back() * out.slope + out.yint}));
-				config->contrem->plotter().enqueue(plotfile, title, items);
+				Plotter::instance().enqueue(plotfile, title, items);
 			}
 			if(config->contrem->plotOrig){
 				std::string plotfile = plotdir + "/orig_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
@@ -615,7 +615,7 @@ namespace {
 				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 				items.emplace_back("Original Spectrum", w, ss);
 				items.emplace_back("Convex Hull", out.hullx, out.hully);
-				config->contrem->plotter().enqueue(plotfile, title, items);
+				Plotter::instance().enqueue(plotfile, title, items);
 			}
 
 			if(!config->contrem->running)
@@ -799,8 +799,4 @@ void Contrem::setProgress(double p) {
 
 double Contrem::progress() const {
 	return m_progress;
-}
-
-Plotter& Contrem::plotter() {
-	return m_plotter;
 }

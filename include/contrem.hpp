@@ -67,7 +67,6 @@ public:
 class Contrem {
 private:
 	ContremListener* m_listener;
-	Plotter m_plotter;
 	double m_progress;
 
 public:

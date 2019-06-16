@@ -26,10 +26,8 @@ using namespace hlrg;
 
 class ContremApp : public QApplication {
 public:
-	Plotter* plotter;
 	ContremApp(int &argc, char **argv) :
-		QApplication(argc, argv),
-		plotter(nullptr) {}
+		QApplication(argc, argv) {}
 
 	bool notify(QObject *receiver, QEvent *e) {
 		try {
@@ -55,15 +53,18 @@ int runWithGui(ContremApp& app, ContremForm& form) {
 
 int main(int argc, char** argv) {
 
+	Plotter plot;
+	if(!plot.start())
+		return 1;
+
 	ContremApp app(argc, argv);
 	ContremForm form(&app);
-	app.plotter = &(form.contrem().plotter());
 
-	int ret = runWithGui(app, form);
+	runWithGui(app, form);
 
-	app.plotter->process();
+	plot.stop();
 
-	return ret;
+	return 0;
 }
 
 
