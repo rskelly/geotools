@@ -355,6 +355,7 @@ void ContremForm::enableSpectraOptions(const std::string& spectra) {
 
 void ContremForm::txtSpectraFileChanged(QString filename) {
 	m_contrem.spectra = filename.toStdString();
+	m_contrem.spectraType = fileTypeFromString(m_contrem.spectra);
 	enableSpectraOptions(m_contrem.spectra);
 	updateWavelengths();
 	m_settings.setValue(LAST_SPECTRA, filename);

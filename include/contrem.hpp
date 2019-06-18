@@ -8,11 +8,15 @@
 #ifndef _CONTREM_HPP_
 #define _CONTREM_HPP_
 
+#include <list>
+#include <vector>
+
 #include "reader.hpp"
 #include "plotter.hpp"
 #include "util.hpp"
 
 using namespace hlrg::util;
+using namespace hlrg::reader;
 
 namespace hlrg {
 namespace contrem {
@@ -67,7 +71,8 @@ public:
 class Contrem {
 private:
 	ContremListener* m_listener;
-	double m_progress;
+	int m_step;
+	int m_steps;
 
 public:
 	std::string output;						///<! The output file.
@@ -75,6 +80,7 @@ public:
 	std::string extension;					///<! The output extension.
 	std::string roi;						///<! The mask/ROI; Raster format.
 	std::string spectra;					///<! The input spectra; raster or CSV.
+	FileType spectraType;					///<! The input spectra file type.
 	std::string samplePoints;				///<! The sample points file for plotting.
 	std::string samplePointsLayer;			///<! The sample points layer for plotting.
 	double minWl;							///<! The lower bound of the wavelength range to process.
@@ -90,6 +96,8 @@ public:
 	int threads;							///<! The number of threads to use.
 	bool running;							///<! True if the process is running. Setting this to false causes shutdown.
 
+	GDALReader* grdr;						///<! A pointer to the reader if it was a raster reader;
+
 	/**
 	 * Process the continuum removal job.
 	 *
@@ -99,12 +107,19 @@ public:
 	void run(ContremListener* listener);
 
 	/**
-	 * Return a map containing pairs where the int is the 1-based band index,
-	 * and the float is the wavelength. Attempts to load from raster metadata
-	 * or table header. If these fail, will attempt to load from first column
-	 * of presumably transposed table.
+	 * Return a reference to the plotter. TODO: This is a hack.
 	 */
-	//std::map<int, double> loadWavelengths();
+	Plotter& plotter();
+
+	/**
+	 * Initialize the number of steps to completion and the first step position.
+	 */
+	void initSteps(int step, int steps);
+
+	/**
+	 * Advance to the next progress step.
+	 */
+	void nextStep();
 
 	/**
 	 * Returns the current processing progress as a double from 0 to 1.
@@ -112,18 +127,6 @@ public:
 	 * \return The current processing progress as a double from 0 to 1.
 	 */
 	double progress() const;
-
-	/**
-	 * Set the current progress. From 0 to 1.
-	 *
-	 * \param progress The progress setting from 0 to 1.
-	 */
-	void setProgress(double progress);
-
-	/**
-	 * Return a reference to the plotter. TODO: This is a hack.
-	 */
-	Plotter& plotter();
 
 };
 

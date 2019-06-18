@@ -202,6 +202,8 @@ public:
 		if(!m_tree)
 			throw std::runtime_error("Tree not built. Forget to call build?");
 
+		radius *= radius;
+
 		if(radius < 0)
 			throw std::runtime_error("Radius too small: " + std::to_string(radius));
 

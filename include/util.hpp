@@ -142,8 +142,8 @@ int gdalTypeSize(GDALDataType type);
  * \param[out] The output buffer.
  */
 template <class T>
-void convertBuffer(std::vector<char>& raw, std::vector<T>& buf) {
-	buf.resize(raw.size() / sizeof(T));
+void inline convertBuffer(std::vector<char>& raw, std::vector<T>& buf) {
+	buf.reserve(raw.size() / sizeof(T));
 	std::memcpy(buf.data(), raw.data(), raw.size());
 }
 

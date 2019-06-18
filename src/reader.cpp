@@ -139,6 +139,8 @@ int Reader::bands() const {
 PointSetReader::PointSetReader(const std::string& filename, const std::string& layer) :
 	m_tree(nullptr) {
 
+	GDALAllRegister();
+
 	GDALDataset* ds = (GDALDataset*) GDALOpenEx(filename.c_str(), GDAL_OF_VECTOR|GDAL_OF_READONLY, 0, 0, 0);
 	if(!ds)
 		throw std::runtime_error("Failed to open dataset " + filename);
@@ -181,9 +183,12 @@ PointSetReader::PointSetReader(const std::string& filename, const std::string& l
 
 std::vector<std::string> PointSetReader::getLayerNames(const std::string& filename) {
 
+	GDALAllRegister();
+
 	std::vector<std::string> names;
 
-	GDALDataset* ds = (GDALDataset*) GDALOpenEx(filename.c_str(), GDAL_OF_VECTOR|GDAL_OF_READONLY, 0, 0, 0);
+	void* h = GDALOpenEx(filename.c_str(), GDAL_OF_VECTOR, 0, 0, 0);
+	GDALDataset* ds = (GDALDataset*) h;
 	if(!ds)
 		throw std::runtime_error("Failed to open dataset " + filename);
 	for(int i = 0; i < ds->GetLayerCount(); ++i) {
@@ -197,6 +202,13 @@ std::vector<std::string> PointSetReader::getLayerNames(const std::string& filena
 int PointSetReader::search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts) {
 
 	std::vector<double> dist;
+	return m_tree->radSearch(hlrg::reader::Point(x, y), radius, 0, std::back_inserter(pts), std::back_inserter(dist));
+}
+
+int PointSetReader::samplesNear(double x, double y, double radius) {
+
+	std::vector<double> dist;
+	std::vector<hlrg::reader::Point*> pts;
 	return m_tree->radSearch(hlrg::reader::Point(x, y), radius, 0, std::back_inserter(pts), std::back_inserter(dist));
 }
 
@@ -260,6 +272,49 @@ void GDALReader::remap(double minWl, double maxWl) {
 	remap(m_bandMap[iminWl], m_bandMap[imaxWl]);
 }
 
+template <class T>
+void doRemap(GDALDataset* ds, double* mapped, int minBand, int maxBand, int cols, int rows) {
+
+	int bcols, brows, acols, arows;
+	GDALRasterBand* firstBand = ds->GetRasterBand(minBand);
+	int mappedBands = maxBand - minBand + 1;
+
+	firstBand->GetBlockSize(&bcols, &brows);
+
+	std::vector<T> buf(mappedBands * bcols * brows * sizeof(T));
+	std::vector<double> row(mappedBands);
+
+	for(int br = 0; br < rows / brows; ++br) {
+		for(int bc = 0; bc < cols / bcols; ++bc) {
+			std::cout << "Remapping block " << (br * (cols / bcols) + bc) << " of " << bcols * brows << "\n";
+
+			// Get a "stack" of blocks representing the band data within a region of pixels.
+			// This is BSQ oriented.
+			for(int i = minBand, b = 0; i <= maxBand; ++i, ++b) {
+				GDALRasterBand* band = ds->GetRasterBand(i);
+				if(CE_None != band->ReadBlock(bc, br, buf.data() + (b * bcols * brows)))
+					continue;
+			}
+
+			firstBand->GetActualBlockSize(bc, br, &acols, &arows);
+
+			for(int r = 0; r < arows; ++r) {
+				for(int c = 0; c < acols; ++c) {
+
+					// Copy the band values into the row buffer.
+					for(int b = 0; b < mappedBands; ++b)
+						row[b] = buf[(b * bcols * brows) + r * bcols + c];
+
+					// Write the row into the mapped file as a sequence of band values for the pixel.
+					size_t idx = (br * brows + r) * cols * mappedBands + (bc * bcols + c) * mappedBands;
+					std::memcpy(mapped + idx, row.data(), row.size() * sizeof(double));
+				}
+			}
+		}
+	}
+
+}
+
 void GDALReader::remap(int minBand, int maxBand) {
 	m_mappedMinBand = minBand;
 	m_mappedBands = (maxBand - minBand) + 1;
@@ -271,38 +326,18 @@ void GDALReader::remap(int minBand, int maxBand) {
 	if((long) m_mapped == -1)
 		throw std::runtime_error(std::string("Failed to remap: ") + strerror(errno) + " " + std::to_string(errno));
 
-	int bcols, brows, acols, arows;
-	for(int i = minBand, b = 0; i <= maxBand; ++i, ++b) {
-		std::cout << "Remapping band " << i << " of " << maxBand << "\n";
+	GDALRasterBand* firstBand = m_ds->GetRasterBand(minBand);
+	GDALDataType type = firstBand->GetRasterDataType();
 
-		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		GDALDataType type = band->GetRasterDataType();
-		int typeSize = gdalTypeSize(type);
-		band->GetBlockSize(&bcols, &brows);
-
-		std::vector<char> rawBuf(bcols * brows * typeSize);
-		std::vector<double> buf(bcols * brows);
-
-		for(int br = 0; br < m_rows / brows; ++br) {
-			for(int bc = 0; bc < m_cols / bcols; ++bc) {
-
-				if(CE_None != band->ReadBlock(bc, br, rawBuf.data()))
-					continue;
-
-				convertBuffer(type, rawBuf, buf);
-
-				band->GetActualBlockSize(bc, br, &acols, &arows);
-
-				for(int r = 0; r < arows; ++r) {
-					for(int c = 0; c < acols; ++c) {
-
-						size_t idx = (br * brows + r) * m_cols * m_mappedBands + (bc * bcols + c) * m_mappedBands + b;
-						m_mapped[idx] = buf[r * bcols + c];
-
-					}
-				}
-			}
-		}
+	switch(type) {
+	case GDT_Float32:
+		doRemap<float>(m_ds, m_mapped, minBand, maxBand, cols(), rows());
+		break;
+	case GDT_Float64:
+		doRemap<double>(m_ds, m_mapped, minBand, maxBand, cols(), rows());
+		break;
+	default:
+		throw std::runtime_error("remap only implemented for float rasters.");
 	}
 }
 

@@ -201,6 +201,7 @@ public:
 	PointSetReader(const std::string& filename, const std::string& layer);
 	static std::vector<std::string> getLayerNames(const std::string& filename);
 	int search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts);
+	int samplesNear(double x, double y, double radius);
 	~PointSetReader();
 };
 

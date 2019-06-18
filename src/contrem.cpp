@@ -310,6 +310,10 @@ namespace {
 	}
 
 	class QConfig {
+	private:
+		int steps;							///<! The total number of steps to complete the processing. Used for the status bar.
+		int step;							///<! The current completed step.
+
 	public:
 		Plotter* plotter;
 		Contrem* contrem;
@@ -327,7 +331,7 @@ namespace {
 		int cols;
 		int rows;
 		int bands;
-		int statusCount;					///<! Count for status counter. CSV: number of rows; Raster: number of pixels; Masked: number of unmasked pixels.
+
 		std::vector<double> wavelengths;
 		std::vector<std::string> bandNames;
 
@@ -339,13 +343,14 @@ namespace {
 		}
 	};
 
+
 	/**
 	 * Return a list of lines depending on configuration.
 	 * 1) If a hull is desired.
 	 * 2) If the longest segment of a hull is desired.
 	 * 3) If a straight line from start to end of spectrum.
 	 *
-	 * \param config The QConfig object.
+	 * \param config The config object.
 	 * \param pts The list of input points.
 	 * \return A list of lines.
 	 */
@@ -386,6 +391,7 @@ namespace {
 
 		return lines;
 	}
+
 
 	/**
 	 * Process the input queue.
@@ -475,6 +481,8 @@ namespace {
 				config->outqueue.push_back(out);
 			}
 
+			config->contrem->nextStep();
+
 			config->outcv.notify_one();
 			config->readcv.notify_one();
 
@@ -549,26 +557,31 @@ namespace {
 			writer["writervalid"]->fill(0);
 		}
 
-		// Each row is a string of coords which can be turned into a hull.
-		//std::ofstream hulls(outfile + "_hulls.csv");
-		//hulls << "id,col,row,slope,yint\n";
-
+		// Initialize the output lists.
 		std::vector<double> ss;
 		std::vector<double> ch;
 		std::vector<double> cr;
 		std::vector<double> crnm;
 		std::vector<double> hull;
 		std::vector<double> w;
-
 		std::vector<int> maxima(1);
 		std::vector<int> valid(1);
 
 		std::fill(maxima.begin(), maxima.end(), 0);
 		std::fill(valid.begin(), valid.end(), 0);
 
+		// If there's a sample points file and a raster reader, we can use the sample points.
+		std::unique_ptr<PointSetReader> samples;
+		bool hasSamples = false;
+		if(!config->contrem->samplePoints.empty() && config->contrem->grdr) {
+			samples.reset(new PointSetReader(config->contrem->samplePoints, config->contrem->samplePointsLayer));
+			hasSamples = true;
+		}
+
 		// Keeps track of the number of unique completed items for progress tracking.
 		int count = 0;
 
+		// Processor loop.
 		output out;
 		while(config->contrem->running) {
 
@@ -600,22 +613,32 @@ namespace {
 			if(!config->contrem->running)
 				break;
 
-			// If appropriate plot the normalized spectrum.
-			if(config->contrem->plotNorm){
-				std::string plotfile = plotdir + "/norm_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
-				std::string title = "Normalized Spectrum, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
-				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
-				items.emplace_back("Normalized Spectrum", w, crnm);
-				items.emplace_back("Regression", std::vector<double>({w.front(), w.back()}), std::vector<double>({w.front() * out.slope + out.yint, w.back() * out.slope + out.yint}));
-				Plotter::instance().enqueue(plotfile, title, items);
-			}
-			if(config->contrem->plotOrig){
-				std::string plotfile = plotdir + "/orig_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
-				std::string title = "Original Spectrum + Hull, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
-				std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
-				items.emplace_back("Original Spectrum", w, ss);
-				items.emplace_back("Convex Hull", out.hullx, out.hully);
-				Plotter::instance().enqueue(plotfile, title, items);
+			if(hasSamples) {
+
+				// Get the position and radius of the column and row.
+				double x = config->contrem->grdr->toX(out.c);
+				double y = config->contrem->grdr->toY(out.r);
+				double rad = std::sqrt(std::pow(config->contrem->grdr->resX(), 2) * 2);
+
+				if(samples->samplesNear(x, y, rad)) {
+					// If appropriate plot the normalized spectrum.
+					if(config->contrem->plotNorm){
+						std::string plotfile = plotdir + "/norm_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
+						std::string title = "Normalized Spectrum, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
+						std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
+						items.emplace_back("Normalized Spectrum", w, crnm);
+						items.emplace_back("Regression", std::vector<double>({w.front(), w.back()}), std::vector<double>({w.front() * out.slope + out.yint, w.back() * out.slope + out.yint}));
+						Plotter::instance().enqueue(plotfile, title, items);
+					}
+					if(config->contrem->plotOrig){
+						std::string plotfile = plotdir + "/orig_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
+						std::string title = "Original Spectrum + Hull, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
+						std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
+						items.emplace_back("Original Spectrum", w, ss);
+						items.emplace_back("Convex Hull", out.hullx, out.hully);
+						Plotter::instance().enqueue(plotfile, title, items);
+					}
+				}
 			}
 
 			if(!config->contrem->running)
@@ -644,7 +667,7 @@ namespace {
 			crnm.clear();
 			w.clear();
 
-			config->contrem->setProgress((double) count / config->statusCount * 0.95);
+			config->contrem->nextStep();
 
 			config->incv.notify_one();
 		}
@@ -656,52 +679,57 @@ namespace {
 
 void Contrem::run(ContremListener* listener) {
 
-	m_progress = 0;
-	m_listener = listener;
+	if(!listener)
+		throw std::runtime_error("A listener is required.");
 
-	if(m_listener)
-		m_listener->started(this);
+	QConfig config;
+	m_listener = listener;
+	m_listener->started(this);
+
+	initSteps(1, 100);
 
 	std::unique_ptr<Reader> reader = getReader(spectra, wlTranspose, wlHeaderRows, wlMinCol, wlMaxCol, wlIDCol);
 	reader->setBandRange(minWl, maxWl);
 	if(reader->fileType() != FileType::CSV) {
-		GDALReader* rdp = static_cast<GDALReader*>(reader.get());
-		if(rdp)
-			rdp->remap(minWl, maxWl);
+		grdr = static_cast<GDALReader*>(reader.get());
+		grdr->remap(minWl, maxWl);
 	}
 
-	QConfig qconfig;
-	qconfig.contrem = this;
-	qconfig.cols = reader->cols();
-	qconfig.rows = reader->rows();
-	qconfig.bands = reader->bands();
-	qconfig.useROI = getFileType(spectra) != FileType::CSV;
+	config.contrem = this;
+	config.cols = reader->cols();
+	config.rows = reader->rows();
+	config.bands = reader->bands();
+	config.useROI = getFileType(spectra) != FileType::CSV;
 
 	// A list of wavelengths.
-	qconfig.wavelengths = reader->getWavelengths();
-	qconfig.bandNames = reader->getBandNames();
+	config.wavelengths = reader->getWavelengths();
+	config.bandNames = reader->getBandNames();
 
-	qconfig.inRunning = true;
-	qconfig.outRunning = true;
+	config.inRunning = true;
+	config.outRunning = true;
+
+	nextStep();
 
 	// A list of wavelengths as strings for labelling.
 	std::vector<std::string> wavelengthMeta;
-	for(double w : qconfig.wavelengths)
+	for(double w : config.wavelengths)
 		wavelengthMeta.push_back(std::to_string(w));
 
 	// Start the processing threads.
 	std::list<std::thread> t0;
 	for(int i = 0; i < threads; ++i)
-		t0.emplace_back(processQueue, &qconfig);
+		t0.emplace_back(processQueue, &config);
 
 	// Start the output thread.
-	std::thread t1(writeQueue, &qconfig);
+	std::thread t1(writeQueue, &config);
+
+	nextStep();
 
 	// Check for a mask file.
 	bool hasRoi = false;
 	std::vector<bool> mask;
 	{
-		if(qconfig.useROI && !roi.empty() && isfile(roi)) {
+		if(config.useROI && !roi.empty() && isfile(roi)) {
 			try {
 				GDALReader rdr(roi);
 				int col, row, cols = 1;
@@ -719,24 +747,35 @@ void Contrem::run(ContremListener* listener) {
 		}
 	}
 
-	switch(getFileType(spectra)) {
-	case FileType::CSV:
-		qconfig.statusCount = reader->rows();
-		break;
-	case FileType::GTiff:
-	case FileType::ENVI:
-		if(hasRoi) {
-			qconfig.statusCount = std::count(mask.begin(), mask.end(), true);
-		} else {
-			qconfig.statusCount = reader->rows() * reader->cols();
+	nextStep();
+
+	// Determine the number of steps for status-keeping.
+	{
+		int steps;
+		switch(getFileType(spectra)) {
+		case FileType::CSV:
+			steps = reader->rows();
+			break;
+		case FileType::GTiff:
+		case FileType::ENVI:
+			if(hasRoi) {
+				steps = std::count(mask.begin(), mask.end(), true);
+			} else {
+				steps = reader->rows() * reader->cols();
+			}
+			break;
+		default:
+			break;
 		}
-		break;
-	default:
-		break;
+
+		// Each datum goes through three steps; 1) adding to the queue; 2) processing; 3) writing.
+		// There are 3 steps at the end.
+		initSteps(1, steps * 3 + 3);
 	}
 
+
 	// A buffer for input data. Stores a row from a raster, or a single "pixel" from a table.
-	std::vector<double> buf(qconfig.cols * reader->bands());
+	std::vector<double> buf(config.cols * reader->bands());
 
 	// Read through the buffer and populate the input queue.
 	int bands = reader->bands();
@@ -746,7 +785,7 @@ void Contrem::run(ContremListener* listener) {
 
 		{
 			// Read out the input objects and add to the queue.
-			std::lock_guard<std::mutex> lk(qconfig.inmtx);
+			std::lock_guard<std::mutex> lk(config.inmtx);
 
 			// If there's a mask, check it. Skip if necessary.
 			if(hasRoi && !mask[row * cols + col])
@@ -755,48 +794,54 @@ void Contrem::run(ContremListener* listener) {
 			input in(id, col, row);
 			for(int b = 0; b < bands; ++b) {
 				double v = buf[b];
-				double w = qconfig.wavelengths[b];
+				double w = config.wavelengths[b];
 				in.data.emplace_back(w, v);
 			}
-			qconfig.inqueue.push_back(in);
+			config.inqueue.push_back(in);
 
-			if(m_listener)
-				m_listener->update(this);
+			nextStep();
 		}
 
 		// Notify the input processor.
-		qconfig.incv.notify_all();
+		config.incv.notify_all();
 
 		// If input queue gets too large, wait before adding more.
-		std::unique_lock<std::mutex> lk(qconfig.readmtx);
-		while(qconfig.inqueue.size() > 1000)
-			qconfig.readcv.wait(lk);
+		std::unique_lock<std::mutex> lk(config.readmtx);
+		while(config.inqueue.size() > 1000)
+			config.readcv.wait(lk);
 	}
 
+	nextStep();
+
 	// Let the processor threads finish.
-	qconfig.inRunning = false;
-	qconfig.incv.notify_all();
+	config.inRunning = false;
+	config.incv.notify_all();
 	for(std::thread& t : t0)
 		t.join();
 
-	m_progress += .02;
+	nextStep();
 
 	// Let the output thread finish.
-	qconfig.outRunning = false;
-	qconfig.outcv.notify_all();
+	config.outRunning = false;
+	config.outcv.notify_all();
 	t1.join();
 
-	m_progress = 1;
-	if(m_listener)
-		m_listener->finished(this);
+	nextStep();
+
+	listener->finished(this);
 }
 
-void Contrem::setProgress(double p) {
-	m_progress = p;
-	if(m_listener)
-		m_listener->update(this);
+void Contrem::initSteps(int step, int steps) {
+	m_step = step;
+	m_steps = steps;
+	m_listener->update(this);
+}
+
+void Contrem::nextStep() {
+	m_step++;
+	m_listener->update(this);
 }
 
 double Contrem::progress() const {
-	return m_progress;
+	return (double) m_step / m_steps;
 }
