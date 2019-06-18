@@ -184,8 +184,8 @@ Spectrum::Spectrum(int firstRow, int firstCol, int dateCol, int timeCol) :
 		m_count(0),
 		m_firstRow(firstRow), m_firstCol(firstCol),
 		m_dateCol(dateCol), m_timeCol(timeCol),
-		time(0),
-		m_rasterIdx(0) {}
+		m_rasterIdx(0),
+		time(0) {}
 
 Spectrum::Spectrum() : Spectrum(0, 0, -1, -1) {}
 
