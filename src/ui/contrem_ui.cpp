@@ -101,7 +101,7 @@ namespace {
 		case FileType::SHP:
 		case FileType::ROI:
 		default:
-			throw std::runtime_error("Invalid file type: " + contrem.spectra);
+			throw std::runtime_error("Missing file or invalid file type: " + contrem.spectra);
 		}
 		return map;
 	}
@@ -417,11 +417,13 @@ void ContremForm::cboNormMethodChanged(QString str) {
 
 void ContremForm::chkPlotOrigChanged(bool on) {
 	m_settings.setValue(LAST_PLOT_ORIG, on);
+	m_contrem.plotOrig = on;
 	checkRun();
 }
 
 void ContremForm::chkPlotNormChanged(bool on) {
 	m_settings.setValue(LAST_PLOT_NORM, on);
+	m_contrem.plotNorm = on;
 	checkRun();
 }
 

@@ -174,7 +174,7 @@ namespace {
 			maxCount(0),
 			maxIdx(0) {}
 
-		void compute(const std::vector<line>& lines) {
+		bool compute(const std::vector<line>& lines) {
 			maxIdx = 0;
 			maxDepth = 0;
 			int i = 0;
@@ -192,6 +192,9 @@ namespace {
 				}
 				++i;
 			}
+
+			if(maxDepth <= 0)
+				return false;
 
 			double sxy = 0, sx = 0, sy = 0, sxx = 0;
 			size_t n = data.size();
@@ -245,6 +248,7 @@ namespace {
 			slope = lines[lineIdx].slope();
 			yint = lines[lineIdx].yint();
 
+			return true;
 		}
 	};
 
@@ -457,19 +461,15 @@ namespace {
 			if(!config->contrem->running)
 				break;
 
-			// Calculate the cr and crm, etc., and get the max value and index.
-			out.compute(lines);
-
-			if(!config->contrem->running)
-				break;
-
 			// We were going to do interpolation for adjacent maxima, but put it off.
 			// Kopăcková, V., & Koucká, L. (2017). Integration of absorption feature information from visible to
 			// longwave infrared spectral ranges for mineral mapping. Remote Sensing, 9(10), 8–13. https://doi.org/10.3390/rs9101006
 			// If there are  >2 maxima, or the distance between them is > than the configured
 			// interp distance, flag the cell and move on. Otherwise, interpolate.
 
-			{
+			// Calculate the cr and crm, etc., and get the max value and index.
+			if(out.compute(lines)) {
+
 				// Send to output queue and notify.
 				std::lock_guard<std::mutex> lk(config->outmtx);
 				config->outqueue.push_back(out);

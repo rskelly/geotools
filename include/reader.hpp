@@ -194,6 +194,7 @@ private:
 	size_t m_mappedMinBand;		///<! The first mapped band (1-based).
 	double* m_mapped;			///<! The pointer to mapped memory for remapping an interleaved raster to a list of spectra.
 	int m_mappedBands;			///<! The number of bands mapped into memory.
+	int m_mappedFd;
 
 	void loadBandMap();
 

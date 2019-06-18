@@ -82,6 +82,11 @@ bool rem(const std::string& dir);
 bool makedir(const std::string& filename);
 
 /**
+ * Return the file descriptor of a temporary opened file.
+ */
+int tmpfile();
+
+/**
  * Remove non-alphanumeric characters and replace with underscores.
  */
 std::string sanitize(const std::string& str);

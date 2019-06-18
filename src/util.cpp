@@ -7,8 +7,9 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#include <stdlib.h>
 
+#include <cstdio>
 #include <algorithm>
 #include <sstream>
 #include <regex>
@@ -147,6 +148,11 @@ bool hlrg::util::makedir(const std::string& filename) {
 			inter << '/';
 	}
 	return true;
+}
+
+int hlrg::util::tmpfile() {
+	char tpl[] = {"geo_util_XXXXXX"};
+	return mkstemp(tpl);
 }
 
 std::string hlrg::util::sanitize(const std::string& str) {

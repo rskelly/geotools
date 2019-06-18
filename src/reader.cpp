@@ -6,6 +6,8 @@
  */
 
 #include <sys/mman.h>
+#include <fcntl.h>
+#include <sys/resource.h>
 
 #include <iostream>
 #include <fstream>
@@ -156,26 +158,56 @@ void GDALReader::remap() {
 }
 
 void GDALReader::remap(double minWl, double maxWl) {
-	int iminWl = (int) (minWl * WL_SCALE);
-	int imaxWl = (int) (maxWl * WL_SCALE);
+	int iminWl = (int) std::round(minWl * WL_SCALE);
+	int imaxWl = (int) std::round(maxWl * WL_SCALE);
 	remap(m_bandMap[iminWl], m_bandMap[imaxWl]);
 }
 
 void GDALReader::remap(int minBand, int maxBand) {
 	m_mappedMinBand = minBand;
 	m_mappedBands = (maxBand - minBand) + 1;
-	m_mappedSize = m_cols * m_rows * m_mappedBands * sizeof(double);
-	m_mapped = (double*) mmap(0, m_mappedSize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
+	m_mappedSize = (size_t) m_cols * m_rows * m_mappedBands * sizeof(double);
+
+	m_mappedFd = hlrg::util::tmpfile();
+	if(m_mappedFd <= 0)
+		throw std::runtime_error(std::string("Failed to create temporary file for mapping.") + strerror(errno));
+
+	if((size_t) lseek(m_mappedFd, m_mappedSize, SEEK_SET) != m_mappedSize) {
+		close(m_mappedFd);
+		throw std::runtime_error(std::string("Failed to create temporary file for mapping.") + strerror(errno));
+	}
+
+	if(write(m_mappedFd, "", 1) < 1) {
+		close(m_mappedFd);
+		throw std::runtime_error(std::string("Failed to create temporary file for mapping.") + strerror(errno));
+	}
+
+	m_mapped = (double*) mmap(0, m_mappedSize, PROT_READ|PROT_WRITE, MAP_SHARED, m_mappedFd, 0);
+
+	close(m_mappedFd);
+
 	if((long) m_mapped == -1)
-		throw std::runtime_error("Failed to remap.");
-	std::vector<double> buf(m_cols);
+		throw std::runtime_error(std::string("Failed to remap: ") + strerror(errno) + " " + std::to_string(errno));
+
+	int bcols, brows, acols, arows;
 	for(int i = minBand, b = 0; i <= maxBand; ++i, ++b) {
+		std::cout << "Remapping band " << i << " of " << maxBand << "\n";
 		GDALRasterBand* band = m_ds->GetRasterBand(i);
-		for(int r = 0; r < m_rows; ++r) {
-			if(CE_None != band->RasterIO(GF_Read, 0, r, m_cols, 1, buf.data(), m_cols, 1, GDT_Float64, 0, 0, 0))
-				throw std::runtime_error("Failed to read row for remap.");
-			for(int c = 0; c < m_cols; ++c)
-				m_mapped[r * m_cols * m_mappedBands + c * m_cols + b] = buf[c];
+		band->GetBlockSize(&bcols, &brows);
+		std::vector<double> buf(bcols * brows);
+		for(int br = 0; br < m_rows / brows; ++br) {
+			for(int bc = 0; bc < m_cols / bcols; ++bc) {
+				//std::cout << "Remapping block " << bc << ", " << br << " of " << (m_cols / bcols) << ", " << (m_rows / brows) << "\n";
+				if(CE_None != band->ReadBlock(bc, br, buf.data()))
+					continue;
+				band->GetActualBlockSize(bc, br, &acols, &arows);
+				for(int r = 0; r < arows; ++r) {
+					for(int c = 0; c < acols; ++c) {
+						size_t idx = (r * br * brows) * m_cols * m_mappedBands + (c * bc * bcols) * m_mappedBands + b;
+						m_mapped[idx] = buf[r * bcols + c];
+					}
+				}
+			}
 		}
 	}
 }
@@ -185,18 +217,20 @@ double GDALReader::mapped(int col, int row, double wl) {
 }
 
 double GDALReader::mapped(int col, int row, int band) {
-	size_t idx = row * m_cols * m_mappedBands + col * m_cols + (band - m_mappedMinBand);
+	size_t idx = row * m_cols * m_mappedBands + col * m_mappedBands + (band - m_mappedMinBand);
 	if(idx >= m_mappedSize)
 		return std::nan("");
 	return m_mapped[idx];
 }
 
 bool GDALReader::mapped(int col, int row, std::vector<double>& values) {
-	size_t idx = row * m_cols * m_mappedBands + col * m_cols;
+	size_t idx = row * m_cols * m_mappedBands + col * m_mappedBands;
 	if(idx + m_mappedBands > m_mappedSize)
 		return false;
 	values.resize(m_mappedBands);
 	std::memcpy(values.data(), m_mapped + idx, m_mappedBands * sizeof(double));
+	if(values[10] != 0)
+		std::cout << "boo\n";
 	return true;
 }
 
@@ -280,7 +314,7 @@ bool GDALReader::next(std::string& id, std::vector<double>& buf, int& cols, int&
 
 	if(m_mapped) {
 
-		if(!mapped(m_row, m_col, buf))
+		if(!mapped(m_col, m_row, buf))
 			return false;
 
 		if(++m_col >= m_cols) {
@@ -321,7 +355,7 @@ bool GDALReader::next(std::vector<double>& buf, int band, int& cols, int& col, i
 	if(m_mapped) {
 
 		std::vector<double> _buf;
-		if(!mapped(m_row, m_col, _buf))
+		if(!mapped(m_col, m_row, _buf))
 			return false;
 		buf.resize(1);
 		buf[0] = _buf[0];
@@ -348,8 +382,10 @@ bool GDALReader::next(std::vector<double>& buf, int band, int& cols, int& col, i
 
 GDALReader::~GDALReader() {
 	GDALClose(m_ds);
-	if(m_mapped)
+	if(m_mapped) {
 		munmap(m_mapped, m_mappedSize);
+		close(m_mappedFd);
+	}
 }
 
 
