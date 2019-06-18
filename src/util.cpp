@@ -150,9 +150,8 @@ bool hlrg::util::makedir(const std::string& filename) {
 	return true;
 }
 
-int hlrg::util::tmpfile() {
-	char tpl[] = {"geo_util_XXXXXX"};
-	return mkstemp(tpl);
+TmpFile hlrg::util::tmpfile(size_t size) {
+	return TmpFile(size);
 }
 
 std::string hlrg::util::sanitize(const std::string& str) {
@@ -160,4 +159,51 @@ std::string hlrg::util::sanitize(const std::string& str) {
 	std::stringstream ss;
 	std::regex_replace(std::ostreambuf_iterator<char>(ss), str.begin(), str.end(), repl, "_");
 	return ss.str();
+}
+
+int hlrg::util::gdalTypeSize(GDALDataType type) {
+	switch(type) {
+	case GDT_Float32:
+	case GDT_Int32:
+	case GDT_UInt32: 	return 4;
+	case GDT_Int16:
+	case GDT_UInt16: 	return 2;
+	case GDT_Float64: 	return 8;
+	case GDT_Byte: 		return 1;
+	default:
+		throw std::runtime_error("Unknown GDAL data type: " + std::to_string((int) type));
+	}
+}
+
+
+TmpFile::TmpFile(size_t size) :
+	fd(0), size(0) {
+	char tpl[] = {"hlrg_util_XXXXXX"};
+	fd = mkstemp(tpl);
+	filename = tpl;
+	resize(size);
+}
+
+void TmpFile::resize(size_t newSize) {
+	if(newSize > size) {
+		if(fd <= 0)
+			throw std::runtime_error(std::string("File is not open: ") + strerror(errno));
+
+		if((size_t) lseek(fd, newSize - 1, SEEK_SET) != (newSize - 1))
+			throw std::runtime_error(std::string("Failed to create temporary file for mapping.") + strerror(errno));
+
+		if(write(fd, "", 1) < 1)
+			throw std::runtime_error(std::string("Failed to create temporary file for mapping.") + strerror(errno));
+
+		size = newSize;
+	}
+}
+
+void TmpFile::close() {
+	::close(fd);
+}
+
+TmpFile::~TmpFile() {
+	::close(fd);
+	unlink(filename.c_str());
 }
