@@ -23,6 +23,7 @@ namespace {
 
 	constexpr const char* LAST_ROI = "lastROI";
 	constexpr const char* LAST_SAMPLE_POINTS = "lastSamplePoints";
+	constexpr const char* LAST_SAMPLE_POINTS_LAYER = "lastSamplePointsLayer";
 	constexpr const char* LAST_SPECTRA = "lastSpectra";
 	constexpr const char* LAST_INPUT_START_BAND = "lastInputStartBand";
 	constexpr const char* LAST_INPUT_END_BAND = "lastInputEndBand";
@@ -135,7 +136,7 @@ void ContremForm::setupUi(QDialog* form) {
 	runWidgets = {
 		txtROIFile, btnROI, txtSamplePoints, btnSamplePoints, txtSpectraFile, btnSpectra, spnWLHeaderRows, spnWLFirstCol, spnWLLastCol,
 		spnWLIDCol, chkWLTranspose, txtOutputFile, cboOutputType, btnOutput, cboMinWL, cboMaxWL, cboNormMethod, chkPlotNorm, chkPlotOrig,
-		btnRun
+		btnRun, cboSamplePointsLayer
 	};
 
 	stopWidgets = {
@@ -147,6 +148,7 @@ void ContremForm::setupUi(QDialog* form) {
 
 	connect(txtSamplePoints, SIGNAL(textChanged(QString)), this, SLOT(txtSamplePointsChanged(QString)));
 	connect(btnSamplePoints, SIGNAL(clicked()), this, SLOT(btnSamplePointsClicked()));
+	connect(cboSamplePointsLayer, SIGNAL(currentTextChanged(QString)), this, SLOT(cboSamplePointsLayerChanged(QString)));
 
 	connect(txtSpectraFile, SIGNAL(textChanged(QString)), this, SLOT(txtSpectraFileChanged(QString)));
 	connect(btnSpectra, SIGNAL(clicked()), this, SLOT(btnSpectraClicked()));
@@ -189,12 +191,14 @@ void ContremForm::setupUi(QDialog* form) {
 	m_contrem.maxWl = m_settings.value(LAST_MAX_WL, 0).toDouble();
 	m_contrem.threads = 1; //m_settings.value(LAST_THREADS, 1).toInt();
 	m_contrem.samplePoints = m_settings.value(LAST_SAMPLE_POINTS, "").toString().toStdString();
+	m_contrem.samplePointsLayer = m_settings.value(LAST_SAMPLE_POINTS_LAYER, "").toString().toStdString();
 	m_contrem.plotNorm = m_settings.value(LAST_PLOT_NORM, false).toBool();
 	m_contrem.plotOrig = m_settings.value(LAST_PLOT_ORIG, false).toBool();
 	m_contrem.normMethod = (NormMethod) m_settings.value(LAST_NORM_METHOD, (int) NormMethod::ConvexHull).toInt();
 
 	txtROIFile->setText(QString(m_contrem.roi.c_str()));
 	txtSamplePoints->setText(QString(m_contrem.samplePoints.c_str()));
+	cboSamplePointsLayer->setCurrentText(QString(m_contrem.samplePointsLayer.c_str()));
 	txtSpectraFile->setText(QString(m_contrem.spectra.c_str()));
 	txtOutputFile->setText(QString(m_contrem.output.c_str()));
 	cboOutputType->setCurrentText(QString(fileTypeAsString(m_contrem.outputType).c_str()));
@@ -282,6 +286,18 @@ void ContremForm::txtROIFileChanged(QString filename) {
 void ContremForm::txtSamplePointsChanged(QString filename) {
 	m_contrem.samplePoints = filename.toStdString();
 	m_settings.setValue(LAST_SAMPLE_POINTS, filename);
+	std::vector<std::string> names = PointSetReader::getLayerNames(filename.toStdString());
+	QStringList lst;
+	for(const std::string& n : names)
+		lst << n.c_str();
+	cboSamplePointsLayer->clear();
+	cboSamplePointsLayer->addItems(lst);
+	checkRun();
+}
+
+void ContremForm::cboSamplePointsLayerChanged(QString layer) {
+	m_contrem.samplePointsLayer = layer.toStdString();
+	m_settings.setValue(LAST_SAMPLE_POINTS_LAYER, layer);
 	checkRun();
 }
 

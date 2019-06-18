@@ -41,19 +41,29 @@ project (contrem)
 
 # Configure directories###################################################################################
 
-include_directories(BEFORE SYSTEM ./include /usr/local/include /usr/include 
+include_directories(BEFORE SYSTEM ann/include ./include /usr/local/include /usr/include 
 	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS}
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}) 
 link_directories(. /usr/local/lib /usr/lib)
 
 # Build support libraries ################################################################################
 
+set (geoannsrc ann/src/ANN.cpp ann/src/brute.cpp 
+	ann/src/kd_tree.cpp ann/src/kd_util.cpp 
+	ann/src/kd_split.cpp ann/src/kd_dump.cpp ann/src/kd_search.cpp ann/src/kd_pr_search.cpp 
+	ann/src/kd_fix_rad_search.cpp ann/src/bd_tree.cpp ann/src/bd_search.cpp ann/src/bd_pr_search.cpp 
+	ann/src/bd_fix_rad_search.cpp ann/src/perf.cpp)
+add_library (geoannobj OBJECT ${geoannsrc})
+set_target_properties (geoannobj PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions (geoannobj PRIVATE DLL_EXPORTS=1)
+add_library (geoann SHARED $<TARGET_OBJECTS:geoannobj>)
+
 add_library (geotools_util src/util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp src/plotter.cpp)
-target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES})
+target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES} geoann)
 
 add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
 target_include_directories(contrem PUBLIC contrem_autogen/include)
-target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geotools_util)
+target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geotools_util geoann)
 
 add_executable (convolve src/convolve_app.cpp src/convolve.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)

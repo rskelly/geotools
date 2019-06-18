@@ -76,6 +76,7 @@ public:
 	std::string roi;						///<! The mask/ROI; Raster format.
 	std::string spectra;					///<! The input spectra; raster or CSV.
 	std::string samplePoints;				///<! The sample points file for plotting.
+	std::string samplePointsLayer;			///<! The sample points layer for plotting.
 	double minWl;							///<! The lower bound of the wavelength range to process.
 	double maxWl;							///<! The upper bound of the wavelength range to process.
 	int wlMinCol;							///<! The first column in the dataset which is a wavelength.

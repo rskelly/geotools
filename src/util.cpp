@@ -150,10 +150,6 @@ bool hlrg::util::makedir(const std::string& filename) {
 	return true;
 }
 
-TmpFile hlrg::util::tmpfile(size_t size) {
-	return TmpFile(size);
-}
-
 std::string hlrg::util::sanitize(const std::string& str) {
 	std::regex repl("([^0-9A-Za-z]+)");
 	std::stringstream ss;

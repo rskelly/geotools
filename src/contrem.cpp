@@ -292,8 +292,8 @@ namespace {
 		std::vector<line> lines;
 		const LineString* ring = hull->getExteriorRing();
 		for(size_t i = 0; i < ring->getNumPoints() - 1; ++i) {
-			Point* p0 = ring->getPointN(i); // This call implies an allocation. LAME. Delete at the end.
-			Point* p1 = ring->getPointN(i + 1);
+			geos::geom::Point* p0 = ring->getPointN(i); // This call implies an allocation. LAME. Delete at the end.
+			geos::geom::Point* p1 = ring->getPointN(i + 1);
 			double x0 = p0->getX(), y0 = p0->getY();
 			double x1 = p1->getX(), y1 = p1->getY();
 			// Only add a segment if it isn't a bottom or end segment (which have at least one zero y-coordinate).

@@ -18,6 +18,7 @@
 
 #include "bintree.hpp"
 #include "util.hpp"
+#include "ds/kdtree.hpp"
 
 namespace hlrg {
 namespace reader {
@@ -156,6 +157,53 @@ public:
 	virtual ~Reader() {}
 };
 
+class Point {
+private:
+	double m_x, m_y, m_z;
+	std::string m_id;
+
+public:
+	Point(double x = 0, double y = 0, double z = 0) :
+		m_x(x), m_y(y), m_z(z) {}
+
+	double operator[](int idx) const {
+		switch(idx % 3) {
+		case 0: return m_x;
+		case 1: return m_y;
+		default: return m_z;
+		}
+	}
+
+	double& operator[](int idx) {
+		switch(idx % 3) {
+		case 0: return m_x;
+		case 1: return m_y;
+		default: return m_z;
+		}
+	}
+
+	double x() const { return m_x; }
+	double y() const { return m_y; }
+	double z() const { return m_z; }
+
+};
+
+
+/**
+ * Reads and stores a set of points from a spatial database and stores them
+ * in a tree where they can be searched by radius.
+ */
+class PointSetReader {
+private:
+	geo::ds::KDTree<hlrg::reader::Point>* m_tree;
+
+public:
+	PointSetReader(const std::string& filename, const std::string& layer);
+	static std::vector<std::string> getLayerNames(const std::string& filename);
+	int search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts);
+	~PointSetReader();
+};
+
 
 /**
  * Reads a file containing a band map and provides the result as a map.
@@ -195,6 +243,7 @@ private:
 	double* m_mapped;			///<! The pointer to mapped memory for remapping an interleaved raster to a list of spectra.
 	int m_mappedBands;			///<! The number of bands mapped into memory.
 	std::unique_ptr<hlrg::util::TmpFile> m_mappedFile;
+	double m_trans[6];
 
 	void loadBandMap();
 
@@ -205,6 +254,13 @@ public:
 	 * \param filename The filename of a GDAL data source.
 	 */
 	GDALReader(const std::string& filename);
+
+	double toX(int col) const;
+	double toY(int row) const;
+	double toCol(double x) const;
+	double toRow(double y) const;
+	double resX() const;
+	double resY() const;
 
 	/**
 	 * Remap the raster into a memory-mapped list of spectra, organized by

@@ -123,13 +123,6 @@ bool rem(const std::string& dir);
 bool makedir(const std::string& filename);
 
 /**
- * Return a TmpFile object representing a temporary file.
- * The object will close the file and delete it when
- * it closes.
- */
-TmpFile tmpfile(size_t size = 0);
-
-/**
  * Remove non-alphanumeric characters and replace with underscores.
  */
 std::string sanitize(const std::string& str);

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>643</width>
-    <height>344</height>
+    <height>418</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -158,9 +158,6 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="2" colspan="7">
-    <widget class="QLineEdit" name="txtSamplePoints"/>
-   </item>
    <item row="1" column="8">
     <widget class="QCheckBox" name="chkWLTranspose">
      <property name="text">
@@ -286,6 +283,12 @@
       <string>Plot Normalized Spectrum</string>
      </property>
     </widget>
+   </item>
+   <item row="4" column="2" colspan="6">
+    <widget class="QLineEdit" name="txtSamplePoints"/>
+   </item>
+   <item row="4" column="8">
+    <widget class="QComboBox" name="cboSamplePointsLayer"/>
    </item>
   </layout>
  </widget>

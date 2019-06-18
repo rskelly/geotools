@@ -18,6 +18,7 @@
 #include <iomanip>
 
 #include <gdal_priv.h>
+#include <ogrsf_frmts.h>
 
 #include "reader.hpp"
 #include "util.hpp"
@@ -134,6 +135,78 @@ int Reader::bands() const {
 	return m_maxIdx - m_minIdx + 1;
 }
 
+
+PointSetReader::PointSetReader(const std::string& filename, const std::string& layer) :
+	m_tree(nullptr) {
+
+	GDALDataset* ds = (GDALDataset*) GDALOpenEx(filename.c_str(), GDAL_OF_VECTOR|GDAL_OF_READONLY, 0, 0, 0);
+	if(!ds)
+		throw std::runtime_error("Failed to open dataset " + filename);
+	OGRLayer* lyr = ds->GetLayerByName(layer.c_str());
+	if(!lyr)
+		throw std::runtime_error("No layer named " + layer + " on dataset.");
+
+	m_tree = new geo::ds::KDTree<hlrg::reader::Point>(2);
+
+	OGRwkbGeometryType type = lyr->GetGeomType();
+	if(type != wkbPoint && type != wkbMultiPoint)
+		throw std::runtime_error("Illegal geometry type: " + std::to_string(type));
+
+	OGRFeature* feat;
+	OGRPoint* pt;
+	OGRMultiPoint* mpt;
+	while((feat = lyr->GetNextFeature())) {
+		switch(type) {
+		case wkbPoint:
+			pt = (OGRPoint*) feat->GetGeometryRef();
+			m_tree->add(new hlrg::reader::Point(pt->getX(), pt->getY(), 0));
+			break;
+		case wkbMultiPoint:
+			mpt = (OGRMultiPoint*) feat->GetGeometryRef();
+			for(int i = 0; i < mpt->getNumGeometries(); ++i) {
+				pt = (OGRPoint*) mpt->getGeometryRef(i);
+				m_tree->add(new hlrg::reader::Point(pt->getX(), pt->getY(), 0));
+			}
+			break;
+		default:
+			break;
+		}
+		OGRFeature::DestroyFeature(feat);
+	}
+
+	GDALClose(ds);
+
+	m_tree->build();
+}
+
+std::vector<std::string> PointSetReader::getLayerNames(const std::string& filename) {
+
+	std::vector<std::string> names;
+
+	GDALDataset* ds = (GDALDataset*) GDALOpenEx(filename.c_str(), GDAL_OF_VECTOR|GDAL_OF_READONLY, 0, 0, 0);
+	if(!ds)
+		throw std::runtime_error("Failed to open dataset " + filename);
+	for(int i = 0; i < ds->GetLayerCount(); ++i) {
+		OGRLayer* lyr = ds->GetLayer(i);
+		names.emplace_back(lyr->GetName());
+	}
+
+	return names;
+}
+
+int PointSetReader::search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts) {
+
+	std::vector<double> dist;
+	return m_tree->radSearch(hlrg::reader::Point(x, y), radius, 0, std::back_inserter(pts), std::back_inserter(dist));
+}
+
+PointSetReader::~PointSetReader() {
+	if(m_tree)
+		delete m_tree;
+}
+
+
+
 GDALReader::GDALReader(const std::string& filename) : Reader(),
 		m_ds(nullptr),
 		m_mappedSize(0),
@@ -148,8 +221,33 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 	m_bands = m_ds->GetRasterCount();
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();
+	m_ds->GetGeoTransform(m_trans);
 
 	loadBandMap();
+}
+
+double GDALReader::toX(int col) const {
+	return m_trans[0] + col * m_trans[1] + m_trans[1] * 0.5;
+}
+
+double GDALReader::toY(int row) const {
+	return m_trans[3] + row + m_trans[5] + m_trans[5] * 0.5;
+}
+
+double GDALReader::toCol(double x) const {
+	return (x - m_trans[0]) / m_trans[1];
+}
+
+double GDALReader::toRow(double y) const {
+	return (y - m_trans[3]) / m_trans[5];
+}
+
+double GDALReader::resX() const {
+	return m_trans[1];
+}
+
+double GDALReader::resY() const {
+	return m_trans[5];
 }
 
 void GDALReader::remap() {
