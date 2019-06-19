@@ -579,7 +579,8 @@ namespace {
 		std::unique_ptr<PointSetReader> samples;
 		bool hasSamples = false;
 		if(!config->contrem->samplePoints.empty() && config->contrem->grdr) {
-			samples.reset(new PointSetReader(config->contrem->samplePoints, config->contrem->samplePointsLayer));
+			samples.reset(new PointSetReader(config->contrem->samplePoints,
+					config->contrem->samplePointsLayer, config->contrem->samplePointsIDField));
 			samples->toGridSpace(config->contrem->grdr);
 			hasSamples = true;
 		}
@@ -620,12 +621,15 @@ namespace {
 				break;
 
 			if(hasSamples) {
+				hlrg::reader::Point pt;
+				pt.c(out.c);
+				pt.r(out.r);
+				if(samples->sampleNear(pt, 0.5)) {
 
-				if(samples->samplesNear(out.c, out.r, 0.5)) {
 					// If appropriate plot the normalized spectrum.
 					if(config->contrem->plotNorm){
 						std::string plotfile = plotdir + "/norm_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
-						std::string title = "Normalized Spectrum, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
+						std::string title = "Normalized Spectrum (" + pt.id() + ", " + std::to_string(pt.x()) + "," + std::to_string(pt.x()) + ")";
 						std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 						items.emplace_back("Normalized Spectrum", w, crnm);
 						//items.emplace_back("Regression", std::vector<double>({w.front(), w.back()}), std::vector<double>({w.front() * out.slope + out.yint, w.back() * out.slope + out.yint}));
@@ -633,7 +637,7 @@ namespace {
 					}
 					if(config->contrem->plotOrig){
 						std::string plotfile = plotdir + "/orig_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
-						std::string title = "Original Spectrum + Hull, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
+						std::string title = "Original Spectrum + Hull (" + pt.id() + ", " + std::to_string(pt.x()) + "," + std::to_string(pt.y()) + ")";
 						std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 						items.emplace_back("Original Spectrum", w, ss);
 						items.emplace_back("Convex Hull", out.hullx, out.hully);

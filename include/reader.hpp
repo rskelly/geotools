@@ -160,34 +160,32 @@ public:
 class Point {
 private:
 	double m_x, m_y, m_z;
+	int m_c, m_r;
 	std::string m_id;
 
 public:
-	Point(double x = 0, double y = 0, double z = 0) :
-		m_x(x), m_y(y), m_z(z) {}
+	Point(double x = 0, double y = 0, double z = 0, const std::string& id = "") :
+		m_x(x), m_y(y), m_z(z), m_c(0), m_r(0), m_id(id) {}
 
 	double operator[](int idx) const {
 		switch(idx % 3) {
-		case 0: return m_x;
-		case 1: return m_y;
-		default: return m_z;
+		case 0: return m_c;
+		default: return m_r;
 		}
 	}
 
-	double& operator[](int idx) {
-		switch(idx % 3) {
-		case 0: return m_x;
-		case 1: return m_y;
-		default: return m_z;
-		}
-	}
-
+	const std::string& id() const { return m_id; }
+	void id(const std::string& id) { m_id = id; }
 	double x() const { return m_x; }
 	double y() const { return m_y; }
 	double z() const { return m_z; }
 	void x(double _x) { m_x = _x; }
 	void y(double _y) { m_y = _y; }
 	void z(double _z) { m_z = _z; }
+	int c() const { return m_c; }
+	int r() const { return m_r; }
+	void c(int _c) { m_c = _c; }
+	void r(int _r) { m_r = _r; }
 
 };
 
@@ -332,10 +330,11 @@ private:
 	geo::ds::KDTree<hlrg::reader::Point>* m_tree;
 
 public:
-	PointSetReader(const std::string& filename, const std::string& layer);
+	PointSetReader(const std::string& filename, const std::string& layer, const std::string& idField);
 	static std::vector<std::string> getLayerNames(const std::string& filename);
+	static std::vector<std::string> getFieldNames(const std::string& filename, const std::string& layer);
 	int search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts);
-	int samplesNear(double x, double y, double radius);
+	bool sampleNear(hlrg::reader::Point& pt, double radius);
 	void toGridSpace(GDALReader* gr);
 	~PointSetReader();
 };

@@ -136,7 +136,7 @@ int Reader::bands() const {
 }
 
 
-PointSetReader::PointSetReader(const std::string& filename, const std::string& layer) :
+PointSetReader::PointSetReader(const std::string& filename, const std::string& layer, const std::string& idField) :
 	m_tree(nullptr) {
 
 	GDALAllRegister();
@@ -154,20 +154,53 @@ PointSetReader::PointSetReader(const std::string& filename, const std::string& l
 	if(type != wkbPoint && type != wkbMultiPoint)
 		throw std::runtime_error("Illegal geometry type: " + std::to_string(type));
 
+	int fieldIdx = -1; //  For ID field.
+
+	{
+		OGRFeatureDefn* fd = lyr->GetLayerDefn();
+		for(int i = 0; i < fd->GetFieldCount(); ++i) {
+			OGRFieldDefn* f = fd->GetFieldDefn(i);
+			if(std::string(f->GetNameRef()) == idField) {
+				fieldIdx = i;
+				break;
+			}
+		}
+	}
+
+
 	OGRFeature* feat;
 	OGRPoint* pt;
 	OGRMultiPoint* mpt;
+	std::string id;
+	int autoId = 0; // For auto-generated IDs.
 	while((feat = lyr->GetNextFeature())) {
 		switch(type) {
 		case wkbPoint:
+			// Get the point.
 			pt = (OGRPoint*) feat->GetGeometryRef();
-			m_tree->add(new hlrg::reader::Point(pt->getX(), pt->getY(), 0));
+			// If the ID field is chosen, get its value, else use the ID.
+			if(fieldIdx > -1) {
+				id = feat->GetFieldAsString(fieldIdx);
+			} else {
+				id = std::to_string(++autoId);
+			}
+			// Add to the tree.
+			m_tree->add(new hlrg::reader::Point(pt->getX(), pt->getY(), 0, id));
 			break;
 		case wkbMultiPoint:
+			// Get the multi-point.
 			mpt = (OGRMultiPoint*) feat->GetGeometryRef();
+			// If the ID field is chosen, get its value, else use the ID.
+			pt = (OGRPoint*) feat->GetGeometryRef();
+			if(fieldIdx > -1) {
+				id = feat->GetFieldAsString(fieldIdx);
+			} else {
+				id = std::to_string(++autoId);
+			}
+			// Add each point to the tree.
 			for(int i = 0; i < mpt->getNumGeometries(); ++i) {
 				pt = (OGRPoint*) mpt->getGeometryRef(i);
-				m_tree->add(new hlrg::reader::Point(pt->getX(), pt->getY(), 0));
+				m_tree->add(new hlrg::reader::Point(pt->getX(), pt->getY(), 0, id));
 			}
 			break;
 		default:
@@ -187,8 +220,7 @@ std::vector<std::string> PointSetReader::getLayerNames(const std::string& filena
 
 	std::vector<std::string> names;
 
-	void* h = GDALOpenEx(filename.c_str(), GDAL_OF_VECTOR, 0, 0, 0);
-	GDALDataset* ds = (GDALDataset*) h;
+	GDALDataset* ds = (GDALDataset*) GDALOpenEx(filename.c_str(), GDAL_OF_VECTOR, 0, 0, 0);
 	if(!ds)
 		throw std::runtime_error("Failed to open dataset " + filename);
 	for(int i = 0; i < ds->GetLayerCount(); ++i) {
@@ -199,11 +231,32 @@ std::vector<std::string> PointSetReader::getLayerNames(const std::string& filena
 	return names;
 }
 
+std::vector<std::string> PointSetReader::getFieldNames(const std::string& filename, const std::string& layer) {
+
+	GDALAllRegister();
+
+	std::vector<std::string> names;
+
+	GDALDataset* ds = (GDALDataset*) GDALOpenEx(filename.c_str(), GDAL_OF_VECTOR, 0, 0, 0);
+	if(!ds)
+		throw std::runtime_error("Failed to open dataset " + filename);
+	OGRLayer* lyr = ds->GetLayerByName(layer.c_str());
+	if(!lyr)
+		throw std::runtime_error("Failed to find layer " + layer);
+	OGRFeatureDefn* def = lyr->GetLayerDefn();
+	for(int i = 0; i < def->GetFieldCount(); ++i) {
+		OGRFieldDefn* f = def->GetFieldDefn(i);
+		names.emplace_back(f->GetNameRef());
+	}
+
+	return names;
+}
+
 void PointSetReader::toGridSpace(GDALReader* gr) {
 
 	for(hlrg::reader::Point* pt : m_tree->items()) {
-		pt->x(gr->toCol(pt->x()));
-		pt->y(gr->toRow(pt->y()));
+		pt->c(gr->toCol(pt->x()));
+		pt->r(gr->toRow(pt->y()));
 	}
 
 	m_tree->build();
@@ -215,11 +268,24 @@ int PointSetReader::search(double x, double y, double radius, std::vector<hlrg::
 	return m_tree->radSearch(hlrg::reader::Point(x, y), radius, 0, std::back_inserter(pts), std::back_inserter(dist));
 }
 
-int PointSetReader::samplesNear(double x, double y, double radius) {
+bool PointSetReader::sampleNear(hlrg::reader::Point& pt, double radius) {
 
 	std::vector<double> dist;
 	std::vector<hlrg::reader::Point*> pts;
-	return m_tree->radSearch(hlrg::reader::Point(x, y), radius, 0, std::back_inserter(pts), std::back_inserter(dist));
+	if(m_tree->radSearch(pt, radius, 0, std::back_inserter(pts), std::back_inserter(dist)) > 0) {
+		size_t minIdx = 0;
+		double minD = radius * 3;
+		for(size_t i = 0; i < dist.size(); ++i) {
+			if(dist[i] < minD) {
+				minD = dist[i];
+				minIdx = i;
+			}
+		}
+		pt = *pts[minIdx];
+		return true;
+	}
+	return false;
+
 }
 
 PointSetReader::~PointSetReader() {

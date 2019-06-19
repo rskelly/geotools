@@ -123,6 +123,7 @@ public slots:
 	void txtSamplePointsChanged(QString);
 	void btnSamplePointsClicked();
 	void cboSamplePointsLayerChanged(QString);
+	void cboSamplePointsIDFieldChanged(QString);
 
 	void spnMinWLColChanged(int);
 	void spnMaxWLColChanged(int);

@@ -83,6 +83,7 @@ public:
 	FileType spectraType;					///<! The input spectra file type.
 	std::string samplePoints;				///<! The sample points file for plotting.
 	std::string samplePointsLayer;			///<! The sample points layer for plotting.
+	std::string samplePointsIDField;		///<! A field to identify the sample point. Optional.
 	double minWl;							///<! The lower bound of the wavelength range to process.
 	double maxWl;							///<! The upper bound of the wavelength range to process.
 	int wlMinCol;							///<! The first column in the dataset which is a wavelength.
