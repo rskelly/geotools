@@ -150,63 +150,75 @@ PointSetReader::PointSetReader(const std::string& filename, const std::string& l
 
 	m_tree = new geo::ds::KDTree<hlrg::reader::Point>(2);
 
-	OGRwkbGeometryType type = lyr->GetGeomType();
-	if(type != wkbPoint && type != wkbMultiPoint)
-		throw std::runtime_error("Illegal geometry type: " + std::to_string(type));
-
 	int fieldIdx = -1; //  For ID field.
-
+	int yIdx = -1, xIdx = -1;
 	{
 		OGRFeatureDefn* fd = lyr->GetLayerDefn();
 		for(int i = 0; i < fd->GetFieldCount(); ++i) {
 			OGRFieldDefn* f = fd->GetFieldDefn(i);
-			if(std::string(f->GetNameRef()) == idField) {
+			std::string name = f->GetNameRef();
+			if(name == idField) {
 				fieldIdx = i;
 				break;
+
+			// Might as well look for coord idx too, in case geom type is none.
+			} else if(name == "x" || name == "X") {
+				xIdx = i;
+			} else if(name == "y" || name == "Y") {
+				yIdx = i;
 			}
 		}
 	}
 
+	OGRwkbGeometryType type = lyr->GetGeomType();
 
-	OGRFeature* feat;
+	OGRFeature* feat = nullptr;
 	OGRPoint* pt;
 	OGRMultiPoint* mpt;
 	std::string id;
 	int autoId = 0; // For auto-generated IDs.
 	while((feat = lyr->GetNextFeature())) {
+
+		// If the ID field is chosen, get its value, else use the ID.
+		if(fieldIdx > -1) {
+			id = feat->GetFieldAsString(fieldIdx);
+		} else {
+			id = std::to_string(++autoId);
+		}
+
 		switch(type) {
 		case wkbPoint:
 			// Get the point.
 			pt = (OGRPoint*) feat->GetGeometryRef();
-			// If the ID field is chosen, get its value, else use the ID.
-			if(fieldIdx > -1) {
-				id = feat->GetFieldAsString(fieldIdx);
-			} else {
-				id = std::to_string(++autoId);
-			}
 			// Add to the tree.
 			m_tree->add(new hlrg::reader::Point(pt->getX(), pt->getY(), 0, id));
 			break;
 		case wkbMultiPoint:
 			// Get the multi-point.
 			mpt = (OGRMultiPoint*) feat->GetGeometryRef();
-			// If the ID field is chosen, get its value, else use the ID.
-			pt = (OGRPoint*) feat->GetGeometryRef();
-			if(fieldIdx > -1) {
-				id = feat->GetFieldAsString(fieldIdx);
-			} else {
-				id = std::to_string(++autoId);
-			}
 			// Add each point to the tree.
 			for(int i = 0; i < mpt->getNumGeometries(); ++i) {
 				pt = (OGRPoint*) mpt->getGeometryRef(i);
 				m_tree->add(new hlrg::reader::Point(pt->getX(), pt->getY(), 0, id));
 			}
 			break;
+		case wkbNone:
+			if(xIdx > -1 && yIdx > -1) {
+				m_tree->add(new hlrg::reader::Point(
+					feat->GetFieldAsDouble(xIdx),
+					feat->GetFieldAsDouble(yIdx),
+					0, id
+				));
+			}
+			break;
 		default:
 			break;
 		}
-		OGRFeature::DestroyFeature(feat);
+
+		if(feat) {
+			OGRFeature::DestroyFeature(feat);
+			feat = nullptr;
+		}
 	}
 
 	GDALClose(ds);

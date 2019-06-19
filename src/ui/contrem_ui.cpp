@@ -194,6 +194,7 @@ void ContremForm::setupUi(QDialog* form) {
 	m_contrem.threads = 1; //m_settings.value(LAST_THREADS, 1).toInt();
 	m_contrem.samplePoints = m_settings.value(LAST_SAMPLE_POINTS, "").toString().toStdString();
 	m_contrem.samplePointsLayer = m_settings.value(LAST_SAMPLE_POINTS_LAYER, "").toString().toStdString();
+	m_contrem.samplePointsIDField = m_settings.value(LAST_SAMPLE_POINTS_ID_FIELD, "").toString().toStdString();
 	m_contrem.plotNorm = m_settings.value(LAST_PLOT_NORM, false).toBool();
 	m_contrem.plotOrig = m_settings.value(LAST_PLOT_ORIG, false).toBool();
 	m_contrem.normMethod = (NormMethod) m_settings.value(LAST_NORM_METHOD, (int) NormMethod::ConvexHull).toInt();
@@ -289,13 +290,16 @@ void ContremForm::txtROIFileChanged(QString filename) {
 void ContremForm::txtSamplePointsChanged(QString filename) {
 	m_contrem.samplePoints = filename.toStdString();
 	m_settings.setValue(LAST_SAMPLE_POINTS, filename);
-	{
+	try {
 		std::vector<std::string> names = PointSetReader::getLayerNames(filename.toStdString());
 		QStringList lst;
 		for(const std::string& n : names)
 			lst << n.c_str();
 		cboSamplePointsLayer->clear();
 		cboSamplePointsLayer->addItems(lst);
+		cboSamplePointsLayer->setCurrentText(QString(m_contrem.samplePointsLayer.c_str()));
+	} catch(const std::exception& ex) {
+		std::cerr << ex.what() << "\n";
 	}
 	checkRun();
 }
@@ -303,7 +307,7 @@ void ContremForm::txtSamplePointsChanged(QString filename) {
 void ContremForm::cboSamplePointsLayerChanged(QString layer) {
 	m_contrem.samplePointsLayer = layer.toStdString();
 	m_settings.setValue(LAST_SAMPLE_POINTS_LAYER, layer);
-	{
+	try {
 		std::vector<std::string> names = PointSetReader::getFieldNames(m_contrem.samplePoints, m_contrem.samplePointsLayer);
 		QStringList lst;
 		for(const std::string& n : names)
@@ -311,6 +315,9 @@ void ContremForm::cboSamplePointsLayerChanged(QString layer) {
 		lst << "[auto]";
 		cboSamplePointsIDField->clear();
 		cboSamplePointsIDField->addItems(lst);
+		cboSamplePointsIDField->setCurrentText(QString(m_contrem.samplePointsIDField.c_str()));
+	} catch(const std::exception& ex) {
+		std::cerr << ex.what() << "\n";
 	}
 	checkRun();
 }
