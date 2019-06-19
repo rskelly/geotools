@@ -185,26 +185,11 @@ public:
 	double x() const { return m_x; }
 	double y() const { return m_y; }
 	double z() const { return m_z; }
+	void x(double _x) { m_x = _x; }
+	void y(double _y) { m_y = _y; }
+	void z(double _z) { m_z = _z; }
 
 };
-
-
-/**
- * Reads and stores a set of points from a spatial database and stores them
- * in a tree where they can be searched by radius.
- */
-class PointSetReader {
-private:
-	geo::ds::KDTree<hlrg::reader::Point>* m_tree;
-
-public:
-	PointSetReader(const std::string& filename, const std::string& layer);
-	static std::vector<std::string> getLayerNames(const std::string& filename);
-	int search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts);
-	int samplesNear(double x, double y, double radius);
-	~PointSetReader();
-};
-
 
 /**
  * Reads a file containing a band map and provides the result as a map.
@@ -335,6 +320,27 @@ public:
 
 	 ~GDALReader();
 };
+
+
+
+/**
+ * Reads and stores a set of points from a spatial database and stores them
+ * in a tree where they can be searched by radius.
+ */
+class PointSetReader {
+private:
+	geo::ds::KDTree<hlrg::reader::Point>* m_tree;
+
+public:
+	PointSetReader(const std::string& filename, const std::string& layer);
+	static std::vector<std::string> getLayerNames(const std::string& filename);
+	int search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts);
+	int samplesNear(double x, double y, double radius);
+	void toGridSpace(GDALReader* gr);
+	~PointSetReader();
+};
+
+
 
 namespace {
 	/**

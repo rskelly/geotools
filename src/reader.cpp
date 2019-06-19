@@ -199,6 +199,16 @@ std::vector<std::string> PointSetReader::getLayerNames(const std::string& filena
 	return names;
 }
 
+void PointSetReader::toGridSpace(GDALReader* gr) {
+
+	for(hlrg::reader::Point* pt : m_tree->items()) {
+		pt->x(gr->toCol(pt->x()));
+		pt->y(gr->toRow(pt->y()));
+	}
+
+	m_tree->build();
+}
+
 int PointSetReader::search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts) {
 
 	std::vector<double> dist;

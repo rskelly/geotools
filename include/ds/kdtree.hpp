@@ -51,16 +51,20 @@ public:
 
 	/**
 	 * Destroy the tree.
+	 *
+	 * \param items If true, destroy the items list also. Tree cannot be rebuilt from existing points in this case.
 	 */
-	void destroy() {
+	void destroy(bool items = true) {
 		//std::lock_guard<std::mutex> lk(m_mtx);
 		if(m_tree) {
 			delete m_tree;
 			m_tree = nullptr;
 		}
-		for(T* item : m_items)
-			delete item;
-		m_items.clear();
+		if(items) {
+			for(T* item : m_items)
+				delete item;
+			m_items.clear();
+		}
 		m_pts.clear();
 	}
 
@@ -97,7 +101,7 @@ public:
 		//std::lock_guard<std::mutex> lk(m_mtx);
 		// Clean up existing tree, etc.
 		if(m_tree)
-			destroy();
+			destroy(false);
 
 		if(m_items.empty())
 			throw std::runtime_error("Not enough items.");

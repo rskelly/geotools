@@ -35,7 +35,7 @@ find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Eigen3 REQUIRED)
 find_package (PythonLibs 2.7)
 
-find_library (GEOS_LIBRARY geos)
+find_library (GEOS_LIBRARY geos_c)
 
 project (contrem)
 

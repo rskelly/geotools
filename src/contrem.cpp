@@ -16,21 +16,13 @@
 #include <condition_variable>
 #include <algorithm>
 
-#include <geos/algorithm/ConvexHull.h>
-#include <geos/geom/Coordinate.h>
-#include <geos/geom/GeometryFactory.h>
-#include <geos/geom/MultiPoint.h>
-#include <geos/geom/Polygon.h>
-#include <geos/geom/LineString.h>
-#include <geos/geom/Point.h>
+#include <geos_c.h>
 
 #include "util.hpp"
 #include "contrem.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
 
-using namespace geos::geom;
-using namespace geos::algorithm;
 using namespace hlrg::contrem;
 using namespace hlrg::reader;
 using namespace hlrg::writer;
@@ -273,38 +265,46 @@ namespace {
 	 */
 	std::vector<line> convexHull(const std::vector<inpoint>& in, double* area = nullptr) {
 
-		const GeometryFactory::unique_ptr gf = GeometryFactory::create();
-
 		// Make a list of Coordinates.
-		std::vector<Coordinate> coords;
-		for(const inpoint& pt : in)
-			coords.emplace_back(pt.w, pt.ss, 0);
+		GEOSCoordSequence* seq;
+		std::vector<GEOSGeometry*> coords;
+		for(const inpoint& pt : in) {
+			seq = GEOSCoordSeq_create(1, 2);
+			GEOSCoordSeq_setX(seq, 0, pt.w);
+			GEOSCoordSeq_setY(seq, 0, pt.ss);
+			coords.push_back(GEOSGeom_createPoint(seq));
+		}
 
 		// Make a MultiPoint from the coords and get the ConvexHull.
-		MultiPoint* mp = gf->createMultiPoint(coords);
-		Polygon* hull = dynamic_cast<Polygon*>(mp->convexHull());
+		GEOSGeometry* mp = GEOSGeom_createCollection(GEOS_MULTIPOINT, coords.data(), coords.size());
+		GEOSGeometry* hull = GEOSConvexHull(mp);
 
 		// Get the area for output.
 		if(area != nullptr)
-			*area = hull->getArea();
+			*area = GEOSArea(hull, area);
 
 		// Extract the line segments.
 		std::vector<line> lines;
-		const LineString* ring = hull->getExteriorRing();
-		for(size_t i = 0; i < ring->getNumPoints() - 1; ++i) {
-			geos::geom::Point* p0 = ring->getPointN(i); // This call implies an allocation. LAME. Delete at the end.
-			geos::geom::Point* p1 = ring->getPointN(i + 1);
-			double x0 = p0->getX(), y0 = p0->getY();
-			double x1 = p1->getX(), y1 = p1->getY();
+		const GEOSGeometry* ring = GEOSGetExteriorRing(hull);
+		GEOSGeometry* p0, *p1;
+		double x0, x1, y0, y1;
+		for(int i = 0; i < GEOSGeomGetNumPoints(ring) - 1; ++i) {
+			p0 = GEOSGeomGetPointN(ring, i);
+			p1 = GEOSGeomGetPointN(ring, i + 1);
+			GEOSGeomGetX(p0, &x0);
+			GEOSGeomGetY(p0, &y0);
+			GEOSGeomGetX(p1, &x1);
+			GEOSGeomGetY(p1, &y1);
 			// Only add a segment if it isn't a bottom or end segment (which have at least one zero y-coordinate).
 			if(y0 > 0 && y1 > 0)
 				lines.emplace_back(x0, y0, x1, y1);
-			delete p0;
-			delete p1;
+
+			GEOSGeom_destroy(p0);
+			GEOSGeom_destroy(p1);
 		}
 
-		delete mp;
-		delete hull;
+		GEOSGeom_destroy(mp);
+		GEOSGeom_destroy(hull);
 
 		return lines;
 	}
@@ -398,6 +398,8 @@ namespace {
 	 */
 	void processQueue(QConfig* config) {
 
+		initGEOS(0, 0);
+
 		input in;
 		while(config->contrem->running) {
 			std::this_thread::yield();
@@ -487,6 +489,9 @@ namespace {
 			config->readcv.notify_one();
 
 		}
+
+		finishGEOS();
+
 	}
 
 
@@ -575,6 +580,7 @@ namespace {
 		bool hasSamples = false;
 		if(!config->contrem->samplePoints.empty() && config->contrem->grdr) {
 			samples.reset(new PointSetReader(config->contrem->samplePoints, config->contrem->samplePointsLayer));
+			samples->toGridSpace(config->contrem->grdr);
 			hasSamples = true;
 		}
 
@@ -615,19 +621,14 @@ namespace {
 
 			if(hasSamples) {
 
-				// Get the position and radius of the column and row.
-				double x = config->contrem->grdr->toX(out.c);
-				double y = config->contrem->grdr->toY(out.r);
-				double rad = std::sqrt(std::pow(config->contrem->grdr->resX(), 2) * 2);
-
-				if(samples->samplesNear(x, y, rad)) {
+				if(samples->samplesNear(out.c, out.r, 0.5)) {
 					// If appropriate plot the normalized spectrum.
 					if(config->contrem->plotNorm){
 						std::string plotfile = plotdir + "/norm_" + sanitize(out.id) + "_" + std::to_string(out.c) + "_" + std::to_string(out.r) + ".png";
 						std::string title = "Normalized Spectrum, " + out.id + " (" + std::to_string(out.c) + "," + std::to_string(out.r) + ")";
 						std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>> items;
 						items.emplace_back("Normalized Spectrum", w, crnm);
-						items.emplace_back("Regression", std::vector<double>({w.front(), w.back()}), std::vector<double>({w.front() * out.slope + out.yint, w.back() * out.slope + out.yint}));
+						//items.emplace_back("Regression", std::vector<double>({w.front(), w.back()}), std::vector<double>({w.front() * out.slope + out.yint, w.back() * out.slope + out.yint}));
 						Plotter::instance().enqueue(plotfile, title, items);
 					}
 					if(config->contrem->plotOrig){
@@ -770,7 +771,7 @@ void Contrem::run(ContremListener* listener) {
 
 		// Each datum goes through three steps; 1) adding to the queue; 2) processing; 3) writing.
 		// There are 3 steps at the end.
-		initSteps(1, steps * 3 + 3);
+		initSteps(1, steps * 3 + 2);
 	}
 
 
