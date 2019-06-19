@@ -222,6 +222,11 @@ void ContremForm::checkRun() {
 	btnROI->setEnabled(s);
 	txtSamplePoints->setEnabled(s);
 	btnSamplePoints->setEnabled(s);
+	spnWLFirstCol->setEnabled(!s);
+	spnWLLastCol->setEnabled(!s);
+	spnWLHeaderRows->setEnabled(!s);
+	spnWLIDCol->setEnabled(!s);
+	chkWLTranspose->setEnabled(!s);
 	bool a = m_contrem.roi.empty() || isfile(m_contrem.roi);
 	bool b = !m_contrem.spectra.empty() && isfile(m_contrem.spectra);
 	bool d = m_contrem.samplePoints.empty() || isfile(m_contrem.samplePoints);
@@ -373,11 +378,6 @@ void ContremForm::enableSpectraOptions(const std::string& spectra) {
 		spnWLIDCol->setValue(idCol);
 		chkWLTranspose->setChecked(transpose);
 	}
-	spnWLFirstCol->setEnabled(enable);
-	spnWLLastCol->setEnabled(enable);
-	spnWLHeaderRows->setEnabled(enable);
-	spnWLIDCol->setEnabled(enable);
-	chkWLTranspose->setEnabled(enable);
 }
 
 void ContremForm::txtSpectraFileChanged(QString filename) {
@@ -483,6 +483,7 @@ void ContremForm::stopState() {
 		w->setEnabled(true);
 	for(QWidget* w : stopWidgets)
 		w->setEnabled(false);
+	checkRun();
 }
 
 void ContremForm::run() {
