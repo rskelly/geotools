@@ -15,8 +15,10 @@
 #include <limits>
 
 #include "convolve.hpp"
+#include "writer.hpp"
 
 using namespace hlrg::convolve;
+using namespace hlrg::writer;
 
 namespace {
 
@@ -42,6 +44,26 @@ namespace {
 	 */
 	inline double gaussian(double sigma, double x, double x0) {
 		return  1.0 / (sigma * std::sqrt(2.0 * M_PI)) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
+	}
+
+
+	void _stripws(std::string& buf) {
+		size_t j = 0;
+		for(size_t i = 0; i < buf.size(); ++i) {
+			char c = buf[i];
+			if(c != '\n' && c != '\r' && c != ' ')
+				buf[j++] = c;
+		}
+		buf.resize(j);
+	}
+
+	void _stripcr(std::string& buf) {
+		size_t j = 0;
+		for(size_t i = 0; i < buf.size(); ++i) {
+			char c = buf[i];
+			if(c != '\r') buf[j++] = c;
+		}
+		buf.resize(j);
 	}
 
 }
@@ -160,30 +182,13 @@ int Band::count() const {
 	return m_count;
 }
 
-void _stripws(std::string& buf) {
-	size_t j = 0;
-	for(size_t i = 0; i < buf.size(); ++i) {
-		char c = buf[i];
-		if(c != '\n' && c != '\r' && c != ' ')
-			buf[j++] = c;
-	}
-	buf.resize(j);
-}
-
-void _stripcr(std::string& buf) {
-	size_t j = 0;
-	for(size_t i = 0; i < buf.size(); ++i) {
-		char c = buf[i];
-		if(c != '\r') buf[j++] = c;
-	}
-	buf.resize(j);
-}
 
 Spectrum::Spectrum(int firstRow, int firstCol, int dateCol, int timeCol) :
 		m_delim(','),
 		m_count(0),
 		m_firstRow(firstRow), m_firstCol(firstCol),
 		m_dateCol(dateCol), m_timeCol(timeCol),
+		m_col(0), m_row(0),
 		m_rasterIdx(0),
 		time(0) {}
 
@@ -203,7 +208,7 @@ bool Spectrum::loadRaster(const std::string& filename) {
 
 	m_raster.reset(new GDALReader(filename));
 	m_raster->remap();
-	std::vector<double> bandRange = m_raster->getBandRange();
+	std::vector<double> bandRange = m_raster->getWavelengths();
 	for(double b : bandRange)
 		bands.emplace_back(b, 0);
 	m_count = m_raster->cols() * m_raster->rows();
@@ -268,11 +273,30 @@ size_t Spectrum::count() const {
 	return m_count;
 }
 
+int Spectrum::col() const {
+	return m_col;
+}
+
+int Spectrum::row() const {
+	return m_row;
+}
+
 bool Spectrum::next() {
 
 	if(m_raster.get()) {
 
-		return m_rasterIdx < m_count;
+		if(m_rasterIdx < m_count) {
+			m_col = m_rasterIdx % m_raster->cols();
+			m_row = m_rasterIdx / m_raster->cols();
+			std::vector<double> values;
+			m_raster->mapped(m_col, m_row, values);
+			for(size_t i = 0; i < bands.size(); ++i)
+				bands[i].setValue(values[i]);
+			++m_rasterIdx;
+			return true;
+		} else {
+			return false;
+		}
 
 	} else {
 
@@ -345,6 +369,12 @@ void Spectrum::convolve(Kernel& kernel, Band& band) {
 			break;
 		}
 	}
+
+	if(idx0 >= idx1) {
+		band.setValue(0);
+		return;
+	}
+
 	// Build a temporary "kernel" to store the computed values from the
 	// kernel function.
 	std::vector<double> k(idx1 - idx0 + 1);
@@ -369,6 +399,10 @@ void Spectrum::reset() {
 	}
 }
 
+std::unique_ptr<GDALReader>& Spectrum::raster() {
+	return m_raster;
+}
+
 void Spectrum::writeHeader(std::ostream& out, double minWl, double maxWl, char delim) {
 	out << "date,timestamp";
 	for(const Band& b : bands) {
@@ -385,6 +419,15 @@ void Spectrum::write(std::ostream& out, double minWl, double maxWl, char delim) 
 			out << delim << b.value();
 	}
 	out << "\n";
+}
+
+void Spectrum::write(GDALWriter* wtr, double minWl, double maxWl, int col, int row) {
+	std::vector<double> v;
+	for(const Band& b : bands) {
+		if(b.wl() >= minWl && b.wl() <= maxWl)
+			v.push_back(b.value());
+	}
+	wtr->write(v, col, row, 1, 1);
 }
 
 void Spectrum::scale(double scale) {
@@ -481,8 +524,13 @@ void Convolve::run(ConvolveListener& listener,
 	Spectrum out;
 	rdr.configureSpectrum(out);
 
-	// Open the output file.
-	std::ofstream outstr(output, std::ios::out|std::ios::trunc);
+	FileType ftype = getFileType(output);
+	std::unique_ptr<Writer> writer;
+	if(ftype == FileType::CSV) {
+		writer.reset(new CSVWriter(output)); // wavelengths, bandNames
+	} else {
+		writer.reset(new GDALWriter(output, FileType::ENVI, spec.raster()->cols(), spec.raster()->rows(), rdr.bands().size())); //, wavelengths, bandNames
+	}
 
 	// Run the convolution record-by-record.
 	size_t complete = 0, count = spec.count(); // Status counters.
@@ -500,13 +548,19 @@ void Convolve::run(ConvolveListener& listener,
 			spec.convolve(kernel, out.bands[i]);
 			if(!running) break;
 		}
-		if(!header) {
+		if(!header && ftype == FileType::CSV) {
 			// Write the header if this is the first iteration.
-			out.writeHeader(outstr, rdr.minWl, rdr.maxWl, delim);
+			out.writeHeader(static_cast<CSVWriter*>(writer.get())->outstr(), rdr.minWl, rdr.maxWl, delim);
 			header = true;
 		}
+
 		// Write the record.
-		out.write(outstr, rdr.minWl, rdr.maxWl, delim);
+		if(ftype == FileType::CSV) {
+			out.write(static_cast<CSVWriter*>(writer.get())->outstr(), rdr.minWl, rdr.maxWl, delim);
+		} else {
+			out.write(static_cast<GDALWriter*>(writer.get()), rdr.minWl, rdr.maxWl, spec.col(), spec.row());
+		}
+
 		// Update progress.
 		m_progress = (double) complete++ / count;
 		listener.update(this);

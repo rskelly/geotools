@@ -157,6 +157,8 @@ public:
 
 	bool writeStats(const std::string& filename, const std::vector<std::string>& names = {});
 
+	std::ofstream& outstr();
+
 	/**
 	 * Fill the raster with the given value.
 	 *

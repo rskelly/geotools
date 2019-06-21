@@ -190,6 +190,10 @@ CSVWriter::CSVWriter(const std::string& filename, const std::vector<double>& wav
 	m_id = 0;
 }
 
+std::ofstream& CSVWriter::outstr() {
+	return m_output;
+}
+
 bool CSVWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
 
 	std::string _id(id);

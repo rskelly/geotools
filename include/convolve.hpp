@@ -14,9 +14,11 @@
 
 #include "util.hpp"
 #include "reader.hpp"
+#include "writer.hpp"
 
 using namespace hlrg::util;
 using namespace hlrg::reader;
+using namespace hlrg::writer;
 
 namespace hlrg {
 namespace convolve {
@@ -261,6 +263,8 @@ private:
 	int m_timeCol;									///<! The timestamp column (or -1 if not used.)
 
 	std::unique_ptr<GDALReader> m_raster;
+	int m_col;
+	int m_row;
 	size_t m_rasterIdx;
 
 	bool loadCSV(const std::string& filename, const std::string& delimiter);
@@ -362,6 +366,14 @@ public:
 	 * @param delim The column delimiter.
 	 */
 	void write(std::ostream& out, double minWl, double maxWl, char delim);
+
+	void write(GDALWriter* wtr, double minWl, double maxWl, int col, int row);
+
+	int col() const;
+
+	int row() const;
+
+	std::unique_ptr<GDALReader>& raster();
 
 };
 
