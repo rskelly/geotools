@@ -43,16 +43,20 @@ int runWithGui(int argc, char **argv) {
 }
 
 class DummyListener : public ConvolveListener {
+private:
+	int lastP;
 public:
 	void started(Convolve* conv) {
 		std::cout << "Running ";
+		lastP = -1;
 	}
 	void update(Convolve* conv) {
 		int p = (int) (conv->progress() * 100);
-		if(p % 25 == 0)
+		if(p != lastP && p % 25 == 0)
 			std::cout << " " << p << "% ";
-		if(p % 10 == 0)
+		if(p != lastP && p % 10 == 0)
 			std::cout << ".";
+		lastP = p;
 	}
 	void stopped(Convolve* conv) {
 		std::cout << " Stopped.\n";
@@ -74,6 +78,7 @@ void usage() {
 			<< " -fc 	First data column index (zero-based). (Default 0).\n"
 			<< " -dc 	Date column index (zero-based). (Default -1).\n"
 			<< " -tc 	Timestamp column index (zero-based). (Default -1).\n"
+			<< " -ot 	Output file type. 'CSV', 'ENVI' or 'GTiff'. (Default 'CSV'). \n"
 			<< "    Run without arguments to use the gui.\n";
 }
 
@@ -98,7 +103,7 @@ int main(int argc, char** argv) {
 			int timeCol = -1;
 
 			for(int i = 1; i < argc; ++i) {
-				std::string arg = argv[++i];
+				std::string arg = argv[i];
 				if(arg == "-s") {
 					inputScale = atof(argv[++i]);
 				} else if(arg == "-t"){
@@ -119,6 +124,17 @@ int main(int argc, char** argv) {
 					dateCol = atoi(argv[++i]);
 				} else if (arg == "-tc") {
 					timeCol = atoi(argv[++i]);
+				} else if (arg == "-ot") {
+					std::string type = argv[++i];
+					if(type == "ENVI") {
+						outputType = FileType::ENVI;
+					} else if(type == "GTiff") {
+						outputType = FileType::GTiff;
+					} else if(type == "CSV") {
+						outputType = FileType::CSV;
+					} else {
+						throw std::runtime_error("Invalid file type: " + type);
+					}
 				} else {
 					files.push_back(arg);
 				}

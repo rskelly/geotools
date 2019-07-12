@@ -108,6 +108,10 @@ public:
 
 	bool writeStats(const std::string& filename, const std::vector<std::string>& names = {});
 
+	void setProjection(const std::string& projection);
+
+	void setTransform(const double* trans);
+
 	/**
 	 * Fill the raster with the given value.
 	 *

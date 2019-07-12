@@ -47,6 +47,7 @@ namespace {
 	}
 
 
+	/*
 	void _stripws(std::string& buf) {
 		size_t j = 0;
 		for(size_t i = 0; i < buf.size(); ++i) {
@@ -56,6 +57,7 @@ namespace {
 		}
 		buf.resize(j);
 	}
+	 */
 
 	void _stripcr(std::string& buf) {
 		size_t j = 0;
@@ -207,6 +209,8 @@ bool Spectrum::load(const std::string& filename, const std::string& delimiter) {
 bool Spectrum::loadRaster(const std::string& filename) {
 
 	m_raster.reset(new GDALReader(filename));
+	m_projection = m_raster->projection();
+	m_raster->transform(m_trans);
 	m_raster->remap();
 	std::vector<double> bandRange = m_raster->getWavelengths();
 	for(double b : bandRange)
@@ -399,6 +403,15 @@ void Spectrum::reset() {
 	}
 }
 
+const std::string& Spectrum::projection() const {
+	return m_projection;
+}
+
+void Spectrum::transform(double* trans) const {
+	for(int i = 0; i < 6; ++i)
+		trans[i] = m_trans[i];
+}
+
 std::unique_ptr<GDALReader>& Spectrum::raster() {
 	return m_raster;
 }
@@ -530,6 +543,10 @@ void Convolve::run(ConvolveListener& listener,
 		writer.reset(new CSVWriter(output)); // wavelengths, bandNames
 	} else {
 		writer.reset(new GDALWriter(output, FileType::ENVI, spec.raster()->cols(), spec.raster()->rows(), rdr.bands().size())); //, wavelengths, bandNames
+		static_cast<GDALWriter*>(writer.get())->setProjection(spec.projection());
+		double trans[6];
+		spec.transform(trans);
+		static_cast<GDALWriter*>(writer.get())->setTransform(trans);
 	}
 
 	// Run the convolution record-by-record.

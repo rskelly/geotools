@@ -123,6 +123,17 @@ bool GDALWriter::write(const std::vector<int>& buf, int col, int row, int cols, 
 	return true;
 }
 
+void GDALWriter::setProjection(const std::string& projection) {
+	m_ds->SetProjection(projection.c_str());
+}
+
+void GDALWriter::setTransform(const double* trans) {
+	double t[6];
+	for(int i = 0; i < 6; ++i)
+		t[i] = trans[i];
+	m_ds->SetGeoTransform(t);
+}
+
 
 bool GDALWriter::writeStats(const std::string& filename, const std::vector<std::string>& names) {
 

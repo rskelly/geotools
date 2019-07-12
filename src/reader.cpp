@@ -322,6 +322,7 @@ GDALReader::GDALReader(const std::string& filename) : Reader(),
 	m_cols = m_ds->GetRasterXSize();
 	m_rows = m_ds->GetRasterYSize();
 	m_ds->GetGeoTransform(m_trans);
+	m_projection = m_ds->GetProjectionRef();
 
 	loadBandMap();
 }
@@ -605,6 +606,15 @@ bool GDALReader::next(std::vector<double>& buf, int band, int& cols, int& col, i
 	}
 
 	return true;
+}
+
+const std::string& GDALReader::projection() const {
+	return m_projection;
+}
+
+void GDALReader::transform(double* trans) const {
+	for(int i = 0; i < 6; ++i)
+		trans[i] = m_trans[i];
 }
 
 GDALReader::~GDALReader() {

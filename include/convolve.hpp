@@ -267,6 +267,9 @@ private:
 	int m_row;
 	size_t m_rasterIdx;
 
+	std::string m_projection;
+	double m_trans[6];
+
 	bool loadCSV(const std::string& filename, const std::string& delimiter);
 
 	bool loadRaster(const std::string& filename);
@@ -280,6 +283,10 @@ public:
 	Spectrum();
 
 	Spectrum(int firstRow, int firstCol, int dateCol, int timeCol);
+
+	const std::string& projection() const;
+
+	void transform(double* trans) const;
 
 	/**
 	 * Load the data file and read the header information.

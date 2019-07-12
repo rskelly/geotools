@@ -229,6 +229,8 @@ private:
 	std::unique_ptr<hlrg::util::TmpFile> m_mappedFile;
 	double m_trans[6];
 
+	std::string m_projection;
+
 	void loadBandMap();
 
 public:
@@ -315,6 +317,10 @@ public:
 	bool next(std::string& id, std::vector<double>& buf, int& cols, int& col, int& row);
 
 	bool next(std::vector<double>& buf, int band, int& cols, int& col, int& row);
+
+	const std::string& projection() const;
+
+	void transform(double* trans) const;
 
 	 ~GDALReader();
 };
