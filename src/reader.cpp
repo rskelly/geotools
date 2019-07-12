@@ -363,10 +363,10 @@ void GDALReader::remap(double minWl, double maxWl) {
 template <class T>
 void doRemap(GDALDataset* ds, double* mapped, int minBand, int maxBand, int cols, int rows) {
 
-	int bcols, brows, acols, arows;
-	GDALRasterBand* firstBand = ds->GetRasterBand(minBand);
 	int mappedBands = maxBand - minBand + 1;
+	int bcols, brows, acols, arows;
 
+	GDALRasterBand* firstBand = ds->GetRasterBand(minBand);
 	firstBand->GetBlockSize(&bcols, &brows);
 
 	std::vector<T> buf(mappedBands * bcols * brows * sizeof(T));
@@ -374,7 +374,7 @@ void doRemap(GDALDataset* ds, double* mapped, int minBand, int maxBand, int cols
 
 	for(int br = 0; br < rows / brows; ++br) {
 		for(int bc = 0; bc < cols / bcols; ++bc) {
-			std::cout << "Remapping block " << (br * (cols / bcols) + bc) << " of " << bcols * brows << "\n";
+			std::cout << "Remapping block " << (br * (cols / bcols) + bc) << " of " << (cols / bcols * rows / brows) << "\n";
 
 			// Get a "stack" of blocks representing the band data within a region of pixels.
 			// This is BSQ oriented.
@@ -391,10 +391,10 @@ void doRemap(GDALDataset* ds, double* mapped, int minBand, int maxBand, int cols
 
 					// Copy the band values into the row buffer.
 					for(int b = 0; b < mappedBands; ++b)
-						row[b] = buf[(b * bcols * brows) + r * bcols + c];
+						row[b] = (double) buf[(b * bcols * brows) + r * bcols + c];
 
 					// Write the row into the mapped file as a sequence of band values for the pixel.
-					size_t idx = (br * brows + r) * cols * mappedBands + (bc * bcols + c) * mappedBands;
+					size_t idx = (size_t) (br * brows + r) * cols * mappedBands + (bc * bcols + c) * mappedBands;
 					std::memcpy(mapped + idx, row.data(), row.size() * sizeof(double));
 				}
 			}
@@ -424,8 +424,20 @@ void GDALReader::remap(int minBand, int maxBand) {
 	case GDT_Float64:
 		doRemap<double>(m_ds, m_mapped, minBand, maxBand, cols(), rows());
 		break;
+	case GDT_UInt32:
+		doRemap<uint32_t>(m_ds, m_mapped, minBand, maxBand, cols(), rows());
+		break;
+	case GDT_Int32:
+		doRemap<int32_t>(m_ds, m_mapped, minBand, maxBand, cols(), rows());
+		break;
+	case GDT_UInt16:
+		doRemap<uint16_t>(m_ds, m_mapped, minBand, maxBand, cols(), rows());
+		break;
+	case GDT_Int16:
+		doRemap<int16_t>(m_ds, m_mapped, minBand, maxBand, cols(), rows());
+		break;
 	default:
-		throw std::runtime_error("remap only implemented for float rasters.");
+		throw std::runtime_error("remap only implemented for some types.");
 	}
 }
 
