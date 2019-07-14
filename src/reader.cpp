@@ -307,9 +307,10 @@ PointSetReader::~PointSetReader() {
 
 
 
-GDALReader::GDALReader(const std::string& filename) : Reader(),
+GDALReader::GDALReader(const std::string& filename, size_t memLimit) : Reader(),
 		m_ds(nullptr),
 		m_mappedSize(0),
+		m_memLimit(memLimit),
 		m_mapped(nullptr) {
 
 	GDALAllRegister();
@@ -408,9 +409,13 @@ void GDALReader::remap(int minBand, int maxBand) {
 	m_mappedMinBand = minBand;
 	m_mappedBands = (maxBand - minBand) + 1;
 	m_mappedSize = (size_t) m_cols * m_rows * m_mappedBands * sizeof(double);
-	m_mappedFile.reset(new TmpFile(m_mappedSize));
-	m_mapped = (double*) mmap(0, m_mappedSize, PROT_READ|PROT_WRITE, MAP_SHARED, m_mappedFile->fd, 0);
-	m_mappedFile->close();
+	if(m_mappedSize > m_memLimit) {
+		m_mappedFile.reset(new TmpFile(m_mappedSize));
+		m_mapped = (double*) mmap(0, m_mappedSize, PROT_READ|PROT_WRITE, MAP_SHARED, m_mappedFile->fd, 0);
+		m_mappedFile->close();
+	} else {
+		m_mapped = (double*) malloc(m_mappedSize);
+	}
 
 	if((long) m_mapped == -1)
 		throw std::runtime_error(std::string("Failed to remap: ") + strerror(errno) + " " + std::to_string(errno));
@@ -619,8 +624,13 @@ void GDALReader::transform(double* trans) const {
 
 GDALReader::~GDALReader() {
 	GDALClose(m_ds);
-	if(m_mapped)
-		munmap(m_mapped, m_mappedSize);
+	if(m_mapped) {
+		if(m_mappedSize > m_memLimit) {
+			munmap(m_mapped, m_mappedSize);
+		} else {
+			free(m_mapped);
+		}
+	}
 }
 
 

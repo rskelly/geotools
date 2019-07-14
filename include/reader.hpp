@@ -223,6 +223,7 @@ private:
 	GDALDataset* m_ds;
 
 	size_t m_mappedSize;		///<! The size of mapped memory for remapping an interleaved raster to a list of spectra.
+	size_t m_memLimit;			///<! The maximum amount of memory above which file-backed storage is used.
 	size_t m_mappedMinBand;		///<! The first mapped band (1-based).
 	double* m_mapped;			///<! The pointer to mapped memory for remapping an interleaved raster to a list of spectra.
 	int m_mappedBands;			///<! The number of bands mapped into memory.
@@ -238,8 +239,9 @@ public:
 	 * Construct the reader around the given filename.
 	 *
 	 * \param filename The filename of a GDAL data source.
+	 * \param memLimit The memory limit (bytes) above which file-backed memory is used.
 	 */
-	GDALReader(const std::string& filename);
+	GDALReader(const std::string& filename, size_t memLimit = 0);
 
 	double toX(int col) const;
 	double toY(int row) const;
