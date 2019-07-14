@@ -42,39 +42,39 @@ public:
 	 * full width at half maximum. The threshold gives the value
 	 * of the Gaussian beyond which the kernel is not applied.
 	 *
-	 * @param size The number of kernel elements.
-	 * @param bandDist The distance between the input bands.
-	 * @param wl The centre wavelength.
-	 * @param fwhm The full width at half maximum.
-	 * @param threshold The minimum function value.
+	 * \param size The number of kernel elements.
+	 * \param bandDist The distance between the input bands.
+	 * \param wl The centre wavelength.
+	 * \param fwhm The full width at half maximum.
+	 * \param threshold The minimum function value.
 	 */
 	Kernel(double wl, double fwhm, double threshold);
 
 	/**
 	 * Set the wavelength.
 	 *
-	 * @param wl The wavelength.
+	 * \param wl The wavelength.
 	 */
 	void setWavelength(double wl);
 
 	/**
 	 * Get the wavelength.
 	 *
-	 * @return The wavelength.
+	 * \return The wavelength.
 	 */
 	double wl() const;
 
 	/**
 	 * Set the full width at half maximum.
 	 *
-	 * @param fwhm The full width at half maximum.
+	 * \param fwhm The full width at half maximum.
 	 */
 	void setFWHM(double fwhm);
 
 	/**
 	 * Get the full width at half maximum.
 	 *
-	 * @return The full width at half maximum.
+	 * \return The full width at half maximum.
 	 */
 	double fwhm() const;
 
@@ -88,8 +88,8 @@ public:
 	 * the function falls below the given threshold. This gives the wavelength
 	 * range to which the kernel can be applied.
 	 *
-	 * @param threshold The minimum y-value of the function.
-	 * @return The distance (in wavelength) from the centre of the
+	 * \param threshold The minimum y-value of the function.
+	 * \return The distance (in wavelength) from the centre of the
 	 * 		   curve to the point where it falls below the threshold.
 	 */
 	double halfWidth() const;
@@ -97,8 +97,8 @@ public:
 	/**
 	 * Return the value of the Gaussian for the given wavelength.
 	 *
-	 * @param The target wavelength.
-	 * @return The Gaussian function output.
+	 * \param The target wavelength.
+	 * \return The Gaussian function output.
 	 */
 	double operator()(double wl0) const;
 
@@ -106,7 +106,7 @@ public:
 	 * Returns the threshold, the minimum value of the Gaussian
 	 * before it is ignored.
 	 *
-	 * @return The minimum Gaussian value.
+	 * \return The minimum Gaussian value.
 	 */
 	double threshold() const;
 
@@ -126,9 +126,9 @@ public:
 	/**
 	 * Create a BandProp instance.
 	 *
-	 * @param band The 1-based band index.
-	 * @param wl The wavelength.
-	 * @param fwhm The full width of half maximum.
+	 * \param band The 1-based band index.
+	 * \param wl The wavelength.
+	 * \param fwhm The full width of half maximum.
 	 */
 	BandProp(int band, double wl, double fwhm);
 };
@@ -150,8 +150,8 @@ public:
 	/**
 	 * Create a band.
 	 *
-	 * @param wl The wavelength.
-	 * @param value The value or intensity.
+	 * \param wl The wavelength.
+	 * \param value The value or intensity.
 	 */
 	Band(double wl, double value);
 
@@ -166,77 +166,77 @@ public:
 	 * Return the count. The count is the number of times the value
 	 * of the band has been updated by setValue.
 	 *
-	 * @return The count.
+	 * \return The count.
 	 */
 	int count() const;
 
 	/**
 	 * Return the Band's value divided by the count.
 	 *
-	 * @return The Band's value divided by the count.
+	 * \return The Band's value divided by the count.
 	 */
 	double normalizedValue() const;
 
 	/**
 	 * Set the band's value. Implicitly implements the counter.
 	 *
-	 * @param value The new value.
+	 * \param value The new value.
 	 */
 	void setValue(double value);
 
 	/**
 	 * Return the band's value.
 	 *
-	 * @return The band's value.
+	 * \return The band's value.
 	 */
 	double value() const;
 
 	/**
 	 * Return the value times the scale factor.
 	 *
-	 * @return The value times the scale factor.
+	 * \return The value times the scale factor.
 	 */
 	double scaledValue() const;
 
 	/**
 	 * Set the scale factor.
 	 *
-	 * @param scale The scale factor.
+	 * \param scale The scale factor.
 	 */
 	void setScale(double scale);
 
 	/**
 	 * Return the scale factor.
 	 *
-	 * @return The scale factor.
+	 * \return The scale factor.
 	 */
 	double scale() const;
 
 	/**
 	 * Set the shift amount.
 	 *
-	 * @param shift The shift amount.
+	 * \param shift The shift amount.
 	 */
 	void setShift(double shift);
 
 	/**
 	 * Get the shift amount.
 	 *
-	 * @return The shift amount.
+	 * \return The shift amount.
 	 */
 	double shift() const;
 
 	/**
 	 * Return the Band's central wavelength.
 	 *
-	 * @return The Band's wavelength.
+	 * \return The Band's wavelength.
 	 */
 	double wl() const;
 
 	/**
 	 * Set he Band's wavelength.
 	 *
-	 * @param wl The wavelength.
+	 * \param wl The wavelength.
 	 */
 	void setWl(double wl);
 
@@ -272,7 +272,7 @@ private:
 
 	bool loadCSV(const std::string& filename, const std::string& delimiter);
 
-	bool loadRaster(const std::string& filename);
+	bool loadRaster(const std::string& filename, size_t memLimit);
 
 public:
 	std::vector<Band> bands;						///<! A list of the bands. This changes as the file is read through.
@@ -293,13 +293,21 @@ public:
 	 * After load is called (and returns true), the next method must be
 	 * called to populate the bands list with data.
 	 *
-	 * @param filename A data file.
-	 * @param delimiter The column delimiter.
-	 * @param firstRow The zero-based index of the first row of data.
-	 * @param firstcol  The zero-based index of the first column of data.
-	 * @return True if the file is loaded and has information in it.
+	 * \param filename A data file.
+	 * \param delimiter The column delimiter.
+	 * \param firstRow The zero-based index of the first row of data.
+	 * \param firstcol  The zero-based index of the first column of data.
+	 * \return True if the file is loaded and has information in it.
 	 */
-	bool load(const std::string& filename, const std::string& delimiter);
+	bool load(const std::string& filename, const std::string& delimiter, size_t memLimit);
+
+	/**
+	 * Return a guess of the size of the input file.
+	 *
+	 * \param filename A data file.
+	 * \param delimiter The column delimiter.
+	 */
+	size_t inputSize(const std::string& filename, const std::string& delimiter);
 
 	/**
 	 * Return the number of spectra.
@@ -310,7 +318,7 @@ public:
 	 * Advance the reader to the next line of data. This becomes the Spectrum's current state:
 	 * the list of Bands contains data from the current row.
 	 *
-	 * @return True if a row has been read, false if there were none left.
+	 * \return True if a row has been read, false if there were none left.
 	 */
 	bool next();
 
@@ -318,14 +326,14 @@ public:
 	 * Sets up the given Spectrum with the same structure and
 	 * wavelengths as the current one.
 	 *
-	 * @param spec A Spectrume.
+	 * \param spec A Spectrume.
 	 */
 	void setup(Spectrum& spec);
 
 	/**
 	 * Apply this scaling factor to every band's intensity value.
 	 *
-	 * @param scale A scale factor.
+	 * \param scale A scale factor.
 	 */
 	void scale(double scale);
 
@@ -333,7 +341,7 @@ public:
 	 * Shift the band designations by this amount. This will be done
 	 * before any other transformations.
 	 *
-	 * @param shift The amount to shift by, in wavelength units.
+	 * \param shift The amount to shift by, in wavelength units.
 	 */
 	void shift(double shift);
 
@@ -341,8 +349,8 @@ public:
 	 * Convolve using the given Kernel, writing the output to the given
 	 * Band.
 	 *
-	 * @param kernel A Kernel.
-	 * @param band A Band.
+	 * \param kernel A Kernel.
+	 * \param band A Band.
 	 */
 
 	void convolve(Kernel& kernel, Band& band);
@@ -356,10 +364,10 @@ public:
 	 * Write the header of an output spectrum, between the given
 	 * wavelengths.
 	 *
-	 * @param out An output stream.
-	 * @param minWl The minimum wavelength to print.
-	 * @param maxWl The maximum wavelength to print.
-	 * @param delim The column delimiter.
+	 * \param out An output stream.
+	 * \param minWl The minimum wavelength to print.
+	 * \param maxWl The maximum wavelength to print.
+	 * \param delim The column delimiter.
 	 */
 	void writeHeader(std::ostream& out, double minWl, double maxWl, char delim);
 
@@ -367,10 +375,10 @@ public:
 	 * Write the bands of an output spectrum, between the given
 	 * wavelengths.
 	 *
-	 * @param out An output stream.
-	 * @param minWl The minimum wavelength to print.
-	 * @param maxWl The maximum wavelength to print.
-	 * @param delim The column delimiter.
+	 * \param out An output stream.
+	 * \param minWl The minimum wavelength to print.
+	 * \param maxWl The maximum wavelength to print.
+	 * \param delim The column delimiter.
 	 */
 	void write(std::ostream& out, double minWl, double maxWl, char delim);
 
@@ -402,15 +410,15 @@ public:
 	/**
 	 * Load the band definition file.
 	 *
-	 * @param filename The filename.
-	 * @param delimiter The column delimiter.
+	 * \param filename The filename.
+	 * \param delimiter The column delimiter.
 	 */
 	void load(const std::string& filename, const std::string& delimiter);
 
 	/**
 	 * Returns a vector containing the list of band numbers.
 	 *
-	 * @return A vector containing the list of band numbers.
+	 * \return A vector containing the list of band numbers.
 	 */
 	const std::vector<int>& bands() const;
 
@@ -418,8 +426,8 @@ public:
 	 * Configure the given kernel using information for the given 1-based
 	 * band index. Throws a runtime exception if the band is not available.
 	 *
-	 * @param kernel The Kernel.
-	 * @param band The 1-based band index.
+	 * \param kernel The Kernel.
+	 * \param band The 1-based band index.
 	 */
 	void configureKernel(Kernel& kernel, int band);
 
@@ -427,7 +435,7 @@ public:
 	 * Configure the given Spectrum with the bands represented
 	 * by the band definition file.
 	 *
-	 * @param spec A Spectrum object.
+	 * \param spec A Spectrum object.
 	 */
 	void configureSpectrum(Spectrum& spec);
 
@@ -450,28 +458,28 @@ public:
 	/**
 	 * Called when the convolution has started.
 	 *
-	 * @param A Convolve.
+	 * \param A Convolve.
 	 */
 	virtual void started(Convolve*) = 0;
 
 	/**
 	 * Called when the convolution status has updated.
 	 *
-	 * @param A Convolve.
+	 * \param A Convolve.
 	 */
 	virtual void update(Convolve*) = 0;
 
 	/**
 	 * Called when the convolution has stopped.
 	 *
-	 * @param A Convolve.
+	 * \param A Convolve.
 	 */
 	virtual void stopped(Convolve*) = 0;
 
 	/**
 	 * Called when the convolution has finished.
 	 *
-	 * @param A Convolve.
+	 * \param A Convolve.
 	 */
 	virtual void finished(Convolve*) = 0;
 
@@ -492,33 +500,42 @@ public:
 	/**
 	 * Run the convolve on the given files. The listener will receive callbacks.
 	 *
-	 * @param listener A ConvolveListener to receive updates.
-	 * @param bandDef The band definition file.
-	 * @param bandDefDelim The delimiter for the data file.
-	 * @param spectra The spectral data file.
-	 * @param spectraDelim The delimiter for the data file.
-	 * @param spectraFirstRow The zero-based index of the first data row.
-	 * @param spectraFirstCol The zero-based index of the first data column.
-	 * @param spectraDateCol The zero-based index of a date string. -1 for none.
-	 * @param spectraTimeCol The zero-based index of a timestamp. -1 for none.
-	 * @param output The output file.
-	 * @param outputDelim The delimiter for the data file.
-	 * @param inputScale Scale every input spectral value by this much.
-	 * @param tolerance A value that dictates how wide the Gaussian will be by providing a minimum threshold for the y-value.
-	 * @param bandShift If given and non-zero, will cause the input band designations to be shifted by the given amount.
-	 * @param running A reference to a boolean that is true so long as the processor should keep running.
+	 * \param listener A ConvolveListener to receive updates.
+	 * \param bandDef The band definition file.
+	 * \param bandDefDelim The delimiter for the data file.
+	 * \param spectra The spectral data file.
+	 * \param spectraDelim The delimiter for the data file.
+	 * \param spectraFirstRow The zero-based index of the first data row.
+	 * \param spectraFirstCol The zero-based index of the first data column.
+	 * \param spectraDateCol The zero-based index of a date string. -1 for none.
+	 * \param spectraTimeCol The zero-based index of a timestamp. -1 for none.
+	 * \param output The output file.
+	 * \param outputDelim The delimiter for the data file.
+	 * \param inputScale Scale every input spectral value by this much.
+	 * \param tolerance A value that dictates how wide the Gaussian will be by providing a minimum threshold for the y-value.
+	 * \param bandShift If given and non-zero, will cause the input band designations to be shifted by the given amount.
+	 * \param running A reference to a boolean that is true so long as the processor should keep running.
 	 */
 	void run(ConvolveListener& listener,
 			const std::string& bandDef, const std::string& bandDefDelim,
 			const std::string& spectra, const std::string& spectraDelim,
 			int spectraFirstRow, int spectraFirstCol, int spectraDateCol, int spectraTimeCol,
 			const std::string& output, const std::string& outputDelim, FileType outputType,
-			double inputScale, double tolerance, double bandShift, bool& running);
+			double inputScale, double tolerance, double bandShift, size_t memLimit, bool& running);
+
+	/**
+	 * Return a guess of the amount of memory needed to process the input file.
+	 *
+	 * \param spectra The spectral data file.
+	 * \param spectraDelim The delimiter for the data file.
+	 * \return The expected size of the processing dataset.
+	 */
+	size_t guess(const std::string& spectra, const std::string& spectraDelim);
 
 	/**
 	 * Return the progress as a double between 0 and 1.
 	 *
-	 * @return The progress as a double between 0 and 1.
+	 * \return The progress as a double between 0 and 1.
 	 */
 	double progress() const;
 };

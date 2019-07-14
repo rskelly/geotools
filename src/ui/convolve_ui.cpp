@@ -52,7 +52,7 @@ namespace {
 			double inputScale, double tolerance, double bandShift, bool* running) {
 		try {
 			conv->run(*form, *bandDef, *bandDefDelim, *spectra, *spectraDelim, firstRow, firstCol, dateCol, timeCol,
-					*output, *outputDelim, outputType, inputScale, tolerance, bandShift, *running);
+					*output, *outputDelim, outputType, inputScale, tolerance, bandShift, 0, *running);  // TODO: Mem Limit.
 		} catch(const std::exception& ex) {
 			form->handleException(ex);
 		}
