@@ -50,10 +50,10 @@ GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int
 	if(!drv)
 		throw std::runtime_error("Driver not found: " + typeStr);
 
-	CPLStringList options;
-	options.SetNameValue("INTERLEAVE", interleave.c_str());
+	//CPLStringList options;
+	//options.SetNameValue("INTERLEAVE", interleave.c_str());
 
-	m_ds = drv->Create(filename.c_str(), cols, rows, bands, gtype, options);
+	m_ds = drv->Create(filename.c_str(), cols, rows, bands, gtype, nullptr);
 	if(!m_ds)
 		throw std::runtime_error("Failed to open " + filename + " for writing");
 

@@ -31,9 +31,10 @@ class Kernel {
 private:
 	double m_wl;
 	double m_fwhm;
-	double m_threshold;
 	double m_sigma;
-	double m_halfWidth;
+	double m_norm;
+	int m_window;
+	int m_index;		///<! Index into the array of source wavelengths.
 
 public:
 
@@ -46,9 +47,11 @@ public:
 	 * \param bandDist The distance between the input bands.
 	 * \param wl The centre wavelength.
 	 * \param fwhm The full width at half maximum.
-	 * \param threshold The minimum function value.
+	 * \param window The size of the window; an odd integer.
 	 */
-	Kernel(double wl, double fwhm, double threshold);
+	Kernel(double wl, double fwhm, int window, int index);
+
+	int index() const;
 
 	/**
 	 * Set the wavelength.
@@ -78,38 +81,13 @@ public:
 	 */
 	double fwhm() const;
 
-	/**
-	 * Initialize the internal variables.
-	 */
-	void init();
+	void setWindow(int window);
 
-	/**
-	 * Returns the absolute distance from the centre wavelength, to the wavelength where
-	 * the function falls below the given threshold. This gives the wavelength
-	 * range to which the kernel can be applied.
-	 *
-	 * \param threshold The minimum y-value of the function.
-	 * \return The distance (in wavelength) from the centre of the
-	 * 		   curve to the point where it falls below the threshold.
-	 */
-	double halfWidth() const;
+	int window() const;
 
-	/**
-	 * Return the value of the Gaussian for the given wavelength.
-	 *
-	 * \param The target wavelength.
-	 * \return The Gaussian function output.
-	 */
-	double operator()(double wl0) const;
+	double apply(const std::vector<double>& intensities, const std::vector<double>& wavelengths, int idx) const;
 
-	/**
-	 * Returns the threshold, the minimum value of the Gaussian
-	 * before it is ignored.
-	 *
-	 * \return The minimum Gaussian value.
-	 */
-	double threshold() const;
-
+	bool operator<(const Kernel& other) const;
 };
 
 
@@ -276,6 +254,8 @@ private:
 
 public:
 	std::vector<Band> bands;						///<! A list of the bands. This changes as the file is read through.
+	std::vector<double> wavelengths;
+	std::vector<double> intensities;
 	std::map<std::string, std::string> properties;	///<! Properties read from the header block.
 	std::string date;								///<! The date of the current row.
 	long time;										///<! The timestamp of the current row.
@@ -287,6 +267,11 @@ public:
 	const std::string& projection() const;
 
 	void transform(double* trans) const;
+
+	/**
+	 * Move values from the intensity array back into the bands array.
+	 */
+	void update();
 
 	/**
 	 * Load the data file and read the header information.
@@ -346,16 +331,6 @@ public:
 	void shift(double shift);
 
 	/**
-	 * Convolve using the given Kernel, writing the output to the given
-	 * Band.
-	 *
-	 * \param kernel A Kernel.
-	 * \param band A Band.
-	 */
-
-	void convolve(Kernel& kernel, Band& band);
-
-	/**
 	 * Set the values of all bands to zero.
 	 */
 	void reset();
@@ -400,10 +375,9 @@ public:
  */
 class BandPropsReader {
 private:
-	std::vector<int> m_bands;			///<! Contains band numbers (1-based)
+	std::map<int, BandProp> m_bandProps;	///<! The map of BandProp object.
 
 public:
-	std::map<int, BandProp> bandProps;	///<! The map of BandProp object.
 	double minWl;						///<! The minimum wavelength in the band definition file.
 	double maxWl;						///<! The maximum wavelength in the band definition file.
 
@@ -416,20 +390,11 @@ public:
 	void load(const std::string& filename, const std::string& delimiter);
 
 	/**
-	 * Returns a vector containing the list of band numbers.
+	 * Returns a reference to the map containing the band configurations.
 	 *
-	 * \return A vector containing the list of band numbers.
+	 * \return A reference to the map containing the band configurations.
 	 */
-	const std::vector<int>& bands() const;
-
-	/**
-	 * Configure the given kernel using information for the given 1-based
-	 * band index. Throws a runtime exception if the band is not available.
-	 *
-	 * \param kernel The Kernel.
-	 * \param band The 1-based band index.
-	 */
-	void configureKernel(Kernel& kernel, int band);
+	const std::map<int, BandProp>& bands() const;
 
 	/**
 	 * Configure the given Spectrum with the bands represented

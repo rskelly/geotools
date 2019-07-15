@@ -70,16 +70,22 @@ namespace {
 
 }
 
-Kernel::Kernel(double wl, double fwhm, double threshold) :
+Kernel::Kernel(double wl, double fwhm, int window, int index) :
 	m_wl(wl),
 	m_fwhm(fwhm),
-	m_threshold(threshold) {
-	init();
+	m_window(window),
+	m_index(index) {
+
+	m_sigma = std::sqrt(fwhm / (2.0 * std::sqrt(2.0 * std::log(2.0))));
+	m_norm = 1.0 / (m_sigma * std::sqrt(2.0 * M_PI));
+}
+
+int Kernel::index() const {
+	return m_index;
 }
 
 void Kernel::setWavelength(double wl) {
 	m_wl = wl;
-	init();
 }
 
 double Kernel::wl() const {
@@ -88,34 +94,30 @@ double Kernel::wl() const {
 
 void Kernel::setFWHM(double fwhm) {
 	m_fwhm = fwhm;
-	init();
 }
 
 double Kernel::fwhm() const {
 	return m_fwhm;
 }
 
-void Kernel::init() {
-	// Derive the std dev from the FWHM.
-	m_sigma = m_fwhm / (2.0 * std::sqrt(2.0 * std::log(2.0)));
-	// Get the distance of the threshold on x from threshold y.
-	double w = invGaussian(m_sigma, m_threshold, m_wl);
-	// The half-width of the curve at the threshold.
-	m_halfWidth = std::abs(m_wl - w);
+void Kernel::setWindow(int window) {
+	m_window = window;
 }
 
-double Kernel::halfWidth() const {
-	return m_halfWidth;
+int Kernel::window() const {
+	return m_window;
 }
 
-double Kernel::operator()(double wl0) const {
-	return gaussian(m_sigma, wl0, m_wl);
+double Kernel::apply(const std::vector<double>& intensities, const std::vector<double>& wavelengths, int idx) const {
+	double out = 0;
+	for(int i = std::max(0, idx - m_window / 2); i < std::min((int) intensities.size(), idx + m_window / 2 + 1); ++i)
+		out += m_norm * std::exp(-0.5 * std::pow((wavelengths[i] - m_wl) / m_sigma, 2.0));
+	return out;
 }
 
-double Kernel::threshold() const {
-	return m_threshold;
+bool Kernel::operator<(const Kernel& other) const {
+	return wl() < other.wl();
 }
-
 
 
 BandProp::BandProp(int band, double wl, double fwhm) :
@@ -202,6 +204,11 @@ size_t Spectrum::inputSize(const std::string& filename, const std::string& delim
 	return input.tellg();
 }
 
+void Spectrum::update() {
+	for(size_t i = 0; i < intensities.size(); ++i)
+		bands[i].setValue(intensities[i]);
+}
+
 bool Spectrum::load(const std::string& filename, const std::string& delimiter, size_t memLimit) {
 	// Clear any existing bands list.
 	bands.clear();
@@ -219,8 +226,14 @@ bool Spectrum::loadRaster(const std::string& filename, size_t memLimit) {
 	m_raster->transform(m_trans);
 	m_raster->remap();
 	std::vector<double> bandRange = m_raster->getWavelengths();
-	for(double b : bandRange)
+
+	for(double b : bandRange) {
 		bands.emplace_back(b, 0);
+		wavelengths.push_back(b);
+	}
+
+	intensities.resize(wavelengths.size());
+
 	m_count = m_raster->cols() * m_raster->rows();
 
 	return true;
@@ -256,8 +269,14 @@ bool Spectrum::loadCSV(const std::string& filename, const std::string& delimiter
 			std::stringstream ss(m_buf);
 			for(int c = 0; c < m_firstCol; ++c)
 				std::getline(ss, buf, m_delim);
-			while(std::getline(ss, buf, m_delim))
-				bands.emplace_back(atof(buf.c_str()), 0);
+			while(std::getline(ss, buf, m_delim)) {
+				double b = std::stod(buf.c_str(), 0);
+				bands.emplace_back(b, 0);
+				wavelengths.push_back(b);
+			}
+
+			intensities.resize(wavelengths.size());
+
 			header = true;
 		} else {
 			// We're at the start of data. Get the position, and count the remaining rows.
@@ -300,8 +319,12 @@ bool Spectrum::next() {
 			m_row = m_rasterIdx / m_raster->cols();
 			std::vector<double> values;
 			m_raster->mapped(m_col, m_row, values);
-			for(size_t i = 0; i < bands.size(); ++i)
+
+			for(size_t i = 0; i < bands.size(); ++i) {
 				bands[i].setValue(values[i]);
+				intensities[i] = values[i];
+			}
+
 			++m_rasterIdx;
 			return true;
 		} else {
@@ -337,8 +360,12 @@ bool Spectrum::next() {
 			std::string part;
 			for(int c = 0; c < m_firstCol; ++c)
 				std::getline(ss, part, m_delim);
-			while(std::getline(ss, part, m_delim))
-				bands[i++].setValue(std::strtod(part.c_str(), nullptr));
+			while(std::getline(ss, part, m_delim)) {
+				double v = std::strtod(part.c_str(), nullptr);
+				bands[i].setValue(v);
+				intensities[i] = v;
+				++i;
+			}
 		}
 
 		// Read the next buffer. If it fails, we'll find out on the next call to next.
@@ -357,49 +384,6 @@ void Spectrum::setup(Spectrum& spec) {
 	// Instantiate the bands on the new spectrum.
 	for(const Band& b : bands)
 		spec.bands.emplace_back(b.wl(), 0);
-}
-
-void Spectrum::convolve(Kernel& kernel, Band& band) {
-	// First, figure out the start and end indices of the input, given
-	// the width of the kernel function out to the threshold.
-	double min = band.wl() - kernel.halfWidth() * 2;
-	double max = band.wl() + kernel.halfWidth() * 2;
-	size_t idx0 = 0;
-	size_t idx1 = bands.size();
-	for(size_t i = 0; i < bands.size(); ++i) {
-		if(min > bands[i].wl()) {
-			idx0 = i;
-		} else {
-			break;
-		}
-	}
-	for(size_t i = idx0; i < bands.size(); ++i) {
-		if(max < bands[i].wl()) {
-			idx1 = i;
-			break;
-		}
-	}
-
-	if(idx0 >= idx1) {
-		band.setValue(0);
-		return;
-	}
-
-	// Build a temporary "kernel" to store the computed values from the
-	// kernel function.
-	std::vector<double> k(idx1 - idx0 + 1);
-	double sum = 0;
-	for(size_t i = idx0; i <= idx1; ++i)
-		sum += k[i - idx0] = kernel(bands[i].wl());
-	// Normalize the kernel values.
-	for(size_t i = idx0; i <= idx1; ++i)
-		k[i - idx0] /= sum;
-	// Convolve the bands using the temporary kernel.
-	for(size_t i = idx0; i <= idx1; ++i) {
-		double v = k[i - idx0];
-		double w = bands[i].scaledValue();
-		band.setValue(band.value() + v * w);
-	}
 }
 
 void Spectrum::reset() {
@@ -483,37 +467,83 @@ void BandPropsReader::load(const std::string& filename, const std::string& delim
 		std::getline(ss, buf);
 		count = (pos = buf.find(delim)) == std::string::npos ? buf.size() : pos;
 		fwhm = std::strtod(buf.substr(0, count).c_str(), nullptr); // May or may not be a comma at the end.
-		bandProps.emplace(std::piecewise_construct, std::forward_as_tuple(band), std::forward_as_tuple(band, wl, fwhm));
+		m_bandProps.emplace(std::piecewise_construct, std::forward_as_tuple(band), std::forward_as_tuple(band, wl, fwhm));
 		if(wl < minWl) minWl = wl;
 		if(wl > maxWl) maxWl = wl;
 	}
-	m_bands.clear();
-	for(const auto& it : bandProps)
-		m_bands.push_back(it.first);
 }
 
-const std::vector<int>& BandPropsReader::bands() const {
-	return m_bands;
-}
-
-void BandPropsReader::configureKernel(Kernel& kernel, int band) {
-	// If the band is not found, raise an error.
-	if(bandProps.find(band) == bandProps.end())
-		throw std::runtime_error("Band not found: " + std::to_string(band));
-	// Get the band and set the properties.
-	const BandProp& p = bandProps.at(band);
-	kernel.setWavelength(p.wl);
-	kernel.setFWHM(p.fwhm);
+const std::map<int, BandProp>& BandPropsReader::bands() const {
+	return m_bandProps;
 }
 
 void BandPropsReader::configureSpectrum(Spectrum& spec) {
 	// Resize the spectrum to the number of bands in the configuration.
-	spec.bands.resize(bandProps.size());
+	spec.bands.resize(m_bandProps.size());
+	spec.wavelengths.resize(spec.bands.size());
+	spec.intensities.resize(spec.bands.size());
 	// Set all the wavelengths on the bands.
 	size_t i = 0;
-	for(const auto& p : bandProps)
-		spec.bands[i++].setWl(p.second.wl);
+	for(const auto& p : m_bandProps) {
+		spec.bands[i].setWl(p.second.wl);
+		spec.wavelengths[i] = p.second.wl;
+		++i;
+	}
 }
+
+class BinTree {
+private:
+	BinTree* left;
+	BinTree* right;
+	const Kernel* kernel;
+	const Kernel& closer(double key, const Kernel& a, const Kernel& b) {
+		if(std::abs(key - a.wl()) < std::abs(key - b.wl())) {
+			return a;
+		} else {
+			return b;
+		}
+	}
+
+	void init(const std::vector<Kernel>& k, int start, int end) {
+		int mid = (end + start) / 2;
+		kernel = &k[mid];
+		if(mid > start) {
+			left = new BinTree();
+			left->init(k, start, mid);
+		}
+		if(end > mid + 1) {
+			right = new BinTree();
+			right->init(k, mid + 1, end);
+		}
+	}
+
+public:
+
+	BinTree() :
+		left(nullptr), right(nullptr), kernel(nullptr) {
+	}
+
+	void init(const std::vector<Kernel>& k) {
+		init(k, 0, (int) k.size());
+	}
+
+	const Kernel& find(double key) {
+		if(key == kernel->wl()) {
+			return *kernel;
+		} else if(key < kernel->wl()) {
+			return left ? closer(key, *kernel, left->find(key)) : *kernel;
+		} else {
+			return right ? closer(key, *kernel, right->find(key)) : *kernel;
+		}
+	}
+
+	~BinTree() {
+		if(left) delete left;
+		if(right) delete right;
+	}
+
+
+};
 
 void Convolve::run(ConvolveListener& listener,
 		const std::string& bandDef, const std::string& bandDefDelim,
@@ -526,12 +556,11 @@ void Convolve::run(ConvolveListener& listener,
 	// Notify a listener.
 	listener.started(this);
 
-	// Configure the kernel.
-	Kernel kernel(0, 0, tolerance);
-
 	// Load the band properties.
 	BandPropsReader rdr;
 	rdr.load(bandDef, bandDefDelim);
+
+	const std::map<int, BandProp>& bands = rdr.bands();
 
 	// Load the spectrum.
 	Spectrum spec(spectraFirstRow, spectraFirstCol, spectraDateCol, spectraTimeCol);
@@ -542,6 +571,18 @@ void Convolve::run(ConvolveListener& listener,
 	// Configure the output (convolved) spectrum.
 	Spectrum out;
 	rdr.configureSpectrum(out);
+
+	// Configure the kernels.
+	int windowSize = 15;
+	BinTree tree;
+	std::vector<Kernel> kernels;
+	{
+		int i = 0;
+		for(const auto& it : bands)
+			kernels.emplace_back(it.second.wl, it.second.fwhm, windowSize, i++);
+		std::sort(kernels.begin(), kernels.end());
+		tree.init(kernels);
+	}
 
 	FileType ftype = getFileType(output);
 	std::unique_ptr<Writer> writer;
@@ -559,18 +600,18 @@ void Convolve::run(ConvolveListener& listener,
 	size_t complete = 0, count = spec.count(); // Status counters.
 	bool header = false;
 	char delim = outputDelim[0];
-	const std::vector<int>& bands = rdr.bands();
+
 	while(running && spec.next()) {
 		out.reset();
 		out.date = spec.date;
 		out.time = spec.time;
-		for(size_t i = 0; i < bands.size(); ++i) {
-			// For each band definition, configure the kernel.
-			rdr.configureKernel(kernel, bands[i]);
-			// Convolve the spectrum onto the given band.
-			spec.convolve(kernel, out.bands[i]);
+		for(size_t i = 0; i < spec.wavelengths.size(); ++i) {
+			const Kernel& k = tree.find(spec.wavelengths[i]);
+			out.intensities[k.index()] = k.apply(spec.intensities, spec.wavelengths, i);
 			if(!running) break;
 		}
+		out.update();
+
 		if(!header && ftype == FileType::CSV) {
 			// Write the header if this is the first iteration.
 			out.writeHeader(static_cast<CSVWriter*>(writer.get())->outstr(), rdr.minWl, rdr.maxWl, delim);
