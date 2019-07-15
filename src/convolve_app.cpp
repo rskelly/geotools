@@ -52,10 +52,12 @@ public:
 	}
 	void update(Convolve* conv) {
 		int p = (int) (conv->progress() * 100);
-		if(p != lastP && p % 25 == 0)
+		if(p != lastP && p % 10 == 0)
 			std::cout << " " << p << "% ";
-		if(p != lastP)
+		if(p != lastP) {
 			std::cout << ".";
+			std::cout.flush();
+		}
 		lastP = p;
 	}
 	void stopped(Convolve* conv) {
