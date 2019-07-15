@@ -56,14 +56,14 @@ set (geoannsrc ann/src/ANN.cpp ann/src/brute.cpp
 add_library (geoannobj OBJECT ${geoannsrc})
 set_target_properties (geoannobj PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions (geoannobj PRIVATE DLL_EXPORTS=1)
-add_library (geoann SHARED $<TARGET_OBJECTS:geoannobj>)
+add_library (geotools_ann SHARED $<TARGET_OBJECTS:geoannobj>)
 
-add_library (geotools_util src/util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp src/plotter.cpp)
-target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES} geoann)
+add_library (geotools_util SHARED src/util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp src/plotter.cpp)
+target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES} geotools_ann)
 
 add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
 target_include_directories(contrem PUBLIC contrem_autogen/include)
-target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geotools_util geoann)
+target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geotools_util geotools_ann)
 
 add_executable (convolve src/convolve_app.cpp src/convolve.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
@@ -79,4 +79,4 @@ add_executable(boresight src/boresight.cpp)
 
 # Install ################################################################################################
 
-install(TARGETS convolve reflectance RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS convolve contrem geotools_ann geotools_util reflectance RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
