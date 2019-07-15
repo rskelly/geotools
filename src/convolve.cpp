@@ -76,8 +76,18 @@ Kernel::Kernel(double wl, double fwhm, int window, int index) :
 	m_window(window),
 	m_index(index) {
 
-	m_sigma = std::sqrt(fwhm / (2.0 * std::sqrt(2.0 * std::log(2.0))));
-	m_norm = 1.0 / (m_sigma * std::sqrt(2.0 * M_PI));
+	double sigma = std::sqrt(fwhm / (2.0 * std::sqrt(2.0 * std::log(2.0))));
+	double norm = 1.0 / (sigma * std::sqrt(2.0 * M_PI));
+	int mid = m_window / 2;
+	double sum = 0;
+	m_kernel.resize(m_window);
+	for(int i = 0; i < m_window; ++i)
+		sum += (m_kernel[i] = norm * std::exp(-0.5 * std::pow((i - mid) / sigma, 2.0)));
+	for(int i = 0; i < m_window; ++i)
+		m_kernel[i] /= sum;
+}
+
+Kernel::~Kernel() {
 }
 
 int Kernel::index() const {
@@ -110,8 +120,13 @@ int Kernel::window() const {
 
 double Kernel::apply(const std::vector<double>& intensities, const std::vector<double>& wavelengths, int idx) const {
 	double out = 0;
-	for(int i = std::max(0, idx - m_window / 2); i < std::min((int) intensities.size(), idx + m_window / 2 + 1); ++i)
-		out += m_norm * std::exp(-0.5 * std::pow((wavelengths[i] - m_wl) / m_sigma, 2.0));
+	int max = (int) intensities.size();
+	for(int i = 0; i < m_window; ++i) {
+		int j = idx + i - m_window / 2;
+		if(j < 0 || j >= max)
+			continue;
+		out += intensities[j] * m_kernel[i];
+	}
 	return out;
 }
 

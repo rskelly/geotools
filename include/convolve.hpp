@@ -31,10 +31,9 @@ class Kernel {
 private:
 	double m_wl;
 	double m_fwhm;
-	double m_sigma;
-	double m_norm;
 	int m_window;
 	int m_index;		///<! Index into the array of source wavelengths.
+	std::vector<double> m_kernel;
 
 public:
 
@@ -88,6 +87,8 @@ public:
 	double apply(const std::vector<double>& intensities, const std::vector<double>& wavelengths, int idx) const;
 
 	bool operator<(const Kernel& other) const;
+
+	~Kernel();
 };
 
 

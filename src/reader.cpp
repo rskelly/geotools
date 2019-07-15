@@ -374,9 +374,17 @@ void doRemap(GDALDataset* ds, double* mapped, int minBand, int maxBand, int cols
 	std::vector<T> buf(mappedBands * bcols * brows * sizeof(T));
 	std::vector<double> row(mappedBands);
 
+	std::cout << "Remapping " << (rows / brows) * (cols / bcols) << " blocks.\n";
+	int lastStat = -1;
 	for(int br = 0; br < rows / brows; ++br) {
-		if(br % 100 == 0)
-			std::cout << "Remapping row " << (br + 1) << " of " << (rows / brows) << "\n";
+		int stat = (int) ((float) br / (rows / brows)) * 100;
+		if(stat != lastStat) {
+			if(stat % 10 == 0)
+				std::cout << " " << stat << "% ";
+			std::cout << ".";
+			std::cout.flush();
+			lastStat = stat;
+		}
 		for(int bc = 0; bc < cols / bcols; ++bc) {
 
 			// Get a "stack" of blocks representing the band data within a region of pixels.
