@@ -54,7 +54,7 @@ public:
 		int p = (int) (conv->progress() * 100);
 		if(p != lastP && p % 25 == 0)
 			std::cout << " " << p << "% ";
-		if(p != lastP && p % 10 == 0)
+		if(p != lastP)
 			std::cout << ".";
 		lastP = p;
 	}
