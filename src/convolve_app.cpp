@@ -79,7 +79,8 @@ void usage() {
 			<< " -dc 	Date column index (zero-based). (Default -1.)\n"
 			<< " -tc 	Timestamp column index (zero-based). (Default -1.)\n"
 			<< " -ot 	Output file type. 'CSV', 'ENVI' or 'GTiff'. (Default 'CSV'.) \n"
-			<< " -m     The memory limit above which file-backed storage is used. (Default 0.)"
+			<< " -m     The memory limit above which file-backed storage is used. (Default 0.)\n"
+			<< " -g     Print the expected memory consumption given the input file(s).\n"
 			<< "    Run without arguments to use the gui.\n";
 }
 
@@ -102,6 +103,8 @@ int main(int argc, char** argv) {
 			int firstCol = 0;
 			int dateCol = -1;
 			int timeCol = -1;
+			bool guess = false;
+			size_t memLimit = 0;
 
 			for(int i = 1; i < argc; ++i) {
 				std::string arg = argv[i];
@@ -136,6 +139,10 @@ int main(int argc, char** argv) {
 					} else {
 						throw std::runtime_error("Invalid file type: " + type);
 					}
+				} else if(arg == "-m") {
+					memLimit = std::stoull(argv[++i]);
+				} else if(arg == "-g") {
+					guess = true;
 				} else {
 					files.push_back(arg);
 				}
@@ -148,7 +155,13 @@ int main(int argc, char** argv) {
 			Convolve conv;
 			DummyListener listener;
 			bool running = true;
-			conv.run(listener, bandDef, bandDelim, spectra, specDelim, firstRow, firstCol, dateCol, timeCol, output, outputDelim, outputType, inputScale, threshold, shift, running);
+
+			if(guess) {
+				std::cout << conv.guess(spectra, specDelim);
+				return 0;
+			} else {
+				conv.run(listener, bandDef, bandDelim, spectra, specDelim, firstRow, firstCol, dateCol, timeCol, output, outputDelim, outputType, inputScale, threshold, shift, memLimit, running);
+			}
 		}
 	} else {
 		return runWithGui(argc, argv);

@@ -411,10 +411,12 @@ void GDALReader::remap(int minBand, int maxBand) {
 	m_mappedBands = (maxBand - minBand) + 1;
 	m_mappedSize = (size_t) m_cols * m_rows * m_mappedBands * sizeof(double);
 	if(m_mappedSize > m_memLimit) {
+		std::cout << "Using mmap.\n";
 		m_mappedFile.reset(new TmpFile(m_mappedSize));
 		m_mapped = (double*) mmap(0, m_mappedSize, PROT_READ|PROT_WRITE, MAP_SHARED, m_mappedFile->fd, 0);
 		m_mappedFile->close();
 	} else {
+		std::cout << "Using malloc.\n";
 		m_mapped = (double*) malloc(m_mappedSize);
 	}
 

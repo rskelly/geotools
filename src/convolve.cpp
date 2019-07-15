@@ -196,19 +196,25 @@ Spectrum::Spectrum(int firstRow, int firstCol, int dateCol, int timeCol) :
 
 Spectrum::Spectrum() : Spectrum(0, 0, -1, -1) {}
 
-bool Spectrum::load(const std::string& filename, const std::string& delimiter) {
+size_t Spectrum::inputSize(const std::string& filename, const std::string& delimiter) {
+	std::ifstream input(filename);
+	input.seekg(0, std::ios::end);
+	return input.tellg();
+}
+
+bool Spectrum::load(const std::string& filename, const std::string& delimiter, size_t memLimit) {
 	// Clear any existing bands list.
 	bands.clear();
 	if(getFileType(filename) == FileType::CSV) {
 		return loadCSV(filename, delimiter);
 	} else {
-		return loadRaster(filename);
+		return loadRaster(filename, memLimit);
 	}
 }
 
-bool Spectrum::loadRaster(const std::string& filename) {
+bool Spectrum::loadRaster(const std::string& filename, size_t memLimit) {
 
-	m_raster.reset(new GDALReader(filename));
+	m_raster.reset(new GDALReader(filename, memLimit));
 	m_projection = m_raster->projection();
 	m_raster->transform(m_trans);
 	m_raster->remap();
@@ -515,7 +521,7 @@ void Convolve::run(ConvolveListener& listener,
 		int spectraFirstRow, int spectraFirstCol,
 		int spectraDateCol, int spectraTimeCol,
 		const std::string& output, const std::string& outputDelim, FileType outputType,
-		double inputScale, double tolerance, double bandShift, bool& running) {
+		double inputScale, double tolerance, double bandShift, size_t memLimit, bool& running) {
 
 	// Notify a listener.
 	listener.started(this);
@@ -529,7 +535,7 @@ void Convolve::run(ConvolveListener& listener,
 
 	// Load the spectrum.
 	Spectrum spec(spectraFirstRow, spectraFirstCol, spectraDateCol, spectraTimeCol);
-	spec.load(spectra, spectraDelim);
+	spec.load(spectra, spectraDelim, memLimit);
 	spec.shift(bandShift);
 	spec.scale(inputScale);
 
@@ -585,6 +591,11 @@ void Convolve::run(ConvolveListener& listener,
 	}
 	// Notify listener of completion.
 	listener.finished(this);
+}
+
+size_t Convolve::guess(const std::string& spectra, const std::string& spectraDelim) {
+	Spectrum spec;
+	return spec.inputSize(spectra, spectraDelim) * 1.5;
 }
 
 double Convolve::progress() const {
