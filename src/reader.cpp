@@ -375,8 +375,9 @@ void doRemap(GDALDataset* ds, double* mapped, int minBand, int maxBand, int cols
 	std::vector<double> row(mappedBands);
 
 	for(int br = 0; br < rows / brows; ++br) {
+		if(br % 100 == 0)
+			std::cout << "Remapping row " << (br + 1) << " of " << (rows / brows) << "\n";
 		for(int bc = 0; bc < cols / bcols; ++bc) {
-			std::cout << "Remapping block " << (br * (cols / bcols) + bc) << " of " << (cols / bcols * rows / brows) << "\n";
 
 			// Get a "stack" of blocks representing the band data within a region of pixels.
 			// This is BSQ oriented.
