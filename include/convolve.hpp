@@ -119,7 +119,6 @@ public:
 class Band {
 private:
 	double m_wl;			///!< The wavelength.
-	double m_value;			///!< The value or intensity.
 	double m_scale;		 	///!< The scaled value of the intensity. This is used for calculations. Is identical to value by default.
 	double m_shift;			///!< The amount to shift the band's wavelength designation by.
 	int m_count;			///!< Tracks the number of accumulations; divide the value by this number.
@@ -148,34 +147,6 @@ public:
 	 * \return The count.
 	 */
 	int count() const;
-
-	/**
-	 * Return the Band's value divided by the count.
-	 *
-	 * \return The Band's value divided by the count.
-	 */
-	double normalizedValue() const;
-
-	/**
-	 * Set the band's value. Implicitly implements the counter.
-	 *
-	 * \param value The new value.
-	 */
-	void setValue(double value);
-
-	/**
-	 * Return the band's value.
-	 *
-	 * \return The band's value.
-	 */
-	double value() const;
-
-	/**
-	 * Return the value times the scale factor.
-	 *
-	 * \return The value times the scale factor.
-	 */
-	double scaledValue() const;
 
 	/**
 	 * Set the scale factor.
@@ -268,11 +239,6 @@ public:
 	const std::string& projection() const;
 
 	void transform(double* trans) const;
-
-	/**
-	 * Move values from the intensity array back into the bands array.
-	 */
-	void update();
 
 	/**
 	 * Load the data file and read the header information.

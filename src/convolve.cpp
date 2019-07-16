@@ -143,7 +143,7 @@ BandProp::BandProp(int band, double wl, double fwhm) :
 
 Band::Band(double wl, double value) :
 		m_wl(wl),
-		m_value(value),
+		//m_value(value),
 		m_scale(1),
 		m_shift(0),
 		m_count(0) {
@@ -152,29 +152,12 @@ Band::Band(double wl, double value) :
 Band::Band() : Band(0, 0) {
 }
 
-void Band::setValue(double value) {
-	m_value = value;
-	++m_count;
-}
-
-double Band::value() const {
-	return m_value;
-}
-
 void Band::setShift(double shift) {
 	m_shift = shift;
 }
 
 double Band::shift() const {
 	return m_shift;
-}
-
-double Band::normalizedValue() const {
-	return m_count > 0 ? m_value / m_count : std::numeric_limits<double>::quiet_NaN();
-}
-
-double Band::scaledValue() const {
-	return m_value * m_scale;
 }
 
 void Band::setScale(double scale) {
@@ -217,11 +200,6 @@ size_t Spectrum::inputSize(const std::string& filename, const std::string& delim
 	std::ifstream input(filename);
 	input.seekg(0, std::ios::end);
 	return input.tellg();
-}
-
-void Spectrum::update() {
-	for(size_t i = 0; i < intensities.size(); ++i)
-		bands[i].setValue(intensities[i]);
 }
 
 bool Spectrum::load(const std::string& filename, const std::string& delimiter, size_t memLimit) {
@@ -332,15 +310,8 @@ bool Spectrum::next() {
 		if(m_rasterIdx < m_count) {
 			m_col = m_rasterIdx % m_raster->cols();
 			m_row = m_rasterIdx / m_raster->cols();
-			std::vector<double> values;
-			if(m_raster->mapped(m_col, m_row, values)) {
-				for(size_t i = 0; i < bands.size(); ++i) {
-					bands[i].setValue(values[i]);
-					intensities[i] = values[i];
-				}
-			} else {
+			if(!m_raster->mapped(m_col, m_row, intensities))
 				std::cerr << "Warning: failed to read mapped values at " << m_col << ", " << m_row << "\n";
-			}
 			++m_rasterIdx;
 			return true;
 		} else {
@@ -376,12 +347,8 @@ bool Spectrum::next() {
 			std::string part;
 			for(int c = 0; c < m_firstCol; ++c)
 				std::getline(ss, part, m_delim);
-			while(std::getline(ss, part, m_delim)) {
-				double v = std::strtod(part.c_str(), nullptr);
-				bands[i].setValue(v);
-				intensities[i] = v;
-				++i;
-			}
+			while(std::getline(ss, part, m_delim))
+				intensities[i++] = std::strtod(part.c_str(), nullptr);
 		}
 
 		// Read the next buffer. If it fails, we'll find out on the next call to next.
@@ -403,10 +370,8 @@ void Spectrum::setup(Spectrum& spec) {
 }
 
 void Spectrum::reset() {
-	for(Band& b : bands) {
-		b.setValue(0);
+	for(Band& b : bands)
 		b.reset();
-	}
 }
 
 const std::string& Spectrum::projection() const {
@@ -433,18 +398,20 @@ void Spectrum::writeHeader(std::ostream& out, double minWl, double maxWl, char d
 
 void Spectrum::write(std::ostream& out, double minWl, double maxWl, char delim) {
 	out << date << delim << time;
-	for(const Band& b : bands) {
+	for(size_t i = 0; i < bands.size(); ++i) {
+		const Band& b = bands[i];
 		if(b.wl() >= minWl && b.wl() <= maxWl)
-			out << delim << b.value();
+			out << delim << intensities[i];
 	}
 	out << "\n";
 }
 
 void Spectrum::write(GDALWriter* wtr, double minWl, double maxWl, int col, int row) {
 	std::vector<double> v;
-	for(const Band& b : bands) {
+	for(size_t i = 0; i < bands.size(); ++i) {
+		const Band& b = bands[i];
 		if(b.wl() >= minWl && b.wl() <= maxWl)
-			v.push_back(b.value());
+			v.push_back(intensities[i]);
 	}
 	wtr->write(v, col, row, 1, 1);
 }
@@ -626,7 +593,6 @@ void Convolve::run(ConvolveListener& listener,
 			out.intensities[k.index()] = k.apply(spec.intensities, spec.wavelengths, i);
 			if(!running) break;
 		}
-		out.update();
 
 		if(!header && ftype == FileType::CSV) {
 			// Write the header if this is the first iteration.
