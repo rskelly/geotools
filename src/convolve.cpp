@@ -333,13 +333,14 @@ bool Spectrum::next() {
 			m_col = m_rasterIdx % m_raster->cols();
 			m_row = m_rasterIdx / m_raster->cols();
 			std::vector<double> values;
-			m_raster->mapped(m_col, m_row, values);
-
-			for(size_t i = 0; i < bands.size(); ++i) {
-				bands[i].setValue(values[i]);
-				intensities[i] = values[i];
+			if(m_raster->mapped(m_col, m_row, values)) {
+				for(size_t i = 0; i < bands.size(); ++i) {
+					bands[i].setValue(values[i]);
+					intensities[i] = values[i];
+				}
+			} else {
+				std::cerr << "Warning: failed to read mapped values at " << m_col << ", " << m_row << "\n";
 			}
-
 			++m_rasterIdx;
 			return true;
 		} else {

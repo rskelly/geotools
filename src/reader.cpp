@@ -470,7 +470,7 @@ double GDALReader::mapped(int col, int row, int band) {
 }
 
 bool GDALReader::mapped(int col, int row, std::vector<double>& values) {
-	size_t idx = row * m_cols * m_mappedBands + col * m_mappedBands;
+	size_t idx = (size_t) row * m_cols * m_mappedBands + (size_t) col * m_mappedBands;
 	if(idx + m_mappedBands > m_mappedSize)
 		return false;
 	values.resize(m_mappedBands);
