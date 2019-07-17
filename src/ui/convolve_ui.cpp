@@ -46,13 +46,13 @@ namespace {
 
 	void runner(ConvolveForm* form, Convolve* conv,
 			const std::string* bandDef, const std::string* bandDefDelim,
-			const std::string* spectra, const std::string* spectraDelim,
+			const std::vector<std::string>* spectra, const std::string* spectraDelim,
 			int firstRow, int firstCol, int dateCol, int timeCol,
 			const std::string* output, const std::string* outputDelim, FileType outputType,
 			double inputScale, double tolerance, double bandShift, bool* running) {
 		try {
 			conv->run(*form, *bandDef, *bandDefDelim, *spectra, *spectraDelim, firstRow, firstCol, dateCol, timeCol,
-					*output, *outputDelim, outputType, inputScale, tolerance, bandShift, 0, *running);  // TODO: Mem Limit.
+					*output, *outputDelim, outputType, inputScale, tolerance, bandShift, 0, 1, *running);  // TODO: Mem Limit.
 		} catch(const std::exception& ex) {
 			form->handleException(ex);
 		}
@@ -297,9 +297,11 @@ void ConvolveForm::run() {
 	runState();
 	if(!m_running) {
 		m_running = true;
+		m_spectraList.clear();
+		m_spectraList.push_back(m_spectraFile);
 		m_thread = std::thread(runner, this, m_convolve,
 				&m_bandDefFile, &m_bandDefDelim,
-				&m_spectraFile, &m_spectraDelim,
+				&m_spectraList, &m_spectraDelim,
 				m_firstRow, m_firstCol, m_dateCol, m_timeCol,
 				&m_outputFile, &m_outputDelim, m_outputType,
 				m_inputScale, m_tolerance, m_bandShift, &m_running);

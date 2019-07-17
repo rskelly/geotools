@@ -30,6 +30,7 @@ private:
 	std::string m_bandDefFile;
 	std::string m_bandDefDelim;
 	std::string m_spectraFile;
+	std::vector<std::string> m_spectraList;
 	std::string m_spectraDelim;
 	std::string m_outputFile;
 	std::string m_outputDelim;

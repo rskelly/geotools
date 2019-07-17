@@ -69,7 +69,7 @@ public:
 };
 
 void usage() {
-	std::cerr << "Usage: convolve [[options] <band definition file> <spectra file> <output file>]\n"
+	std::cerr << "Usage: convolve [[options] <band definition file> <output file> <spectra file [spectra file [...]]> ]\n"
 			<< " -t		The threshold -- the gaussian will extend out until it is below this value. (Default 0.0001).\n"
 			<< " -f 	The wavelength shift. Used to counter mis-calibration in the spectrometer. (Default 0).\n"
 			<< " -s		Scale the input. (Default 1.)\n"
@@ -81,9 +81,10 @@ void usage() {
 			<< " -dc 	Date column index (zero-based). (Default -1.)\n"
 			<< " -tc 	Timestamp column index (zero-based). (Default -1.)\n"
 			<< " -ot 	Output file type. 'CSV', 'ENVI' or 'GTiff'. (Default 'CSV'.) \n"
-			<< " -m     The memory limit above which file-backed storage is used. (Default 0.)\n"
+			<< " -m <m> The memory limit above which file-backed storage is used. (Default 0.)\n"
+			<< " -p <p> Run using the given number of threads. The -m argument is multiplied by this number. (Default 1.)\n"
 			<< " -g     Print the expected memory consumption given the input file(s).\n"
-			<< "    Run without arguments to use the gui.\n";
+			<< "     Run without arguments to use the gui.\n";
 }
 
 int main(int argc, char** argv) {
@@ -107,6 +108,7 @@ int main(int argc, char** argv) {
 			int timeCol = -1;
 			bool guess = false;
 			size_t memLimit = 0;
+			int threads = 1;
 
 			for(int i = 1; i < argc; ++i) {
 				std::string arg = argv[i];
@@ -143,6 +145,10 @@ int main(int argc, char** argv) {
 					}
 				} else if(arg == "-m") {
 					memLimit = std::stoull(argv[++i]);
+				} else if(arg == "-p") {
+					threads = std::stoi(argv[++i]);
+					if(threads <= 0)
+						threads = 1;
 				} else if(arg == "-g") {
 					guess = true;
 				} else {
@@ -151,18 +157,21 @@ int main(int argc, char** argv) {
 			}
 
 			std::string bandDef = files[0];
-			std::string spectra = files[1];
-			std::string output = files[2];
+			std::string output = files[1];
+			std::vector<std::string> spectra(std::next(files.begin(), 2), files.end());
 
 			Convolve conv;
 			DummyListener listener;
 			bool running = true;
 
 			if(guess) {
-				std::cout << conv.guess(spectra, specDelim);
+				int m = 0;
+				for(const std::string& f : spectra)
+					m += conv.guess(f, specDelim);
+				std::cout << m << "\n";
 				return 0;
 			} else {
-				conv.run(listener, bandDef, bandDelim, spectra, specDelim, firstRow, firstCol, dateCol, timeCol, output, outputDelim, outputType, inputScale, threshold, shift, memLimit, running);
+				conv.run(listener, bandDef, bandDelim, spectra, specDelim, firstRow, firstCol, dateCol, timeCol, output, outputDelim, outputType, inputScale, threshold, shift, memLimit, threads, running);
 			}
 		}
 	} else {

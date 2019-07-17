@@ -23,43 +23,11 @@ using namespace hlrg::writer;
 namespace {
 
 	/**
-	 * Compute the inverse of the Gaussian: retrieve the x that would give
-	 * the given y. X is returned as an absolute distance from x0.
+	 * Strip carriage returns from the given string. Modifies in place.
 	 *
-	 * @param sigma The standard deviation of the function.
-	 * @param y The value of y for which to find x.
-	 * @param x0 The mean x.
+	 * \param buf A string.
 	 */
-	inline double invGaussian(double sigma, double y, double x0) {
-		return sigma * std::sqrt(-2.0 * std::log(y * sigma * std::sqrt(2.0 * M_PI))) + x0;
-	}
-
-	/**
-	 * Compute the value of the Gaussian function for a given mean (x0) and
-	 * x, given sigma and magnitude 1.
-	 *
-	 * @param sigma The standard deviation of the function.
-	 * @param x The current x.
-	 * @param x0 The mean (expected) x.
-	 */
-	inline double gaussian(double sigma, double x, double x0) {
-		return  1.0 / (sigma * std::sqrt(2.0 * M_PI)) * std::exp(-0.5 * std::pow((x - x0) / sigma, 2.0));
-	}
-
-
-	/*
-	void _stripws(std::string& buf) {
-		size_t j = 0;
-		for(size_t i = 0; i < buf.size(); ++i) {
-			char c = buf[i];
-			if(c != '\n' && c != '\r' && c != ' ')
-				buf[j++] = c;
-		}
-		buf.resize(j);
-	}
-	 */
-
-	void _stripcr(std::string& buf) {
+	void stripcr(std::string& buf) {
 		size_t j = 0;
 		for(size_t i = 0; i < buf.size(); ++i) {
 			char c = buf[i];
@@ -68,7 +36,97 @@ namespace {
 		buf.resize(j);
 	}
 
-}
+	/**
+	 * Binary search tree for locating the Kernel whose mean is nearest
+	 * a given wavelength.
+	 */
+	class BinTree {
+	private:
+		BinTree* left;
+		BinTree* right;
+		const Kernel* kernel;
+
+		/**
+		 * Return the Kernel nearest the given key, be it a or b.
+		 *
+		 * \param key A key.
+		 * \param a A Kernel.
+		 * \param b A Kernel.
+		 * \return The nearest Kernel.
+		 */
+		const Kernel& closer(double key, const Kernel& a, const Kernel& b) {
+			if(std::abs(key - a.wl()) < std::abs(key - b.wl())) {
+				return a;
+			} else {
+				return b;
+			}
+		}
+
+		/**
+		 * Initialize with a (sorted) kernel array.
+		 *
+		 * \param k The sorted Kernel array.
+		 * \param start The start index.
+		 * \param end The ending index.
+		 */
+		void init(const std::vector<Kernel>& k, int start, int end) {
+			int mid = (end + start) / 2;
+			kernel = &k[mid];
+			if(mid > start) {
+				left = new BinTree();
+				left->init(k, start, mid);
+			}
+			if(end > mid + 1) {
+				right = new BinTree();
+				right->init(k, mid + 1, end);
+			}
+		}
+
+	public:
+
+		/**
+		 * Create a BinTree.
+		 */
+		BinTree() :
+			left(nullptr), right(nullptr), kernel(nullptr) {
+		}
+
+		/**
+		 * Initialize with the given (sorted) vector.
+		 *
+		 * \param k A sorted Kernel vector.
+		 */
+		void init(const std::vector<Kernel>& k) {
+			init(k, 0, (int) k.size());
+		}
+
+		/**
+		 * Find the Kernel nearest the given key.
+		 *
+		 * \param key The key.
+		 * \return A reference to the nearest Kernel.
+		 */
+		const Kernel& find(double key) {
+			if(key == kernel->wl()) {
+				return *kernel;
+			} else if(key < kernel->wl()) {
+				return left ? closer(key, *kernel, left->find(key)) : *kernel;
+			} else {
+				return right ? closer(key, *kernel, right->find(key)) : *kernel;
+			}
+		}
+
+		~BinTree() {
+			if(left) delete left;
+			if(right) delete right;
+		}
+
+
+	};
+
+} // anon
+
+
 
 Kernel::Kernel(double wl, double fwhm, int window, int index) :
 	m_wl(wl),
@@ -76,13 +134,19 @@ Kernel::Kernel(double wl, double fwhm, int window, int index) :
 	m_window(window),
 	m_index(index) {
 
+	// Calculate the std. dev from FWHM.
 	double sigma = std::sqrt(fwhm / (2.0 * std::sqrt(2.0 * std::log(2.0))));
-	double norm = 1.0 / (sigma * std::sqrt(2.0 * M_PI));
+
 	int mid = m_window / 2;
 	double sum = 0;
+
 	m_kernel.resize(m_window);
+
+	// Calculate the coefficients and add to sum.
 	for(int i = 0; i < m_window; ++i)
-		sum += (m_kernel[i] = norm * std::exp(-0.5 * std::pow((i - mid) / sigma, 2.0)));
+		sum += (m_kernel[i] = std::exp(-0.5 * std::pow((i - mid) / sigma, 2.0)));
+
+	// Normalize.
 	for(int i = 0; i < m_window; ++i)
 		m_kernel[i] /= sum;
 }
@@ -123,9 +187,8 @@ double Kernel::apply(const std::vector<double>& intensities, const std::vector<d
 	int max = (int) intensities.size();
 	for(int i = 0; i < m_window; ++i) {
 		int j = idx + i - m_window / 2;
-		if(j < 0 || j >= max)
-			continue;
-		out += intensities[j] * m_kernel[i];
+		if(j >= 0 && j < max)
+			out += intensities[j] * m_kernel[i];
 	}
 	return out;
 }
@@ -135,15 +198,13 @@ bool Kernel::operator<(const Kernel& other) const {
 }
 
 
+
 BandProp::BandProp(int band, double wl, double fwhm) :
 		band(band), wl(wl), fwhm(fwhm) {
 }
 
-
-
 Band::Band(double wl, double value) :
 		m_wl(wl),
-		//m_value(value),
 		m_scale(1),
 		m_shift(0),
 		m_count(0) {
@@ -250,7 +311,7 @@ bool Spectrum::loadCSV(const std::string& filename, const std::string& delimiter
 
 	// Run over the rows.
 	while(std::getline(m_input, m_buf)) {
-		_stripcr(m_buf); // Strip carriage return.
+		stripcr(m_buf); // Strip carriage return.
 		if(m_buf.size() == 0) {
 			// If the line contains no information, skip it.
 			continue;
@@ -413,7 +474,8 @@ void Spectrum::write(GDALWriter* wtr, double minWl, double maxWl, int col, int r
 		if(b.wl() >= minWl && b.wl() <= maxWl)
 			v.push_back(intensities[i]);
 	}
-	wtr->write(v, col, row, 1, 1);
+	if(!wtr->write(v, col, row, 1, 1))
+		std::cerr << "Failed to write at " << col << ", " << row << "\n";
 }
 
 void Spectrum::scale(double scale) {
@@ -425,6 +487,8 @@ void Spectrum::shift(double shift) {
 	for(Band& b : bands)
 		b.setShift(shift);
 }
+
+
 
 void BandPropsReader::load(const std::string& filename, const std::string& delimiter) {
 	// Set the initial limits. These will be refined.
@@ -474,144 +538,160 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 	}
 }
 
-class BinTree {
-private:
-	BinTree* left;
-	BinTree* right;
-	const Kernel* kernel;
-	const Kernel& closer(double key, const Kernel& a, const Kernel& b) {
-		if(std::abs(key - a.wl()) < std::abs(key - b.wl())) {
-			return a;
+
+#include <thread>
+#include <atomic>
+
+void doRun(std::list<std::string>* queue, std::mutex* mtx, std::atomic<int>* count, std::atomic<int>* current,
+		const std::string* bandDef, const std::string* bandDefDelim, const std::string* spectraDelim,
+		int spectraFirstRow, int spectraFirstCol, int spectraDateCol, int spectraTimeCol,
+		const std::string* output, const std::string* outputDelim, FileType outputType,
+		double inputScale, double tolerance, double bandShift, size_t memLimit,
+		bool* running, char* finished) {
+
+	while(*running) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		std::string spectra;
+		{
+			std::lock_guard<std::mutex> lk(*mtx);
+			if(queue->empty())
+				break;
+			spectra = queue->front();
+			queue->pop_front();
+		}
+
+		// Load the band properties.
+		BandPropsReader rdr;
+		rdr.load(*bandDef, *bandDefDelim);
+
+		const std::map<int, BandProp>& bands = rdr.bands();
+
+		// Load the input spectrum.
+		Spectrum spec(spectraFirstRow, spectraFirstCol, spectraDateCol, spectraTimeCol);
+		spec.load(spectra, *spectraDelim, memLimit);
+		spec.shift(bandShift);
+		spec.scale(inputScale);
+
+		(*count) += spec.count();
+
+		// Configure the output (convolved) spectrum.
+		Spectrum out;
+		rdr.configureSpectrum(out);
+
+		// Configure the kernels and add to btree.
+		int windowSize = 15;
+		BinTree tree;
+		std::vector<Kernel> kernels;
+		{
+			int i = 0;
+			for(const auto& it : bands)
+				kernels.emplace_back(it.second.wl, it.second.fwhm, windowSize, i++);
+			std::sort(kernels.begin(), kernels.end());
+			tree.init(kernels);
+		}
+
+		// Create the writer.
+		FileType ftype = getFileType(*output);
+		std::unique_ptr<Writer> writer;
+		if(ftype == FileType::CSV) {
+			writer.reset(new CSVWriter(*output)); // wavelengths, bandNames
 		} else {
-			return b;
+			writer.reset(new GDALWriter(*output, FileType::ENVI, spec.raster()->cols(), spec.raster()->rows(), rdr.bands().size())); //, wavelengths, bandNames
+			static_cast<GDALWriter*>(writer.get())->setProjection(spec.projection());
+			double trans[6];
+			spec.transform(trans);
+			static_cast<GDALWriter*>(writer.get())->setTransform(trans);
+		}
+
+		// Run the convolution record-by-record.
+		bool header = false;
+		char delim = (*outputDelim)[0];
+
+		while(*running && spec.next()) {
+
+			// Reset the output
+			out.reset();
+			out.date = spec.date;
+			out.time = spec.time;
+
+			// Apply the kernel to each band.
+			for(size_t i = 0; i < spec.wavelengths.size(); ++i) {
+				const Kernel& k = tree.find(spec.wavelengths[i]);
+				out.intensities[k.index()] = k.apply(spec.intensities, spec.wavelengths, i);
+				if(!*running) break;
+			}
+
+			// Write the header if this is the first iteration.
+			if(!header && ftype == FileType::CSV) {
+				out.writeHeader(static_cast<CSVWriter*>(writer.get())->outstr(), rdr.minWl, rdr.maxWl, delim);
+				header = true;
+			}
+
+			// Write the record.
+			if(ftype == FileType::CSV) {
+				out.write(static_cast<CSVWriter*>(writer.get())->outstr(), rdr.minWl, rdr.maxWl, delim);
+			} else {
+				out.write(static_cast<GDALWriter*>(writer.get()), rdr.minWl, rdr.maxWl, spec.col(), spec.row());
+			}
+
+			// Update progress.
+			(*current)++;
+			if(!*running) break;
 		}
 	}
-
-	void init(const std::vector<Kernel>& k, int start, int end) {
-		int mid = (end + start) / 2;
-		kernel = &k[mid];
-		if(mid > start) {
-			left = new BinTree();
-			left->init(k, start, mid);
-		}
-		if(end > mid + 1) {
-			right = new BinTree();
-			right->init(k, mid + 1, end);
-		}
-	}
-
-public:
-
-	BinTree() :
-		left(nullptr), right(nullptr), kernel(nullptr) {
-	}
-
-	void init(const std::vector<Kernel>& k) {
-		init(k, 0, (int) k.size());
-	}
-
-	const Kernel& find(double key) {
-		if(key == kernel->wl()) {
-			return *kernel;
-		} else if(key < kernel->wl()) {
-			return left ? closer(key, *kernel, left->find(key)) : *kernel;
-		} else {
-			return right ? closer(key, *kernel, right->find(key)) : *kernel;
-		}
-	}
-
-	~BinTree() {
-		if(left) delete left;
-		if(right) delete right;
-	}
-
-
-};
+	*finished = 1;
+}
 
 void Convolve::run(ConvolveListener& listener,
 		const std::string& bandDef, const std::string& bandDefDelim,
-		const std::string& spectra, const std::string& spectraDelim,
+		const std::vector<std::string>& spectra, const std::string& spectraDelim,
 		int spectraFirstRow, int spectraFirstCol,
 		int spectraDateCol, int spectraTimeCol,
 		const std::string& output, const std::string& outputDelim, FileType outputType,
-		double inputScale, double tolerance, double bandShift, size_t memLimit, bool& running) {
+		double inputScale, double tolerance, double bandShift, size_t memLimit, int threads, bool& running) {
 
 	// Notify a listener.
 	listener.started(this);
 
-	// Load the band properties.
-	BandPropsReader rdr;
-	rdr.load(bandDef, bandDefDelim);
+	std::atomic<int> count(0);
+	std::atomic<int> current(0);
+	std::list<std::string> queue;
+	std::mutex mtx;
 
-	const std::map<int, BandProp>& bands = rdr.bands();
+	for(const std::string& f : spectra)
+		queue.push_back(f);
 
-	// Load the spectrum.
-	Spectrum spec(spectraFirstRow, spectraFirstCol, spectraDateCol, spectraTimeCol);
-	spec.load(spectra, spectraDelim, memLimit);
-	spec.shift(bandShift);
-	spec.scale(inputScale);
+	std::vector<std::thread> thr;
+	std::vector<char> finished(threads);
+	std::fill(finished.begin(), finished.end(), 0);
 
-	// Configure the output (convolved) spectrum.
-	Spectrum out;
-	rdr.configureSpectrum(out);
-
-	// Configure the kernels.
-	int windowSize = 15;
-	BinTree tree;
-	std::vector<Kernel> kernels;
-	{
-		int i = 0;
-		for(const auto& it : bands)
-			kernels.emplace_back(it.second.wl, it.second.fwhm, windowSize, i++);
-		std::sort(kernels.begin(), kernels.end());
-		tree.init(kernels);
+	for(int i = 0; i < threads; ++i) {
+		finished[i] = false;
+		thr.emplace_back(doRun, &queue, &mtx, &count, &current,
+				&bandDef, &bandDefDelim, &spectraDelim,
+				spectraFirstRow, spectraFirstCol, spectraDateCol, spectraTimeCol,
+				&output, &outputDelim, outputType, inputScale,
+				tolerance, bandShift, memLimit, &running, (finished.data() + i));
 	}
 
-	FileType ftype = getFileType(output);
-	std::unique_ptr<Writer> writer;
-	if(ftype == FileType::CSV) {
-		writer.reset(new CSVWriter(output)); // wavelengths, bandNames
-	} else {
-		writer.reset(new GDALWriter(output, FileType::ENVI, spec.raster()->cols(), spec.raster()->rows(), rdr.bands().size())); //, wavelengths, bandNames
-		static_cast<GDALWriter*>(writer.get())->setProjection(spec.projection());
-		double trans[6];
-		spec.transform(trans);
-		static_cast<GDALWriter*>(writer.get())->setTransform(trans);
-	}
-
-	// Run the convolution record-by-record.
-	size_t complete = 0, count = spec.count(); // Status counters.
-	bool header = false;
-	char delim = outputDelim[0];
-
-	while(running && spec.next()) {
-		out.reset();
-		out.date = spec.date;
-		out.time = spec.time;
-		for(size_t i = 0; i < spec.wavelengths.size(); ++i) {
-			const Kernel& k = tree.find(spec.wavelengths[i]);
-			out.intensities[k.index()] = k.apply(spec.intensities, spec.wavelengths, i);
-			if(!running) break;
+	while(running) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		int n = 0;
+		for(int i = 0; i < threads; ++i) {
+			if(!finished[i])
+				++n;
 		}
-
-		if(!header && ftype == FileType::CSV) {
-			// Write the header if this is the first iteration.
-			out.writeHeader(static_cast<CSVWriter*>(writer.get())->outstr(), rdr.minWl, rdr.maxWl, delim);
-			header = true;
-		}
-
-		// Write the record.
-		if(ftype == FileType::CSV) {
-			out.write(static_cast<CSVWriter*>(writer.get())->outstr(), rdr.minWl, rdr.maxWl, delim);
-		} else {
-			out.write(static_cast<GDALWriter*>(writer.get()), rdr.minWl, rdr.maxWl, spec.col(), spec.row());
-		}
-
-		// Update progress.
-		m_progress = (double) complete++ / count;
+		m_progress = count == 0 ? 0 : ((float) current / count);
 		listener.update(this);
-		if(!running) break;
+		if(!n)
+			break;
 	}
+
+	for(int i = 0; i < threads; ++i) {
+		if(thr[i].joinable())
+			thr[i].join();
+	}
+
 	// Notify listener of completion.
 	listener.finished(this);
 }

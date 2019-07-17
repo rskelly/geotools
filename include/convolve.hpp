@@ -446,14 +446,16 @@ public:
 	 * \param inputScale Scale every input spectral value by this much.
 	 * \param tolerance A value that dictates how wide the Gaussian will be by providing a minimum threshold for the y-value.
 	 * \param bandShift If given and non-zero, will cause the input band designations to be shifted by the given amount.
+	 * \param memLimit The amount of memory that will trigger the use of file-backed storaged.
+	 * \param threads The number of threads -- memLimit must be multiplied by this.
 	 * \param running A reference to a boolean that is true so long as the processor should keep running.
 	 */
 	void run(ConvolveListener& listener,
 			const std::string& bandDef, const std::string& bandDefDelim,
-			const std::string& spectra, const std::string& spectraDelim,
+			const std::vector<std::string>& spectra, const std::string& spectraDelim,
 			int spectraFirstRow, int spectraFirstCol, int spectraDateCol, int spectraTimeCol,
 			const std::string& output, const std::string& outputDelim, FileType outputType,
-			double inputScale, double tolerance, double bandShift, size_t memLimit, bool& running);
+			double inputScale, double tolerance, double bandShift, size_t memLimit, int threads, bool& running);
 
 	/**
 	 * Return a guess of the amount of memory needed to process the input file.
