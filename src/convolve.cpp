@@ -17,6 +17,12 @@
 #include "convolve.hpp"
 #include "writer.hpp"
 
+#ifdef _WIN32
+	const char pathsep = '\\';
+#else
+	const char pathsep = '/';
+#endif
+
 using namespace hlrg::convolve;
 using namespace hlrg::writer;
 
@@ -124,6 +130,47 @@ namespace {
 
 	};
 
+	std::string basename(const std::string& path) {
+		std::string _p = path;
+
+		while(_p.size() > 0 && _p.back() == pathsep)
+			_p = _p.substr(0, _p.size() - 1);
+
+		if(_p.empty())
+			return _p;
+
+		size_t a = _p.find_last_of(pathsep);
+		size_t b = _p.find_last_of('.');
+		if(a == std::string::npos)
+			a = 0;
+		if(b < a)
+			b = std::string::npos;
+		return _p.substr(a + 1, b - a - 1);
+	}
+
+	std::string extension(const std::string& path) {
+		size_t pos = path.find_last_of('.');
+		if(pos < std::string::npos)
+			return path.substr(pos, std::string::npos);
+		return path;
+	}
+
+	std::string join(const std::string& a, const std::string& b) {
+		std::string _a, _b;
+		for(size_t i = a.size() - 1; i < std::string::npos; --i) {
+			if(a[i] != pathsep) {
+				_a = a.substr(0, i + 1);
+				break;
+			}
+		}
+		for(size_t i = 0; i < b.size(); ++i) {
+			if(b[i] != pathsep) {
+				_b = b.substr(i);
+				break;
+			}
+		}
+		return _a + pathsep + _b;
+	}
 } // anon
 
 
@@ -590,13 +637,17 @@ void doRun(std::list<std::string>* queue, std::mutex* mtx, std::atomic<int>* cou
 			tree.init(kernels);
 		}
 
+		std::string ext = extension(spectra);
+		std::string base = basename(spectra);
+		std::string outfile = join(*output, base + "_conv" + ext);
+
 		// Create the writer.
-		FileType ftype = getFileType(*output);
+		FileType ftype = getFileType(outfile);
 		std::unique_ptr<Writer> writer;
 		if(ftype == FileType::CSV) {
-			writer.reset(new CSVWriter(*output)); // wavelengths, bandNames
+			writer.reset(new CSVWriter(outfile)); // wavelengths, bandNames
 		} else {
-			writer.reset(new GDALWriter(*output, FileType::ENVI, spec.raster()->cols(), spec.raster()->rows(), rdr.bands().size())); //, wavelengths, bandNames
+			writer.reset(new GDALWriter(outfile, FileType::ENVI, spec.raster()->cols(), spec.raster()->rows(), rdr.bands().size())); //, wavelengths, bandNames
 			static_cast<GDALWriter*>(writer.get())->setProjection(spec.projection());
 			double trans[6];
 			spec.transform(trans);

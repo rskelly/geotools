@@ -69,7 +69,7 @@ public:
 };
 
 void usage() {
-	std::cerr << "Usage: convolve [[options] <band definition file> <output file> <spectra file [spectra file [...]]> ]\n"
+	std::cerr << "Usage: convolve [[options] <band definition file> <output folder> <spectra file [spectra file [...]]> ]\n"
 			<< " -t		The threshold -- the gaussian will extend out until it is below this value. (Default 0.0001).\n"
 			<< " -f 	The wavelength shift. Used to counter mis-calibration in the spectrometer. (Default 0).\n"
 			<< " -s		Scale the input. (Default 1.)\n"
