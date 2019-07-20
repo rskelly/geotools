@@ -11,12 +11,13 @@
 #include <list>
 #include <vector>
 
+#include "util.hpp"
 #include "reader.hpp"
 #include "plotter.hpp"
-#include "util.hpp"
 
-using namespace hlrg::util;
+using namespace geo::util;
 using namespace hlrg::reader;
+using namespace hlrg::plot;
 
 namespace hlrg {
 namespace contrem {

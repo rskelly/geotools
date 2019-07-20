@@ -21,11 +21,12 @@
 #include <ogrsf_frmts.h>
 
 #include "reader.hpp"
+
 #include "util.hpp"
 
 using namespace hlrg::reader;
 using namespace hlrg::ds;
-using namespace hlrg::util;
+using namespace geo::util;
 
 namespace {
 
@@ -148,7 +149,7 @@ PointSetReader::PointSetReader(const std::string& filename, const std::string& l
 	if(!lyr)
 		throw std::runtime_error("No layer named " + layer + " on dataset.");
 
-	m_tree = new geo::ds::KDTree<hlrg::reader::Point>(2);
+	m_tree = new geo::ds::kdtree<hlrg::reader::Point>(2);
 
 	int fieldIdx = -1; //  For ID field.
 	int yIdx = -1, xIdx = -1;
@@ -277,14 +278,14 @@ void PointSetReader::toGridSpace(GDALReader* gr) {
 int PointSetReader::search(double x, double y, double radius, std::vector<hlrg::reader::Point*>& pts) {
 
 	std::vector<double> dist;
-	return m_tree->radSearch(hlrg::reader::Point(x, y), radius, 0, std::back_inserter(pts), std::back_inserter(dist));
+	return m_tree->search(hlrg::reader::Point(x, y), radius, 0, std::back_inserter(pts), std::back_inserter(dist));
 }
 
 bool PointSetReader::sampleNear(hlrg::reader::Point& pt, double radius) {
 
 	std::vector<double> dist;
 	std::vector<hlrg::reader::Point*> pts;
-	if(m_tree->radSearch(pt, radius, 0, std::back_inserter(pts), std::back_inserter(dist)) > 0) {
+	if(m_tree->search(pt, radius, 0, std::back_inserter(pts), std::back_inserter(dist)) > 0) {
 		size_t minIdx = 0;
 		double minD = radius * 3;
 		for(size_t i = 0; i < dist.size(); ++i) {

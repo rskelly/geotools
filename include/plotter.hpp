@@ -22,7 +22,7 @@
 #include "cereal/types/tuple.hpp"
 
 namespace hlrg {
-namespace util {
+namespace plot {
 
 class PlotJob {
 public:

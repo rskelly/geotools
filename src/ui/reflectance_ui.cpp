@@ -15,11 +15,12 @@
 #include <QtWidgets/QMessageBox>
 
 #include "reflectance_ui.hpp"
-#include "reflectance.hpp"
+
 #include "util.hpp"
+#include "reflectance.hpp"
 
 using namespace hlrg::reflectance;
-using namespace hlrg::util;
+using namespace geo::util;
 
 namespace {
 

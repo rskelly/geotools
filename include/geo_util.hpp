@@ -5,8 +5,8 @@
  *      Author: rob
  */
 
-#ifndef INCLUDE_UTIL_HPP_
-#define INCLUDE_UTIL_HPP_
+#ifndef INCLUDE_GEO_UTIL_HPP_
+#define INCLUDE_GEO_UTIL_HPP_
 
 #include <array>
 #include <cstring>
@@ -213,4 +213,4 @@ void convertBuffer(GDALDataType type, std::vector<char>& rawBuf, std::vector<T>&
 } // util
 } // hlrg
 
-#endif /* INCLUDE_UTIL_HPP_ */
+#endif /* INCLUDE_GEO_UTIL_HPP_ */

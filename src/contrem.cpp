@@ -18,14 +18,16 @@
 
 #include <geos_c.h>
 
-#include "util.hpp"
 #include "contrem.hpp"
+
+#include "util.hpp"
 #include "reader.hpp"
 #include "writer.hpp"
 
 using namespace hlrg::contrem;
 using namespace hlrg::reader;
 using namespace hlrg::writer;
+using namespace geo::util;
 
 namespace {
 

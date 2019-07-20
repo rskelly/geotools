@@ -15,7 +15,6 @@
 #include "convolve_ui.hpp"
 
 using namespace hlrg::convolve;
-using namespace hlrg::util;
 
 namespace {
 

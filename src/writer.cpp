@@ -23,7 +23,7 @@
 #include "stats.hpp"
 
 using namespace hlrg::writer;
-using namespace hlrg::util;
+using namespace geo::util;
 
 
 GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int rows, int bands,

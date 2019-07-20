@@ -13,12 +13,12 @@
 #include <QtWidgets/QDialog>
 #include <QtCore/QSettings>
 
+#include "util.hpp"
 #include "ui_convolve.h"
 #include "convolve.hpp"
-#include "util.hpp"
 
 using namespace hlrg::convolve;
-using namespace hlrg::util;
+using namespace geo::util;
 
 namespace hlrg {
 namespace convolve {

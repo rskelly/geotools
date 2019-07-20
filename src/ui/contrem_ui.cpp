@@ -13,7 +13,8 @@
 #include <QtWidgets/QMessageBox>
 
 #include "contrem_ui.hpp"
-#include "util.hpp"
+
+#include "../../include/geo_util.hpp"
 #include "contrem.hpp"
 
 using namespace hlrg::contrem;

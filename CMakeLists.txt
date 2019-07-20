@@ -1,11 +1,23 @@
 cmake_minimum_required(VERSION 3.1)
 
+project (geotools)
+
 enable_language(C)
 enable_language(CXX)
 set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_EXTENSIONS OFF)
+set (CMAKE_CXX_FLAGS "-Wall -Wextra") # -D_GLIBCXX_PARALLEL")
+set (CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+set (CMAKE_CXX_FLAGS_RELEASE "-O3")
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
+set (CMAKE_INCLUDE_DIRECTORIES_BEFORE ON)
+
+set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set (CMAKE_INSTALL_RPATH "/usr/local/lib")
+set (CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 if(APPLE)
 	# This does not use GCC.
@@ -13,13 +25,6 @@ if(APPLE)
 else()
 	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fopenmp -Wno-unknown-pragmas -Wall -D_GLIBCXX_PARALLEL")
 endif()
-
-set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set (CMAKE_INSTALL_RPATH "/usr/local/lib")
-set (CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-set (CMAKE_CXX_COMPILER_LAUNCHER ccache)
 
 set (CMAKE_AUTOUIC ON)
 set (CMAKE_AUTOMOC ON)
@@ -37,40 +42,46 @@ find_package (PythonLibs 2.7)
 
 find_library (GEOS_LIBRARY geos_c)
 
-project (contrem)
+add_subdirectory (libgeo)
 
 # Configure directories###################################################################################
 
-include_directories(BEFORE SYSTEM ann/include ./include /usr/local/include /usr/include 
+include_directories(BEFORE SYSTEM ./libgeo/include ./libgeo/ann/include ./include /usr/local/include /usr/include 
 	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS}
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}) 
+
 link_directories(. /usr/local/lib /usr/lib)
 
 # Build support libraries ################################################################################
 
-set (geoannsrc ann/src/ANN.cpp ann/src/brute.cpp 
-	ann/src/kd_tree.cpp ann/src/kd_util.cpp 
-	ann/src/kd_split.cpp ann/src/kd_dump.cpp ann/src/kd_search.cpp ann/src/kd_pr_search.cpp 
-	ann/src/kd_fix_rad_search.cpp ann/src/bd_tree.cpp ann/src/bd_search.cpp ann/src/bd_pr_search.cpp 
-	ann/src/bd_fix_rad_search.cpp ann/src/perf.cpp)
-add_library (geoannobj OBJECT ${geoannsrc})
-set_target_properties (geoannobj PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_compile_definitions (geoannobj PRIVATE DLL_EXPORTS=1)
-add_library (geotools_ann SHARED $<TARGET_OBJECTS:geoannobj>)
+#add_library (geotools_util SHARED src/geo_util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp src/plotter.cpp)
+#target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES} geoann)
 
-add_library (geotools_util SHARED src/util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp src/plotter.cpp)
-target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES} geotools_ann)
+add_library (geotools_plot SHARED src/plotter.cpp)
+target_link_libraries(geotools_plot ${PYTHON_LIBRARIES})
+
+add_library (geotools_stats SHARED src/stats.cpp)
+target_link_libraries(geotools_stats)
+
+add_library (geotools_reader SHARED src/reader.cpp)
+target_link_libraries(geotools_reader geoann ${GDAL_LIBRARY})
+
+add_library (geotools_writer SHARED src/writer.cpp)
+target_link_libraries(geotools_writer geotools_stats ${GDAL_LIBRARY})
+
+add_library (geotools_raster SHARED src/raster.cpp)
+target_link_libraries(geotools_raster ${GDAL_LIBRARY})
 
 add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
 target_include_directories(contrem PUBLIC contrem_autogen/include)
-target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geotools_util geotools_ann)
+target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geoutil geoann geotools_plot geotools_reader geotools_writer)
 
 add_executable (convolve src/convolve_app.cpp src/convolve.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
-target_link_libraries (convolve Qt5::Widgets geotools_util)
+target_link_libraries (convolve Qt5::Widgets geoutil geotools_reader geotools_writer)
 
 add_executable (reflectance src/reflectance.cpp src/ui/reflectance_ui.cpp)
-target_link_libraries (reflectance Qt5::Widgets geotools_util)
+target_link_libraries (reflectance Qt5::Widgets geoutil geotools_reader geotools_raster)
 
 add_executable (edgereplace src/edgereplace.cpp)
 
@@ -79,4 +90,4 @@ add_executable(boresight src/boresight.cpp)
 
 # Install ################################################################################################
 
-install(TARGETS convolve contrem geotools_ann geotools_util reflectance RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS convolve contrem reflectance RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 

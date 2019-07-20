@@ -12,7 +12,7 @@
 
 #include "plotter.hpp"
 
-using namespace hlrg::util;
+using namespace hlrg::plot;
 
 namespace plt = matplotlibcpp;
 

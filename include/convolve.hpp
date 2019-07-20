@@ -16,7 +16,7 @@
 #include "reader.hpp"
 #include "writer.hpp"
 
-using namespace hlrg::util;
+using namespace geo::util;
 using namespace hlrg::reader;
 using namespace hlrg::writer;
 

@@ -17,8 +17,8 @@
 #include <gdal_priv.h>
 
 #include "bintree.hpp"
-#include "util.hpp"
 #include "ds/kdtree.hpp"
+#include "util.hpp"
 
 namespace hlrg {
 namespace reader {
@@ -59,7 +59,7 @@ public:
 	 *
 	 * \return The FileType represented by this reader.
 	 */
-	hlrg::util::FileType fileType() const;
+	geo::util::FileType fileType() const;
 
 	/**
 	 * Fill the buffer with the next available row of data. Data will be stored sequentially by band,
@@ -227,7 +227,7 @@ private:
 	size_t m_mappedMinBand;		///<! The first mapped band (1-based).
 	double* m_mapped;			///<! The pointer to mapped memory for remapping an interleaved raster to a list of spectra.
 	int m_mappedBands;			///<! The number of bands mapped into memory.
-	std::unique_ptr<hlrg::util::TmpFile> m_mappedFile;
+	std::unique_ptr<geo::util::TmpFile> m_mappedFile;
 	double m_trans[6];
 
 	std::string m_projection;
@@ -335,7 +335,7 @@ public:
  */
 class PointSetReader {
 private:
-	geo::ds::KDTree<hlrg::reader::Point>* m_tree;
+	geo::ds::kdtree<hlrg::reader::Point>* m_tree;
 
 public:
 	PointSetReader(const std::string& filename, const std::string& layer, const std::string& idField);
