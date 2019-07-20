@@ -36,7 +36,6 @@ build
 /.settings
 /data/
 /.pydevproject
-/run/output/
-/run/mosaic/
+/run
 .DS_Store
 __pycache__
