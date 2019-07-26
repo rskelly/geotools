@@ -69,9 +69,6 @@ target_link_libraries(geotools_reader geoann ${GDAL_LIBRARY})
 add_library (geotools_writer SHARED src/writer.cpp)
 target_link_libraries(geotools_writer geotools_stats ${GDAL_LIBRARY})
 
-add_library (geotools_raster SHARED src/raster.cpp)
-target_link_libraries(geotools_raster ${GDAL_LIBRARY})
-
 add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
 target_include_directories(contrem PUBLIC contrem_autogen/include)
 target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geoutil geoann geotools_plot geotools_reader geotools_writer)
