@@ -23,6 +23,7 @@
 #include "plotter.hpp"
 
 using namespace hlrg;
+using namespace geo::plot;
 
 class ContremApp : public QApplication {
 public:
