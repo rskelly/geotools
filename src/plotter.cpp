@@ -12,19 +12,22 @@
 
 #include "plotter.hpp"
 
-using namespace hlrg::plot;
+using namespace geo::plot;
 
 namespace plt = matplotlibcpp;
 
 namespace {
 
+	// Pipe buffer size.
 	constexpr size_t BUFFER_SIZE = 1024 * 1024;
 
+	// The singleton instance.
 	Plotter* pinst = nullptr;
 
 }
 
 PlotJob::PlotJob() {}
+
 PlotJob::PlotJob(const std::string& filename, const std::string& title,
 		const std::vector<std::tuple<std::string, std::vector<double>, std::vector<double>>>& items) :
 	filename(filename), title(title), items(items) {
