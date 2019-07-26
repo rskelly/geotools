@@ -16,8 +16,8 @@
 #include "plotter.hpp"
 
 using namespace geo::util;
+using namespace geo::plot;
 using namespace hlrg::reader;
-using namespace hlrg::plot;
 
 namespace hlrg {
 namespace contrem {

@@ -18,7 +18,7 @@
 #include <QtWidgets/QMessageBox>
 
 #include "reader.hpp"
-#include "raster.hpp"
+#include "grid.hpp"
 #include "ui/reflectance_ui.hpp"
 
 using namespace hlrg::reflectance;
@@ -30,7 +30,7 @@ namespace {
 	private:
 		int lastP;
 	public:
-		void started(Reflectance* r) {
+		void started(Reflectance*) {
 			lastP = -1;
 			std::cout << "Running ";
 		}
@@ -46,50 +46,20 @@ namespace {
 			}
 		}
 
-		void stopped(Reflectance* r) {
+		void stopped(Reflectance*) {
 			std::cout << " Stopped.\n";
 		}
 
-		void finished(Reflectance* r) {
+		void finished(Reflectance*) {
 			std::cout << " Done.\n";
 		}
 
-		void exception(Reflectance* r, const std::exception& ex) {
+		void exception(Reflectance*, const std::exception& ex) {
 			std::cerr << ex.what() << "\n";
 		}
 
 		~DummyListener() {}
 	};
-
-	/**
-	 * Average the values in the given vector.
-	 */
-	double _avg(std::vector<uint16_t>& buf) {
-		uint32_t sum = 0;
-		for(uint16_t v : buf)
-			sum += v;
-		return (double) sum / buf.size();
-	}
-
-	/**
-	 * Average the values in the given vector.
-	 */
-	double _avg(std::vector<double>& buf) {
-		double sum = 0;
-		for(double v : buf)
-			sum += v;
-		return (double) sum / buf.size();
-	}
-
-	std::string _ts2str(long ts) {
-		ts /= 1000;
-		char buf[32];
-		struct tm* dt = localtime(&ts);
-		strftime(buf, 32, "%Y/%m/%d %H:%M:%S", dt);
-		std::stringstream ss;
-		ss << buf << "." << ts % 1000;
-		return ss.str();
-	}
 
 }
 
@@ -141,11 +111,18 @@ void Reflectance::run(ReflectanceListener& listener,
 	listener.update(this);
 
 	// Set up rasters.
-	Raster raster(rawRad);
-	Raster output(reflOut, raster.cols(), raster.rows(), raster.bands(), 0, Float32, &raster);
+	Grid<float> raster(rawRad);
+
+	GridProps oprops(raster.props());
+	oprops.setWritable(true);
+	Grid<float> output(reflOut, oprops);
+
+	int cols = oprops.cols();
+	int rows = oprops.rows();
+	int bands = oprops.bands();
 
 	// Add rows to the number of steps.
-	m_numSteps += raster.rows();
+	m_numSteps += rows;
 	++m_step;
 	listener.update(this);
 
@@ -162,7 +139,7 @@ void Reflectance::run(ReflectanceListener& listener,
 	long gpsTime, actualGpsTime0 = 0, actualGpsTime1 = 0;
 	int frame0 = 0, frame1 = 0;
 	std::vector<float> buffer;
-	std::vector<float> refl(raster.cols() * raster.bands());
+	std::vector<float> refl(cols * bands);
 
 	// Get the first frame index.
 	int firstIdx;
@@ -175,9 +152,6 @@ void Reflectance::run(ReflectanceListener& listener,
 
 	++m_step;
 	listener.update(this);
-
-	// Set up a writer to log the output for checking.
-	//std::ofstream out("./tmp2.out", std::ios::out);
 
 	// Get the first row from the flame data.
 	if(running && fr.next(frow0)) {
@@ -216,21 +190,23 @@ void Reflectance::run(ReflectanceListener& listener,
 					FlameRow& frow = row < half ? frow0 : frow1;
 
 					// Read the pixels.
-					raster.get(buffer, row - firstIdx);
+					for(int b = 1; b <= bands; ++b)
+						raster.getRow(row - firstIdx, b, (buffer.data() + (b - 1) * cols));
 
 					// Print a selection of bands from the middle of the row.
 					//out << actualGpsTime1 << "," << buffer[bufCol] << "," << frow.bands[flameCol] << ", " << _ts2str(actualGpsTime1) << "\n";
 
 					// For every band and every cell int he buffer, compute the reflectance using the irradiance values.
-					for(int b = 0; running && b < raster.bands(); ++b) {
-						for(int c = 0; running && c < raster.cols(); ++c) {
-							size_t i = b * raster.cols() + c;
+					for(int b = 0; running && b < bands; ++b) {
+						for(int c = 0; running && c < cols; ++c) {
+							size_t i = b * cols + c;
 							refl[i] = buffer[i] / frow.bands[b];
 						}
 					}
 
 					// Write to the new raster
-					output.write(refl, row - firstIdx);
+					for(int b = 1; b <= bands; ++b)
+						raster.setRow(row - firstIdx, b, (buffer.data() + (b - 1) * cols));
 
 					++m_step;
 					listener.update(this);

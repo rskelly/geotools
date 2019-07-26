@@ -81,7 +81,7 @@ target_include_directories(convolve PUBLIC convolve_autogen/include)
 target_link_libraries (convolve Qt5::Widgets geoutil geotools_reader geotools_writer)
 
 add_executable (reflectance src/reflectance.cpp src/ui/reflectance_ui.cpp)
-target_link_libraries (reflectance Qt5::Widgets geoutil geotools_reader geotools_raster)
+target_link_libraries (reflectance Qt5::Widgets geoutil geogrid geotools_reader ${GEOS_LIBRARY})
 
 add_executable (edgereplace src/edgereplace.cpp)
 
