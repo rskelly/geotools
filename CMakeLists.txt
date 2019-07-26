@@ -84,6 +84,18 @@ add_executable (edgereplace src/edgereplace.cpp)
 
 add_executable(boresight src/boresight.cpp)
 
+add_executable (pc2grid src/pc2grid.cpp)
+target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY})
+
+add_executable (pcnorm src/pcnorm.cpp)
+target_link_libraries (pcnorm ${LIBLAS_LIBRARY})
+
+add_executable (sbet2csv src/sbet2csv.cpp)
+target_link_libraries (sbet2csv geoutil ${PROJ_LIBRARY} ${GEOS_LIBRARY})
+
+#add_executable (polygonize src/polygonize.cpp)
+#target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
+
 
 # Install ################################################################################################
 
