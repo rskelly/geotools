@@ -358,9 +358,13 @@ void GDALReader::remap() {
 }
 
 void GDALReader::remap(double minWl, double maxWl) {
-	int iminWl = (int) std::round(minWl * WL_SCALE);
-	int imaxWl = (int) std::round(maxWl * WL_SCALE);
-	remap(m_bandMap[iminWl], m_bandMap[imaxWl]);
+	int iminWl = (int) std::floor(minWl * WL_SCALE);
+	int imaxWl = (int) std::ceil(maxWl * WL_SCALE);
+	int a = m_bandMap.lower_bound(iminWl)->second;
+	if(a > 1)
+		a = std::prev(m_bandMap.lower_bound(iminWl))->second;
+	int b = m_bandMap.upper_bound(imaxWl)->second;
+	remap(a, b);
 }
 
 template <class T>
