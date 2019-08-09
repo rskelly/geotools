@@ -104,7 +104,7 @@ namespace {
 		case FileType::SHP:
 		case FileType::ROI:
 		default:
-			throw std::runtime_error("Missing file or invalid file type: " + contrem.spectra);
+			std::cerr << "Missing file or invalid file type: " + contrem.spectra;
 		}
 		return map;
 	}
