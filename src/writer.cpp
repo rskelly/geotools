@@ -101,7 +101,6 @@ void GDALWriter::fill(double v) {
 		m_ds->GetRasterBand(i)->Fill(v);
 }
 
-
 void GDALWriter::fill(int v) {
 	fill((double) v);
 }

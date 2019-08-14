@@ -295,6 +295,7 @@ void ConvolveForm::stopState() {
 void ConvolveForm::run() {
 	runState();
 	if(!m_running) {
+		std::cout << "Starting...\n";
 		m_running = true;
 		m_spectraList.clear();
 		m_spectraList.push_back(m_spectraFile);
@@ -305,8 +306,10 @@ void ConvolveForm::run() {
 				&m_outputFile, &m_outputDelim, m_outputType,
 				m_inputScale, m_tolerance, m_bandShift, &m_running);
 	}
-	if(!m_thread.joinable())
+	if(!m_thread.joinable()) {
+		std::cout << "Failed to start.\n";
 		stopState();
+	}
 }
 
 bool _failure = false;

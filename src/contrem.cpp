@@ -272,6 +272,10 @@ namespace {
 		std::vector<GEOSGeometry*> coords;
 		for(const inpoint& pt : in) {
 			seq = GEOSCoordSeq_create(1, 2);
+			if(!seq) {
+				std::cerr << "Failed to create sequence.\n";
+				continue;
+			}
 			GEOSCoordSeq_setX(seq, 0, pt.w);
 			GEOSCoordSeq_setY(seq, 0, pt.ss);
 			coords.push_back(GEOSGeom_createPoint(seq));
@@ -317,7 +321,6 @@ namespace {
 		int step;							///<! The current completed step.
 
 	public:
-		Plotter* plotter;
 		Contrem* contrem;
 		std::list<input> inqueue;
 		std::list<output> outqueue;
@@ -333,6 +336,9 @@ namespace {
 		int cols;
 		int rows;
 		int bands;
+
+		std::unique_ptr<PointSetReader> samples;
+		bool hasSamples;
 
 		std::vector<double> wavelengths;
 		std::vector<std::string> bandNames;
@@ -400,11 +406,8 @@ namespace {
 	 */
 	void processQueue(QConfig* config) {
 
-		initGEOS(0, 0);
-
 		input in;
 		while(config->contrem->running) {
-			std::this_thread::yield();
 			{
 				std::unique_lock<std::mutex> lk(config->inmtx);
 				// If the input is empty or the output is too large, pause.
@@ -465,8 +468,10 @@ namespace {
 				}
 			}
 
-			if(out.data.size() < 2)
-				throw std::runtime_error("The list of input points is too small.");
+			if(out.data.size() < 2) {
+				std::cerr << "The list of input points is too small.\n";
+				continue;
+			}
 
 			if(!config->contrem->running)
 				break;
@@ -491,8 +496,6 @@ namespace {
 			config->readcv.notify_one();
 
 		}
-
-		finishGEOS();
 
 	}
 
@@ -528,15 +531,18 @@ namespace {
 
 		// Remove the extension if there is one.
 		outfile = outfile.substr(0, outfile.find_last_of("."));
+		std::cout << "Outfile without extension: " << outfile << "\n";
 		std::string outdir = outfile.substr(0, outfile.find_last_of("/"));
+		std::cout << "Output directory: " << outdir << "\n";
 		std::string plotdir = outdir + "/hull_img";
+		std::cout << "Plot directory: " << plotdir << "\n";
 
 		if(isfile(outdir))
 			throw std::runtime_error("The output directory is an extant file.");
 		if(!isdir(outdir) && !makedir(outdir))
-			throw std::runtime_error("Failed to create output directory.");
+			throw std::runtime_error("Failed to create output directory: " + outdir);
 		if(!isdir(plotdir) && !makedir(plotdir))
-			throw std::runtime_error("Failed to create plot directory.");
+			throw std::runtime_error("Failed to create plot directory: " + plotdir);
 
 		if(!config->contrem->running)
 			return;
@@ -577,16 +583,6 @@ namespace {
 		std::fill(maxima.begin(), maxima.end(), 0);
 		std::fill(valid.begin(), valid.end(), 0);
 
-		// If there's a sample points file and a raster reader, we can use the sample points.
-		std::unique_ptr<PointSetReader> samples;
-		bool hasSamples = false;
-		if(!config->contrem->samplePoints.empty() && config->contrem->grdr) {
-			samples.reset(new PointSetReader(config->contrem->samplePoints,
-					config->contrem->samplePointsLayer, config->contrem->samplePointsIDField));
-			samples->toGridSpace(config->contrem->grdr);
-			hasSamples = true;
-		}
-
 		// Keeps track of the number of unique completed items for progress tracking.
 		int count = 0;
 
@@ -622,11 +618,11 @@ namespace {
 			if(!config->contrem->running)
 				break;
 
-			if(hasSamples) {
+			if(config->hasSamples) {
 				hlrg::reader::Point pt;
 				pt.c(out.c);
 				pt.r(out.r);
-				if(samples->sampleNear(pt, 0.5)) {
+				if(config->samples->sampleNear(pt, 0.5)) {
 
 					// If appropriate plot the normalized spectrum.
 					if(config->contrem->plotNorm){
@@ -684,7 +680,25 @@ namespace {
 
 }
 
+Contrem::Contrem() :
+		m_listener(nullptr),
+		m_step(0), m_steps(0),
+		outputType(FileType::Unknown),
+		spectraType(FileType::Unknown),
+		minWl(0), maxWl(0),
+		wlMinCol(0), wlMaxCol(0),
+		wlHeaderRows(0), wlTranspose(0),
+		wlIDCol(0),
+		plotOrig(false), plotNorm(false),
+		onlySamples(false),
+		normMethod(NormMethod::ConvexHull),
+		threads(1),
+		running(false),
+		grdr(nullptr) {}
+
 void Contrem::run(ContremListener* listener) {
+
+	std::cout << "Run.\n";
 
 	if(!listener)
 		throw std::runtime_error("A listener is required.");
@@ -695,12 +709,16 @@ void Contrem::run(ContremListener* listener) {
 
 	initSteps(1, 100);
 
+	std::cout << "Remapping...\n";
+
 	std::unique_ptr<Reader> reader = getReader(spectra, wlTranspose, wlHeaderRows, wlMinCol, wlMaxCol, wlIDCol);
 	reader->setBandRange(minWl, maxWl);
 	if(reader->fileType() != FileType::CSV) {
 		grdr = static_cast<GDALReader*>(reader.get());
 		grdr->remap(minWl, maxWl);
 	}
+
+	std::cout << "Remapped.\n";
 
 	config.contrem = this;
 	config.cols = reader->cols();
@@ -721,6 +739,8 @@ void Contrem::run(ContremListener* listener) {
 	std::vector<std::string> wavelengthMeta;
 	for(double w : config.wavelengths)
 		wavelengthMeta.push_back(std::to_string(w));
+
+	initGEOS(0, 0);
 
 	// Start the processing threads.
 	std::list<std::thread> t0;
@@ -758,7 +778,7 @@ void Contrem::run(ContremListener* listener) {
 
 	// Determine the number of steps for status-keeping.
 	{
-		int steps;
+		int steps = 0;
 		switch(getFileType(spectra)) {
 		case FileType::CSV:
 			steps = reader->rows();
@@ -780,6 +800,13 @@ void Contrem::run(ContremListener* listener) {
 		initSteps(1, steps * 3 + 2);
 	}
 
+	// If there's a sample points file and a raster reader, we can use the sample points.
+	config.hasSamples = false;
+	if(!samplePoints.empty() && static_cast<GDALReader*>(reader.get())) {
+		config.samples.reset(new PointSetReader(samplePoints, samplePointsLayer, samplePointsIDField));
+		config.samples->toGridSpace(static_cast<GDALReader*>(reader.get()));
+		config.hasSamples = true;
+	}
 
 	// A buffer for input data. Stores a row from a raster, or a single "pixel" from a table.
 	std::vector<double> buf(config.cols * reader->bands());
@@ -787,15 +814,23 @@ void Contrem::run(ContremListener* listener) {
 	// Read through the buffer and populate the input queue.
 	int bands = reader->bands();
 	int cols, col, row;
+	hlrg::reader::Point pt;
 	std::string id;
 	while(running && reader->next(id, buf, cols, col, row)) {
 
 		{
+			nextStep();
+
 			// Read out the input objects and add to the queue.
 			std::lock_guard<std::mutex> lk(config.inmtx);
 
 			// If there's a mask, check it. Skip if necessary.
 			if(hasRoi && !mask[row * cols + col])
+				continue;
+
+			pt.c(col);
+			pt.r(row);
+			if(config.hasSamples && !config.samples->sampleNear(pt, 1.0))
 				continue;
 
 			input in(id, col, row);
@@ -805,8 +840,6 @@ void Contrem::run(ContremListener* listener) {
 				in.data.emplace_back(w, v);
 			}
 			config.inqueue.push_back(in);
-
-			nextStep();
 		}
 
 		// Notify the input processor.
@@ -834,6 +867,8 @@ void Contrem::run(ContremListener* listener) {
 	t1.join();
 
 	nextStep();
+
+	finishGEOS();
 
 	listener->finished(this);
 }

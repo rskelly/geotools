@@ -94,11 +94,14 @@ public:
 	int wlIDCol;							///<! A column used as an identifier (a string).
 	bool plotOrig;							///<! Plot the original spectrum and hull.
 	bool plotNorm;							///<! Plot the normalized continuum removed spectrum and regression line.
+	bool onlySamples;						///<! If checked, only sample points will be processed, not the entire grid.
 	NormMethod normMethod;					///<! The normalization method.
 	int threads;							///<! The number of threads to use.
 	bool running;							///<! True if the process is running. Setting this to false causes shutdown.
 
 	GDALReader* grdr;						///<! A pointer to the reader if it was a raster reader;
+
+	Contrem();
 
 	/**
 	 * Process the continuum removal job.

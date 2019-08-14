@@ -52,151 +52,136 @@ int runWithGui(ContremApp& app, ContremForm& form) {
 	return app.exec();
 }
 
-int main(int argc, char** argv) {
-
-	Plotter plot;
-	if(!plot.start())
-		return 1;
-
-	ContremApp app(argc, argv);
-	ContremForm form(&app);
-
-	runWithGui(app, form);
-
-	plot.stop();
-
-	return 0;
-}
-
-
-/*
-
-
-
 class DummyListener : public ContremListener {
 public:
-	void started(Contrem* conv) {
+	void started(Contrem*) {
 		std::cout << "Started\n";
 	}
 	void update(Contrem* conv) {
 		std::cout << "Progress: " << (conv->progress() * 100) << "%\n";
 	}
-	void stopped(Contrem* conv) {
+	void stopped(Contrem*) {
 		std::cout << "Stopped.\n";
 	}
-	void finished(Contrem* conv) {
+	void finished(Contrem*) {
 		std::cout << "Finished.\n";
 	}
 };
 
 void usage() {
 	std::cerr << "Usage: contrem [options]\n"
-			<< " -d A GDAL-readable data file containing spectral samples; can contain any number of bands >= 2.\n"
-			<< " -r An ENVI ROI text file.\n"
-			<< " -b A CSV file containing a mapping from wavelength to (1-based) band index.\n"
-			<< " -w An integer giving the (0-based) column index in -b which contains wavelengths.\n"
-			<< " -i An integer giving the (0-based) column index in -b which contains the band indices.\n"
-			<< " -z If given, indicates the presence of a header in the band map that must be skipped.\n"
-			<< " -o An output file template. This is a filename with no extension that will be modified as\n"
-			<< "    appropriate. Parent directories will be created.\n"
-			<< " -l The minimum wavelength to consider.\n"
-			<< " -h The maximum wavelength to consider.\n"
-			<< " -s The size of the buffer. Default is 256. Larger buffers are possible, but one must\n"
-			<< "    consider that multiple buffers may be in memory at once.\n"
-			<< " -t The number of threads to use. Default 2.\n"
-			<< " -p By default, sample statistics are used. This flag forces the use of\n"
-			<< "    population statistics.\n"
-			<< " -v The driver to use for output rasters. Defaults to ENVI, but any GDAL-writable\n"
-			<< "    format will do.\n"
-			<< " -e File extension for raster files. Defaults to .dat for ENVI files.\n";
+			<< " -sf A GDAL-readable data file containing spectral samples; can contain any number of bands >= 2.\n"
+			<< " -st The spectrum file type; GTiff, ENVI or CSV.\n"
+			<< " -rf A GDAL-readable mask file.\n"
+			<< " -bf A CSV file containing a mapping from wavelength to (1-based) band index.\n"
+			<< " -of An output file template. This is a filename with no extension that will be modified as\n"
+			<< "     appropriate. Parent directories will be created.\n"
+			<< " -od The driver to use for output rasters. GTiff or ENVI.\n"
+			<< " -oe File extension for raster files. Defaults to .dat for ENVI files, .tif for GTiff.\n"
+			<< " -w  An integer giving the (0-based) column index in -b which contains wavelengths.\n"
+			<< " -i  An integer giving the (0-based) column index in -b which contains the band indices.\n"
+			<< " -z  If given, indicates the presence of a header in the band map that must be skipped.\n"
+			<< " -l  The minimum wavelength to consider.\n"
+			<< " -h  The maximum wavelength to consider.\n"
+			<< " -t  The number of threads to use. Default 2.\n"
+			<< " -nm Normalization method. ConvexHull, ConvexHullLongestSeg or Line.\n"
+			<< "Run without arguments for GUI version.\n";
 }
 
 int main(int argc, char** argv) {
-*/
-	/*
+
+	int ret = 0;
+
+	Plotter plot; // Will start if any jobs are sent to it.
+
 	if(argc > 1) {
 
-		Contrem processor;
-
-		processor.bufferSize = 256;
-		processor.sampleStats = false;
-		processor.driver = "ENVI";
-		processor.extension = ".dat";
-		processor.threads = 1;
-
-		int wlCol = -1;
-		int bandCol = -1;
-		bool bandHeader = false;
-		double minWl = 0;
-		double maxWl = 0;
-		std::string datafile;
-		std::string roifile;
-		std::string bandfile;
-
 		try {
-			int c;
-			while((c = getopt(argc, argv, "d:r:b:o:l:h:s:w:i:t:e:v:zp")) != -1) {
-				switch(c) {
-				case 'd': datafile = optarg; break;
-				case 'r': roifile = optarg; break;
-				case 'b': bandfile = optarg; break;
-				case 'l': minWl = atof(optarg); break;
-				case 'h': maxWl = atof(optarg); break;
-				case 'w': wlCol = atoi(optarg); break;
-				case 'i': bandCol = atoi(optarg); break;
-				case 'z': bandHeader = true; break;
-				case 'o': processor.outfile = optarg; break;
-				case 's': processor.bufferSize = atoi(optarg); break;
-				case 't': processor.threads = atoi(optarg); break;
-				case 'p': processor.sampleStats = false; break;
-				case 'v': processor.driver = optarg; break;
-				case 'e': processor.extension = optarg; break;
-				default: break;
+			Contrem contrem;
+
+			contrem.extension = ".dat";
+			contrem.threads = 2;
+			contrem.spectraType = FileType::Unknown;
+			contrem.normMethod = NormMethod::Unknown;
+			contrem.outputType = FileType::Unknown;
+
+			for(int i = 0; i < argc; ++i) {
+				std::string arg(argv[i]);
+				if(arg == "-sf") {
+					contrem.spectra = argv[++i];
+				} else if(arg == "-st") {
+					std::string s(argv[++i]);
+					if(s == "CSV") {
+						contrem.spectraType = FileType::CSV;
+					} else if(s == "GTiff") {
+						contrem.spectraType = FileType::GTiff;
+					} else if(s == "ENVI") {
+						contrem.spectraType = FileType::ENVI;
+					}
+				} else if(arg == "-rf") {
+					contrem.roi = argv[++i];
+				} else if (arg == "-bf") {
+					// contrem.bandFile = argv[++i];
+					std::cerr << "Band file not implemented.\n";
+					return 1;
+				} else if(arg == "-l") {
+					contrem.minWl = atof(argv[++i]);
+				} else if(arg == "-h") {
+					contrem.maxWl = atof(argv[++i]);
+				} else if(arg == "-w") {
+					//wlCol = atoi(argv[++i]);
+				} else if(arg == "-i") {
+					//bandCol = atoi(argv[++i]);
+				} else if(arg == "-z") {
+					//bandHeader = true;
+				} else if(arg == "-of") {
+					contrem.output = argv[++i];
+				} else if(arg == "-oe") {
+					contrem.extension = argv[++i];
+				} else if(arg == "-od") {
+					std::string d(argv[++i]);
+					if(d == "GTiff") {
+						contrem.outputType = FileType::GTiff;
+					} else if(d == "ENVI") {
+						contrem.outputType = FileType::ENVI;
+					} else if(d == "CSV") {
+						contrem.outputType = FileType::CSV;
+					}
+				} else if(arg == "-t") {
+					contrem.threads = atoi(argv[++i]);
+				} else if(arg == "-nm") {
+					std::string d(argv[++i]);
+					if(d == "ConvexHull") {
+						contrem.normMethod = NormMethod::ConvexHull;
+					} else if(d == "ConvexHulLongestSeg") {
+						contrem.normMethod = NormMethod::ConvexHullLongestSeg;
+					} else if(d == "Line") {
+						contrem.normMethod = NormMethod::Line;
+					}
 				}
 			}
 
-			if(processor.bufferSize <= 0)
-				throw std::invalid_argument("Buffer size must be larger than zero.");
-			if(datafile.empty() && roifile.empty())
-				throw std::invalid_argument("Data  or ROI file not given.");
-			if(processor.outfile.empty())
-				throw std::invalid_argument("Output file template not given.");
-			if(processor.threads < 1)
-				throw std::invalid_argument("At least one thread is required.");
-			if(!bandfile.empty() && (bandCol < 0 || wlCol < 0))
-				throw std::invalid_argument("If the band file is given, wavelength and band columns must also be given.");
-
-			Reader* reader;
-			if(!roifile.empty()) {
-				reader = new ROIReader(roifile);
-			} else if(!datafile.empty()) {
-				reader = new GDALReader(datafile);
-			} else {
-				throw std::invalid_argument("No input file (-r or -d) given.");
-			}
-
-			if(!bandfile.empty()) {
-				if(wlCol == -1 || bandCol == -1 || wlCol == bandCol)
-					throw std::invalid_argument("If a band file is given, the indices for "
-							"wavelength and band must be >=0 and different from each other.");
-				BandMapReader br(bandfile, wlCol, bandCol, bandHeader);
-				reader->setBandMap(br.bandMap());
-			}
-
-			if(minWl > 0 && maxWl > 0)
-				reader->setBandRange(minWl, maxWl);
-
-			reader->setBufSize(processor.bufferSize);
-
 			DummyListener dl;
 
-			processor.run(&dl, reader);
+			contrem.running = true;
+			contrem.run(&dl);
 
 		} catch(const std::exception& ex) {
 			std::cerr << ex.what() << "\n";
 			usage();
-			return 1;
+			ret = 0;
 		}
 
 	} else {
-*/
+
+		ContremApp app(argc, argv);
+		ContremForm form(&app);
+
+		runWithGui(app, form);
+
+	}
+
+	plot.stop();
+
+	return ret;
+}

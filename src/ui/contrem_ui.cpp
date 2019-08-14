@@ -48,6 +48,7 @@ namespace {
 	constexpr const char* LAST_NORM_METHOD = "lastNormMethod";
 	constexpr const char* LAST_PLOT_NORM = "lastPlotNorm";
 	constexpr const char* LAST_PLOT_ORIG = "lastPlotOrig";
+	constexpr const char* LAST_ONLY_SAMPLES = "lastOnlySamples";
 
 	double nearestWl(double v, const std::map<int, double>& map) {
 		if(map.empty())
@@ -138,7 +139,7 @@ void ContremForm::setupUi(QDialog* form) {
 	runWidgets = {
 		txtROIFile, btnROI, txtSamplePoints, btnSamplePoints, txtSpectraFile, btnSpectra, spnWLHeaderRows, spnWLFirstCol, spnWLLastCol,
 		spnWLIDCol, chkWLTranspose, txtOutputFile, cboOutputType, btnOutput, cboMinWL, cboMaxWL, cboNormMethod, chkPlotNorm, chkPlotOrig,
-		btnRun, cboSamplePointsLayer, cboSamplePointsIDField
+		btnRun, cboSamplePointsLayer, cboSamplePointsIDField, chkOnlySamples
 	};
 
 	stopWidgets = {
@@ -170,6 +171,7 @@ void ContremForm::setupUi(QDialog* form) {
 	connect(cboNormMethod, SIGNAL(currentTextChanged(QString)), this, SLOT(cboNormMethodChanged(QString)));
 	connect(chkPlotOrig, SIGNAL(toggled(bool)), this, SLOT(chkPlotOrigChanged(bool)));
 	connect(chkPlotNorm, SIGNAL(toggled(bool)), this, SLOT(chkPlotNormChanged(bool)));
+	connect(chkOnlySamples, SIGNAL(toggled(bool)), this, SLOT(chkOnlySamplesChanged(bool)));
 
 	connect(btnRun, SIGNAL(clicked()), this, SLOT(btnRunClicked()));
 	connect(btnCancel, SIGNAL(clicked()), this, SLOT(btnCancelClicked()));
@@ -198,6 +200,7 @@ void ContremForm::setupUi(QDialog* form) {
 	m_contrem.samplePointsIDField = m_settings.value(LAST_SAMPLE_POINTS_ID_FIELD, "").toString().toStdString();
 	m_contrem.plotNorm = m_settings.value(LAST_PLOT_NORM, false).toBool();
 	m_contrem.plotOrig = m_settings.value(LAST_PLOT_ORIG, false).toBool();
+	m_contrem.onlySamples = m_settings.value(LAST_ONLY_SAMPLES, false).toBool();
 	m_contrem.normMethod = (NormMethod) m_settings.value(LAST_NORM_METHOD, (int) NormMethod::ConvexHull).toInt();
 
 	txtROIFile->setText(QString(m_contrem.roi.c_str()));
@@ -213,6 +216,7 @@ void ContremForm::setupUi(QDialog* form) {
 	chkWLTranspose->setChecked(m_contrem.wlTranspose);
 	chkPlotNorm->setChecked(m_contrem.plotNorm);
 	chkPlotOrig->setChecked(m_contrem.plotOrig);
+	chkOnlySamples->setChecked(m_contrem.onlySamples);
 	cboNormMethod->setCurrentText(QString(normMethodAsString(m_contrem.normMethod).c_str()));
 }
 
@@ -466,6 +470,12 @@ void ContremForm::chkPlotOrigChanged(bool on) {
 	checkRun();
 }
 
+void ContremForm::chkOnlySamplesChanged(bool on) {
+	m_settings.setValue(LAST_ONLY_SAMPLES, on);
+	m_contrem.onlySamples = on;
+	checkRun();
+}
+
 void ContremForm::chkPlotNormChanged(bool on) {
 	m_settings.setValue(LAST_PLOT_NORM, on);
 	m_contrem.plotNorm = on;
@@ -489,11 +499,14 @@ void ContremForm::stopState() {
 
 void ContremForm::run() {
 	runState();
+
 	if(!m_contrem.running) {
+		std::cout << "Starting...\n";
 		m_contrem.running = true;
 		m_thread = std::thread(trun, this, &m_contrem);
 	}
 	if(!m_thread.joinable()) {
+		std::cout << "Failed to start.\n";
 		m_contrem.running = false;
 		stopState();
 	}

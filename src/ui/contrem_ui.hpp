@@ -144,6 +144,7 @@ public slots:
 	void cboNormMethodChanged(QString);
 	void chkPlotOrigChanged(bool);
 	void chkPlotNormChanged(bool);
+	void chkOnlySamplesChanged(bool);
 
 	void btnRunClicked();
 	void btnCancelClicked();
