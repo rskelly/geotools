@@ -40,7 +40,8 @@ void usage() {
 			<< " -d <nodata>      A nodata value. The default is -9999.0\n"
 			<< " -o               Fill voids. Does this by doubling the search radius iteratively.\n"
 			<< "                  the point count in this cells remains at zero.\n"
-			<< " -l <bytes>       The limit of memory devoted to point data that will trigger the use\n"
+			<< " -l               If given, forces the use of in-memory storage for the tree. Otherwise,\n"
+			<< "                  uses anonymous file-backed storage, which is slower.\n"
 			<< "                  of file-backed memory. This will be slow but less likely to crash.\n"
 			<< " -c <scale>       A scale value to scale coordinates for storage in the quadtree.\n"
 			<< "                  must be non-zero, usually a multiple or fraction of 10. Default 1.\n";
@@ -73,7 +74,7 @@ int main(int argc, char** argv) {
 	int thin = 0;
 	double nodata = -9999;
 	bool voids = false;
-	size_t limit = 0;
+	bool memMode = false;
 	double scale = 1;
 
 	for(int i = 1; i < argc; ++i) {
@@ -102,7 +103,7 @@ int main(int argc, char** argv) {
 		} else if(v == "-t") {
 			thin = atoi(argv[++i]);
 		} else if(v == "-l") {
-			limit = atoi(argv[++i]);
+			memMode = true;
 		} else if(v == "-d") {
 			nodata = atof(argv[++i]);
 		} else if(v == "-c") {
@@ -129,7 +130,7 @@ int main(int argc, char** argv) {
 		r.setFilter(&filter);
 		r.setThin(thin);
 		r.setNoData(nodata);
-		r.setMemLimit(limit);
+		r.setMemMode(memMode);
 		r.setScale(scale);
 		r.rasterize(args[0], types, resX, resY, easting, northing, radius, srid, useHeader, voids);
 	} catch(const std::exception& ex) {
