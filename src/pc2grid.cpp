@@ -42,9 +42,7 @@ void usage() {
 			<< "                  the point count in this cells remains at zero.\n"
 			<< " -l               If given, forces the use of in-memory storage for the tree. Otherwise,\n"
 			<< "                  uses anonymous file-backed storage, which is slower.\n"
-			<< "                  of file-backed memory. This will be slow but less likely to crash.\n"
-			<< " -c <scale>       A scale value to scale coordinates for storage in the quadtree.\n"
-			<< "                  must be non-zero, usually a multiple or fraction of 10. Default 1.\n";
+			<< "                  of file-backed memory. This will be slow but less likely to crash.\n";
 
 	PCPointFilter::printHelp(std::cerr);
 
@@ -75,7 +73,6 @@ int main(int argc, char** argv) {
 	double nodata = -9999;
 	bool voids = false;
 	bool memMode = false;
-	double scale = 1;
 
 	for(int i = 1; i < argc; ++i) {
 		if(filter.parseArgs(i, argv))
@@ -106,8 +103,6 @@ int main(int argc, char** argv) {
 			memMode = true;
 		} else if(v == "-d") {
 			nodata = atof(argv[++i]);
-		} else if(v == "-c") {
-			scale = atof(argv[++i]);
 		} else if(v == "-o") {
 			voids = true;
 		} else {
@@ -131,7 +126,6 @@ int main(int argc, char** argv) {
 		r.setThin(thin);
 		r.setNoData(nodata);
 		r.setMemMode(memMode);
-		r.setScale(scale);
 		r.rasterize(args[0], types, resX, resY, easting, northing, radius, srid, useHeader, voids);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
