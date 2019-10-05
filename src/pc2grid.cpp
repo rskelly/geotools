@@ -9,10 +9,14 @@
 #include <vector>
 #include <unordered_set>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include "pointcloud.hpp"
+#include "util.hpp"
 
 using namespace geo::pc;
+using namespace geo::util;
 
 void usage() {
 	std::cerr << "Usage: pc2grid [options] <output raster> <input las [*]>\n"
@@ -42,7 +46,9 @@ void usage() {
 			<< "                  the point count in this cells remains at zero.\n"
 			<< " -l               If given, forces the use of in-memory storage for the tree. Otherwise,\n"
 			<< "                  uses anonymous file-backed storage, which is slower.\n"
-			<< "                  of file-backed memory. This will be slow but less likely to crash.\n";
+			<< "                  of file-backed memory. This will be slow but less likely to crash.\n"
+			<< " -b <bounds>      A comma-delimited list of coordinates, minx, miny, maxx, maxy giving the size of the\n"
+			<< "                  raster in projected coordinates.\n";
 
 	PCPointFilter::printHelp(std::cerr);
 
@@ -73,6 +79,7 @@ int main(int argc, char** argv) {
 	double nodata = -9999;
 	bool voids = false;
 	bool memMode = false;
+	double bounds[4] = {std::nan("")};
 
 	for(int i = 1; i < argc; ++i) {
 		if(filter.parseArgs(i, argv))
@@ -105,6 +112,13 @@ int main(int argc, char** argv) {
 			nodata = atof(argv[++i]);
 		} else if(v == "-o") {
 			voids = true;
+		} else if(v == "-b") {
+			std::vector<std::string> parts;
+			split(std::back_inserter(parts), argv[++i]);
+			if(parts.size() < 4)
+				g_runerr("Not enough parts in the bounds string.");
+			for(size_t i = 0; i < 4; ++i)
+				bounds[i] = atof(parts[i].c_str());
 		} else {
 			args.push_back(argv[i]);
 		}
@@ -126,6 +140,7 @@ int main(int argc, char** argv) {
 		r.setThin(thin);
 		r.setNoData(nodata);
 		r.setMemMode(memMode);
+		r.setBounds(bounds);
 		r.rasterize(args[0], types, resX, resY, easting, northing, radius, srid, useHeader, voids);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
