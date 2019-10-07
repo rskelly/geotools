@@ -152,7 +152,7 @@ void ReflectanceForm::stopState() {
 	_enable(widgets, true);
 }
 
-void ReflectanceForm::reflStarted(Reflectance* refl) {
+void ReflectanceForm::reflStarted(Reflectance*) {
 	runState();
 	progressBar->setValue(0);
 }
@@ -163,21 +163,21 @@ void ReflectanceForm::reflUpdate(Reflectance* refl) {
 	progressBar->setValue(p);
 }
 
-void ReflectanceForm::reflStopped(Reflectance* refl) {
+void ReflectanceForm::reflStopped(Reflectance*) {
 	m_running = false;
 	if(m_thread.joinable())
 		m_thread.detach();
 	stopState();
 }
 
-void ReflectanceForm::reflFinished(Reflectance* refl) {
+void ReflectanceForm::reflFinished(Reflectance*) {
 	m_running = false;
 	if(m_thread.joinable())
 		m_thread.detach();
 	stopState();
 }
 
-void ReflectanceForm::reflException(Reflectance* refl, const std::exception& ex) {
+void ReflectanceForm::reflException(Reflectance*, const std::exception& ex) {
 	progressBar->setValue(0);
 	QMessageBox::critical(this, "Error", ex.what());
 	_failure = true;

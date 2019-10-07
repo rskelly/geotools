@@ -46,7 +46,7 @@ class DummyListener : public ConvolveListener {
 private:
 	int lastP;
 public:
-	void started(Convolve* conv) {
+	void started(Convolve*) {
 		std::cout << "Running ";
 		lastP = -1;
 	}
@@ -60,10 +60,10 @@ public:
 		}
 		lastP = p;
 	}
-	void stopped(Convolve* conv) {
+	void stopped(Convolve*) {
 		std::cout << " Stopped.\n";
 	}
-	void finished(Convolve* conv) {
+	void finished(Convolve*) {
 		std::cout << " Done.\n";
 	}
 };
