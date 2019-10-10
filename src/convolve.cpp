@@ -184,7 +184,7 @@ int Kernel::window() const {
 	return m_window;
 }
 
-double Kernel::apply(const std::vector<double>& intensities, const std::vector<double>& wavelengths, int idx) const {
+double Kernel::apply(const std::vector<double>& intensities, const std::vector<double>& /*wavelengths*/, int idx) const {
 	double out = 0;
 	int max = (int) intensities.size();
 	for(int i = 0; i < m_window; ++i) {
@@ -207,6 +207,7 @@ BandProp::BandProp(int band, double wl, double fwhm) :
 
 Band::Band(double wl, double value) :
 		m_wl(wl),
+		m_value(value),
 		m_scale(1),
 		m_shift(0),
 		m_count(0) {
@@ -259,7 +260,7 @@ Spectrum::Spectrum(int firstRow, int firstCol, int dateCol, int timeCol) :
 
 Spectrum::Spectrum() : Spectrum(0, 0, -1, -1) {}
 
-size_t Spectrum::inputSize(const std::string& filename, const std::string& delimiter) {
+size_t Spectrum::inputSize(const std::string& filename, const std::string& /*delimiter*/) {
 	std::ifstream input(filename);
 	input.seekg(0, std::ios::end);
 	return input.tellg();
@@ -547,8 +548,8 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 void doRun(std::list<std::string>* queue, std::mutex* mtx, std::atomic<int>* count, std::atomic<int>* current,
 		const std::string* bandDef, const std::string* bandDefDelim, const std::string* spectraDelim,
 		int spectraFirstRow, int spectraFirstCol, int spectraDateCol, int spectraTimeCol,
-		const std::string* output, const std::string* outputDelim, FileType outputType,
-		double inputScale, double tolerance, double bandShift, size_t memLimit,
+		const std::string* output, const std::string* outputDelim, FileType /*outputType*/,
+		double inputScale, double /*tolerance*/, double bandShift, size_t memLimit,
 		bool* running, char* finished) {
 
 	while(*running) {

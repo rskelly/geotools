@@ -119,6 +119,7 @@ public:
 class Band {
 private:
 	double m_wl;			///!< The wavelength.
+	double m_value;			///!< The intensity value.
 	double m_scale;		 	///!< The scaled value of the intensity. This is used for calculations. Is identical to value by default.
 	double m_shift;			///!< The amount to shift the band's wavelength designation by.
 	int m_count;			///!< Tracks the number of accumulations; divide the value by this number.
@@ -134,6 +135,13 @@ public:
 	Band(double wl, double value);
 
 	Band();
+
+	/**
+	 * Return the value.
+	 *
+	 * \return The value.
+	 */
+	double value() const;
 
 	/**
 	 * Reset the counter.
