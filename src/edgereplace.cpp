@@ -42,6 +42,11 @@ namespace {
 
 int main(int argc, char** argv) {
 
+	if(argc < 7) {
+		std::cerr << "Not enough args.\n";
+		return -1;
+	}
+
 	std::string infile = argv[1];
 	std::string outfile = argv[2];
 	int imgWidth = atoi(argv[3]);

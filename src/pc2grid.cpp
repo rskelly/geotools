@@ -42,8 +42,8 @@ void usage() {
 			<< "                  number of points will be randomly thinned. Any cell with less will be\n"
 			<< "                  reduced to zero. This occurs after filtering.\n"
 			<< " -d <nodata>      A nodata value. The default is -9999.0\n"
-			<< " -o               Fill voids. Does this by doubling the search radius iteratively.\n"
-			<< "                  the point count in this cells remains at zero.\n"
+			<< " -o <max radius>  Fill voids. Does this by doubling the search radius iteratively.\n"
+			<< "                  the point count in this cells remains at zero. Quits when radius is exceeded.\n"
 			<< " -b <bounds>      A comma-delimited list of coordinates, minx, miny, maxx, maxy giving the size of the\n"
 			<< "                  raster in projected coordinates.\n";
 
@@ -75,6 +75,7 @@ int main(int argc, char** argv) {
 	int thin = 0;
 	double nodata = -9999;
 	bool voids = false;
+	double maxRadius = 0;
 	double bounds[4] = {std::nan("")};
 
 	for(int i = 1; i < argc; ++i) {
@@ -106,6 +107,7 @@ int main(int argc, char** argv) {
 			nodata = atof(argv[++i]);
 		} else if(v == "-o") {
 			voids = true;
+			maxRadius = atof(argv[++i]);
 		} else if(v == "-b") {
 			std::vector<std::string> parts;
 			split(std::back_inserter(parts), argv[++i]);
@@ -134,7 +136,7 @@ int main(int argc, char** argv) {
 		r.setThin(thin);
 		r.setNoData(nodata);
 		r.setBounds(bounds);
-		r.rasterize(args[0], types, resX, resY, easting, northing, radius, srid, useHeader, voids);
+		r.rasterize(args[0], types, resX, resY, easting, northing, radius, srid, useHeader, voids, maxRadius);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
 		usage();
