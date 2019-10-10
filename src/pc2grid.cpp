@@ -14,12 +14,16 @@
 
 #include "pointcloud.hpp"
 #include "util.hpp"
+#include "grid.hpp"
 
 using namespace geo::pc;
 using namespace geo::util;
+using namespace geo::grid;
 
 void usage() {
 	std::cerr << "Usage: pc2grid [options] <output raster> <input las [*]>\n"
+			<< " -r <filename>    Use a template raster for resolution, extent and projection.\n"
+			<< "                  Overrides rx/ry, e, n and s.\n"
 			<< " -rx <resolution> The output x resolution in map units.\n"
 			<< " -ry <resolution> The output y resolution in map units.\n"
 			<< " -e <easting>     The top left corner horizontal alignment\n"
@@ -77,6 +81,8 @@ int main(int argc, char** argv) {
 	bool voids = false;
 	double maxRadius = 0;
 	double bounds[4] = {std::nan("")};
+	std::string templ;
+	std::string projection;
 
 	for(int i = 1; i < argc; ++i) {
 		if(filter.parseArgs(i, argv))
@@ -85,6 +91,8 @@ int main(int argc, char** argv) {
 		if(v == "-m") {
 			std::string type = argv[++i];
 			split(std::back_inserter(types), lowercase(type), ",");
+		} else if(v == "-r") {
+			templ = argv[++i];
 		} else if(v == "-h") {
 			useHeader = false;
 		} else if(v == "-v") {
@@ -128,6 +136,19 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
+	if(!templ.empty()) {
+		std::cout << "Getting raster parameters from template: " << templ << "\n";
+		Grid<float> tgrid(templ);
+		const GridProps& props = tgrid.props();
+		resX = props.resX();
+		resY = props.resY();
+		easting = props.tlx();
+		northing = props.tly();
+		projection = props.projection();
+	} else if(srid > 0) {
+		projection = projectionFromSRID(srid);
+	}
+
 	std::vector<std::string> infiles(args.begin() + 1, args.end());
 
 	try {
@@ -136,7 +157,7 @@ int main(int argc, char** argv) {
 		r.setThin(thin);
 		r.setNoData(nodata);
 		r.setBounds(bounds);
-		r.rasterize(args[0], types, resX, resY, easting, northing, radius, srid, useHeader, voids, maxRadius);
+		r.rasterize(args[0], types, resX, resY, easting, northing, radius, projection, useHeader, voids, maxRadius);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
 		usage();
