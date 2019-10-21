@@ -90,6 +90,9 @@ target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY})
 add_executable (pcnorm src/pcnorm.cpp)
 target_link_libraries (pcnorm ${LIBLAS_LIBRARY})
 
+add_executable (pcmatch src/pcmatch.cpp)
+target_link_libraries (pcmatch geoutil ${LIBLAS_LIBRARY})
+
 add_executable (sbet2csv src/sbet2csv.cpp)
 target_link_libraries (sbet2csv geoutil ${PROJ_LIBRARY} ${GEOS_LIBRARY})
 
@@ -99,4 +102,4 @@ target_link_libraries (sbet2csv geoutil ${PROJ_LIBRARY} ${GEOS_LIBRARY})
 
 # Install ################################################################################################
 
-install(TARGETS pc2grid convolve contrem reflectance geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS pc2grid pcmatch convolve contrem reflectance geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
