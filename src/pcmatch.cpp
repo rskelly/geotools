@@ -22,7 +22,14 @@
 #include <iostream>
 #include <limits>
 
-#include <liblas/liblas.hpp>
+#include <memory>
+#include <pdal/PointTable.hpp>
+#include <pdal/PointView.hpp>
+#include <pdal/io/LasReader.hpp>
+#include <pdal/io/BufferReader.hpp>
+#include <pdal/io/LasWriter.hpp>
+#include <pdal/io/LasHeader.hpp>
+#include <pdal/Options.hpp>
 
 #include "ds/mqtree.hpp"
 #include "util.hpp"
@@ -70,19 +77,29 @@ public:
 		weight(weight) {}
 
 	void init() {
-		liblas::ReaderFactory rf;
-		std::ifstream str(file);
-		liblas::Reader rdr = rf.CreateWithStream(str);
-		liblas::Header hdr = rdr.GetHeader();
-		while(rdr.ReadNextPoint()) {
-			const liblas::Point& pt = rdr.GetPoint();
-			float x = (float) pt.GetX();
-			float y = (float) pt.GetY();
+		pdal::Option las_opt("filename", file);
+		pdal::Options las_opts;
+		las_opts.add(las_opt);
+		pdal::PointTable table;
+		pdal::LasReader las_reader;
+		las_reader.setOptions(las_opts);
+		las_reader.prepare(table);
+		pdal::PointViewSet point_view_set = las_reader.execute(table);
+		pdal::PointViewPtr point_view = *point_view_set.begin();
+		pdal::Dimension::IdList dims = point_view->dims();
+		pdal::LasHeader las_header = las_reader.header();
+
+		using namespace pdal::Dimension;
+
+		for (pdal::PointId idx = 0; idx < point_view->size(); ++idx) {
+			double x = point_view->getFieldAs<double>(Id::X, idx);
+			double y = point_view->getFieldAs<double>(Id::Y, idx);
 			if(x < minx) minx = x;
 			if(y < miny) miny = y;
 			if(x > maxx) maxx = x;
 			if(y > maxy) maxy = y;
 		}
+
 		cols = (int) std::ceil((maxx - minx) / res);
 		rows = (int) std::ceil((maxy - miny) / res);
 		grid.resize(cols * rows);
@@ -90,14 +107,28 @@ public:
 	}
 
 	void buildTree() {
-		liblas::ReaderFactory rf;
-		std::ifstream str(file);
-		liblas::Reader rdr = rf.CreateWithStream(str);
-		liblas::Header hdr = rdr.GetHeader();
-		while(rdr.ReadNextPoint()) {
-			const liblas::Point& pt = rdr.GetPoint();
-			if(pt.GetClassification().GetClass() == 2)
-				tree.add(Point(pt.GetX(), pt.GetY(), pt.GetZ()));
+		pdal::Option las_opt("filename", file);
+		pdal::Options las_opts;
+		las_opts.add(las_opt);
+		pdal::PointTable table;
+		pdal::LasReader las_reader;
+		las_reader.setOptions(las_opts);
+		las_reader.prepare(table);
+		pdal::PointViewSet point_view_set = las_reader.execute(table);
+		pdal::PointViewPtr point_view = *point_view_set.begin();
+		pdal::Dimension::IdList dims = point_view->dims();
+		pdal::LasHeader las_header = las_reader.header();
+
+		using namespace pdal::Dimension;
+
+		for (pdal::PointId idx = 0; idx < point_view->size(); ++idx) {
+			int c = point_view->getFieldAs<int>(Id::Classification, idx);
+			if(c == 2) {
+				double x = point_view->getFieldAs<double>(Id::X, idx);
+				double y = point_view->getFieldAs<double>(Id::Y, idx);
+				double z = point_view->getFieldAs<double>(Id::Z, idx);
+				tree.add(Point(x, y, z));
+			}
 		}
 	}
 
@@ -108,13 +139,18 @@ public:
 	void set(float x, float y, float v) {
 		int col = (int) (x - minx) / res;
 		int row = (int) (y - miny) / res;
-		grid[row * rows + col] = v;
+		if(!(col < 0 || row < 0 || col >= cols || row >= rows))
+			grid[row * rows + col] = v;
 	}
 
 	float get(float x, float y) {
 		int col = (int) (x - minx) / res;
 		int row = (int) (y - miny) / res;
-		return grid[row * rows + col];
+		if(!(col < 0 || row < 0 || col >= cols || row >= rows)) {
+			return grid[row * rows + col];
+		} else  {
+			return -9999.0;
+		}
 	}
 
 };
@@ -247,36 +283,58 @@ int main(int argc, char** argv) {
 	geo::util::makedir(outdir);
 
 	for(PointFile& pf : infiles) {
-		liblas::ReaderFactory rf;
-		std::ifstream istr(pf.file);
-		liblas::Reader rdr = rf.CreateWithStream(istr);
-		liblas::Header hdr(rdr.GetHeader());
+		pdal::Option opt("filename", pf.file);
+		pdal::Options opts;
+		opts.add(opt);
 
-		std::string outfile = geo::util::join(outdir, geo::util::basename(pf.file) + "_adj.las");
-		std::ofstream ostr(outfile);
-		liblas::WriterFactory wf;
-		liblas::Writer wtr = wf.CreateWithStream(ostr, hdr);
+		pdal::PointTable table;
+		pdal::LasReader rdr;
+		rdr.setOptions(opts);
+		rdr.prepare(table);
 
-		float minz = MAX_FLOAT;
-		float maxz = MIN_FLOAT;
-		while(rdr.ReadNextPoint()) {
-			const liblas::Point& pt = rdr.GetPoint();
-			int col = (int) (pt.GetX() - pf.minx) / res;
-			int row = (int) (pt.GetY() - pf.miny) / res;
-			float v = pf.grid[row * pf.rows + col];
-			if(v != -9999.0) {
-				liblas::Point pt0(pt);
-				pt0.SetZ(pt.GetZ() + v);
-				if(pt0.GetZ() < minz) minz = pt0.GetZ();
-				if(pt0.GetZ() > maxz) maxz = pt0.GetZ();
-				wtr.WritePoint(pt0);
+		pdal::PointViewSet viewSet = rdr.execute(table);
+		pdal::PointViewPtr view = *viewSet.begin();
+		pdal::Dimension::IdList dims = view->dims();
+		pdal::LasHeader hdr = rdr.header();
+
+		using namespace pdal::Dimension;
+
+		double minz = MAX_FLOAT;
+		double maxz = MIN_FLOAT;
+
+		for (pdal::PointId idx = 0; idx < view->size(); ++idx) {
+			int c = view->getFieldAs<int>(Id::Classification, idx);
+			if(c == 2) {
+				double x = view->getFieldAs<double>(Id::X, idx);
+				double y = view->getFieldAs<double>(Id::Y, idx);
+				double z = view->getFieldAs<double>(Id::Z, idx);
+
+				int col = (int) (x - pf.minx) / res;
+				int row = (int) (y - pf.miny) / res;
+				float v = pf.grid[row * pf.rows + col];
+				if(v != -9999.0) {
+					z += v;
+					view->setField(Id::Z, idx, z);
+					if(z < minz) minz = z;
+					if(z > maxz) maxz = z;
+				}
 			}
 		}
 
-		hdr.SetMax(pf.maxx, pf.maxy, maxz);
-		hdr.SetMin(pf.minx, pf.miny, minz);
+		std::string outfile = geo::util::join(outdir, geo::util::basename(pf.file) + "_adj.las");
+		if(geo::util::isfile(outfile))
+			geo::util::rem(outfile);
+		opt = pdal::Option("filename", outfile);
+		opts.replace(opt);
+		pdal::LasWriter wtr;
+		pdal::BufferReader brdr;
+		brdr.addView(view);
+		wtr.setInput(brdr);
+		wtr.setOptions(opts);
+		wtr.setSpatialReference(rdr.getSpatialReference());
 
-		wtr.WriteHeader();
+		wtr.prepare(table);
+		wtr.execute(table);
 	}
 
 	std::cout << "Done.\n";

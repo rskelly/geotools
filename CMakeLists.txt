@@ -39,6 +39,7 @@ find_package (GDAL 2 REQUIRED)
 find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Eigen3 REQUIRED)
 find_package (PythonLibs 2.7)
+find_package (PDAL REQUIRED)
 
 find_library (GEOS_LIBRARY geos_c)
 
@@ -91,7 +92,7 @@ add_executable (pcnorm src/pcnorm.cpp)
 target_link_libraries (pcnorm ${LIBLAS_LIBRARY})
 
 add_executable (pcmatch src/pcmatch.cpp)
-target_link_libraries (pcmatch geoutil ${LIBLAS_LIBRARY})
+target_link_libraries (pcmatch geoutil ${PDAL_LIBRARIES})
 
 add_executable (sbet2csv src/sbet2csv.cpp)
 target_link_libraries (sbet2csv geoutil ${PROJ_LIBRARY} ${GEOS_LIBRARY})
