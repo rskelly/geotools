@@ -387,9 +387,10 @@ int main(int argc, char** argv) {
 		double minz = MAX_FLOAT;
 		double maxz = MIN_FLOAT;
 
-		double x, y, z, pv;
-		int col, row, col0, row0;
-		double cx, cy, cx0, cy0, cx1, cy1;
+		double x, y, z, cx, cy;
+		double d, v, w, ss, sw;
+		bool skip;
+		int col, row;
 
 		for (pdal::PointId idx = 0; idx < view->size(); ++idx) {
 			x = view->getFieldAs<double>(Id::X, idx);
@@ -399,40 +400,35 @@ int main(int argc, char** argv) {
 			col = (int) (x - pf.minx) / res;
 			row = (int) (y - pf.miny) / res;
 
-			// The centre of the cell containing the point.
-			cx = pf.minx + col * res + res * 0.5;
-			cy = pf.miny + row * res + res * 0.5;
-
-			col0 = col;
-			if(x < cx) {
-				col0 = col > 0 ? col - 1 : col;
-			} else if(x > cx) {
-				col0 = col < cols - 1 ? col + 1 : col;
+			ss = 0;
+			sw = 0;
+			skip = false;
+			for(int rr = row - 1; !skip && rr < row + 2; ++rr) {
+				for(int cc = col - 1; !skip && cc < col + 2; ++cc) {
+					if(cc < 0 || rr < 0 || rr >= pf.rows || cc >= pf.cols) continue;
+					if((v = pf.grid[rr * pf.cols + cc]) != -9999.0) {
+						cx = pf.minx + cc * res + res * 0.5;
+						cy = pf.miny + rr * res + res * 0.5;
+						d = std::pow(cx - x, 2.0) + std::pow(cy - y, 2.0);
+						if(d == 0) {
+							ss = v;
+							sw = 1.0;
+							skip = true;
+							break;
+						} else {
+							w = 1.0 - std::min(1.0, d / (res * res));
+							ss += v * w;
+							sw += w;
+						}
+					}
+				}
 			}
 
-			row0 = row;
-			if(y < cy) {
-				row0 = row > 0 ? row - 1 : row;
-			} else if(y > cy) {
-				row0 = row < rows - 1 ? row + 1 : row;
+			if(sw != 0) {
+				z += ss / sw;
+			} else {
+				std::cout << ss << ", " << sw << ", " << col << ", " << row << "\n";
 			}
-
-			cx0 = pf.minx + col0 * res + res * 0.5;
-			cy0 = pf.miny + row * res + res * 0.5;
-
-			cx1 = pf.minx + col * res + res * 0.5;
-			cy1 = pf.miny + row0 * res + res * 0.5;
-
-			pv = bary(Point(x, y, 0),
-				Point(cx, cy, pf.grid[row * pf.cols + col]),
-				Point(cx0, cy0, pf.grid[row * pf.cols + col0]),
-				Point(cx1, cy1, pf.grid[row0 * pf.cols + col])
-			);
-
-			if(std::isnan(pv))
-				pv = pf.grid[row * pf.cols + col];
-
-			z += pv;
 
 			view->setField(Id::Z, idx, z);
 
