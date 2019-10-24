@@ -21,8 +21,8 @@
 #include <vector>
 #include <iostream>
 #include <limits>
-
 #include <memory>
+
 #include <pdal/PointTable.hpp>
 #include <pdal/PointView.hpp>
 #include <pdal/io/LasReader.hpp>
@@ -31,6 +31,8 @@
 #include <pdal/io/LasHeader.hpp>
 #include <pdal/Options.hpp>
 
+#include <gdal_priv.h>
+
 #include "ds/mqtree.hpp"
 #include "util.hpp"
 
@@ -38,8 +40,10 @@ constexpr double MIN_FLOAT = std::numeric_limits<double>::lowest();
 constexpr double MAX_FLOAT = std::numeric_limits<double>::max();
 
 class Point {
-public:
+private:
 	double _x, _y, _z;
+
+public:
 
 	Point() : Point(0, 0, 0) {}
 
@@ -58,6 +62,18 @@ public:
 		return _z;
 	}
 
+	void x(double x) {
+		_x = x;
+	}
+
+	void y(double y) {
+		_y = y;
+	}
+
+	void z(double z) {
+		_z = z;
+	}
+
 };
 
 class PointFile {
@@ -67,9 +83,9 @@ public:
 	double res;						// The grid size.
 	std::vector<double> grid;		// The grid of local means for this file.
 	int cols, rows;					// The grid size.
-	geo::ds::mqtree<Point> tree;
-	double weight;
-	std::string projection;
+	geo::ds::mqtree<Point> tree;	// Tree to store points from this file.
+	double weight;					// The weight given to the points from this file in the mean (0-1).
+	std::string projection;			// The projection of the las file.
 
 	PointFile(const std::string& file, double res, double weight) :
 		file(file),
@@ -173,7 +189,6 @@ void usage() {
 }
 
 int gridNo = 0;
-#include <gdal_priv.h>
 
 void saveGrid(const std::vector<double> grid, int cols, int rows, double minx, double miny, double res, const std::string& proj) {
 	std::string file = "grid_" + std::to_string(++gridNo) + ".tif";
@@ -225,6 +240,13 @@ int main(int argc, char** argv) {
 
 	double res = 100;
 
+	for(int i = 1; i < argc; ++i) {
+		std::string arg(argv[i]);
+		if(arg == "-r") {
+			res = atof(argv[++i]);
+		}
+	}
+
 	std::cout << "Creating input entities.\n";
 	std::string outdir = argv[1];
 	std::vector<PointFile> infiles;
@@ -269,8 +291,8 @@ int main(int argc, char** argv) {
 			double x = minx + col * res + res * 0.5;
 			double y = miny + row * res + res * 0.5;
 
-			pt._x = x;
-			pt._y = y;
+			pt.x(x);
+			pt.y(y);
 
 			double sum = 0;
 			double w = 0;
