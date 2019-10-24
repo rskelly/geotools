@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	double res = 100;
+	double res = 20;
 
 	std::cout << "Creating input entities.\n";
 	std::string outdir = argv[1];
@@ -303,19 +303,77 @@ int main(int argc, char** argv) {
 	for(PointFile& pf : infiles)
 		pf.clearTree();
 
+
 	// now smooth the main grid
 	std::cout << "Smoothing the grid.\n";
 	{
-		int ksize = 11;
-		std::vector<std::tuple<int, int, double>> kernel(ksize * ksize);
-		for(int r = -ksize / 2; r < ksize / 2 + 1; ++r) {
-			for(int c = -ksize / 2; c < ksize / 2 + 1; ++c)
-				kernel[(r + ksize / 2) * ksize + (c + ksize / 2)] = std::make_tuple(c, r, 1.0 - std::min(1.0, (c * c + r * r) / std::pow(ksize / 2, 2)));
+		int crad = 10;	// Radius of kernel in cells.
+
+		std::cout << "Collecting stats.\n";
+		std::vector<double> stats(cols * rows);
+		std::fill(stats.begin(), stats.end(), -9999.0);
+		double minvar = MAX_FLOAT;
+		double maxvar = MIN_FLOAT;
+		{
+			for(int row = 0; row < rows; ++row) {
+				for(int col = 0; col < cols; ++col) {
+
+					double v, mean = 0;
+					int ct = 0;
+					for(int rr = row - crad; rr < row + crad + 1; ++rr) {
+						for(int cc = col - crad; cc < col + crad + 1; ++cc) {
+							if(cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
+							if((v = grid[rr * cols + cc]) != -9999.0) {
+								mean += v;
+								++ct;
+							}
+						}
+					}
+
+					if(!ct) continue;
+
+					mean /= ct;
+
+					double var = 0;
+					for(int rr = row - crad; rr < row + crad + 1; ++rr) {
+						for(int cc = col - crad; cc < col + crad + 1; ++cc) {
+							if(cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
+							if((v = grid[rr * cols + cc]) != -9999.0)
+								var += std::pow(v - mean, 2.0);
+						}
+					}
+
+					var /= ct;
+
+					if(var < minvar) minvar = var;
+					if(var > maxvar) maxvar = var;
+					stats[row * cols + col] = var;
+				}
+			}
 		}
+
+		// Make the smoothing kernels.
+		std::vector<std::vector<std::tuple<int, int, double>>> kernels(crad);
+		for(int i = 1; i <= crad; ++i) {
+			kernels[i - 1].resize((i * 2 + 1) * (i * 2 + 1));
+			for(int r = -i; r < i + 1; ++r) {
+				for(int c = -i; c < i + 1; ++c)
+					kernels[i - 1][(r + i) * (i * 2 + 1) + (c + i)] = std::make_tuple(c, r, 1.0 - std::min(1.0, (c * c + r * r) / std::pow(crad, 2)));
+			}
+		}
+
 		std::vector<double> smoothed(cols * rows);
 		std::fill(smoothed.begin(), smoothed.end(), -9999.0);
 		for(int row = 0; row < rows; ++row) {
 			for(int col = 0; col < cols; ++col) {
+
+				// Get the correct kernel for the variance for this cell.
+				// The lowest variance gets the largest kernel.
+				double var = stats[row * cols + col];
+				if(var == -9999.0) continue;
+				int varidx = crad - 1 - (int) (var - minvar) / (maxvar - minvar);
+				const std::vector<std::tuple<int, int, double>>& kernel = kernels[varidx];
+
 				double v, sum = 0, weight = 0;
 				int ct = 0;
 				for(const auto& it : kernel) {
