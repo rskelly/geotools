@@ -22,6 +22,8 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <set>
+#include <map>
 
 #include <pdal/PointTable.hpp>
 #include <pdal/PointView.hpp>
@@ -188,10 +190,7 @@ void usage() {
 	std::cout << "Usage: cloudmatch <outfile> <infile [infile [...]]>\n";
 }
 
-int gridNo = 0;
-
-void saveGrid(const std::vector<double> grid, int cols, int rows, double minx, double miny, double res, const std::string& proj) {
-	std::string file = "grid_" + std::to_string(++gridNo) + ".tif";
+void saveGrid(const std::string& file, const std::vector<double> grid, int cols, int rows, double minx, double miny, double res, const std::string& proj) {
 	GDALAllRegister();
 	GDALDriverManager* dm = GetGDALDriverManager();
 	GDALDriver* drv = dm->GetDriverByName("GTiff");
@@ -228,6 +227,53 @@ double bary(const Point& p, const Point& a, const Point& b, const Point& c) {
 		return std::nan("");
 	} else {
 		return a.z() * w1 + b.z() * w2 + c.z() * w3;
+	}
+}
+
+void gauss(std::vector<double>& arr, int size, double sd) {
+	arr.resize(std::pow(size * 2 + 1, 2));
+	double a = 1.0 / (2.0 * M_PI * sd * sd);
+	for(int r = -size; r < size + 1; ++r) {
+		for(int c = -size; c < size + 1; ++c) {
+			arr[(r + size) * (size * 2 + 1) + (c + size)] = a * std::exp(-double(c * c + r * r) / (2.0 * sd * sd));
+		}
+	}
+}
+
+void convolve(std::vector<double>& data, int cols, int rows, const std::vector<double>& kernel, int size, int col = -1, int row = -1) {
+	if(col == -1 && row == -1) {
+		double v, w, sum = 0, wt = 0;
+		std::vector<double> smoothed(data.size());
+		std::fill(smoothed.begin(), smoothed.end(), -9999.0);
+		for(int r = 0; r < rows; ++r) {
+			for(int c = 0; c < cols; ++c) {
+				for(int rr = r - size; rr < r + size + 1; ++rr) {
+					for(int cc = c - size; cc < c + size + 1; ++cc) {
+						if(cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
+						if((v = data[rr * cols + cc]) != -9999.0) {
+							w = kernel[(rr + size) * (size * 2 + 1) + (cc + size)];
+							sum += v * w;
+							wt += w;
+						}
+					}
+				}
+				smoothed[r * cols + c] = sum / wt;	// Divide by wt to help with edge effects.
+			}
+		}
+		data.swap(smoothed);
+	} else {
+		double v, w, sum = 0, wt = 0;
+		for(int rr = row - size; rr < row + size + 1; ++rr) {
+			for(int cc = col - size; cc < col + size + 1; ++cc) {
+				if(cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
+				if((v = data[rr * cols + cc]) != -9999.0) {
+					w = kernel[(rr + size) * (size * 2 + 1) + (cc + size)];
+					sum += v * w;
+					wt += w;
+				}
+			}
+		}
+		data[row * cols + col] = sum / wt;	// Divide by wt to help with edge effects.
 	}
 }
 
@@ -316,10 +362,10 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	std::cout << "Saving grids.\n";
-	for(PointFile& pf : infiles)
-		saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
-	saveGrid(grid, cols, rows, minx, miny, res, infiles.front().projection);
+	//std::cout << "Saving grids.\n";
+	//for(PointFile& pf : infiles)
+	//	saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
+	//saveGrid(grid, cols, rows, minx, miny, res, infiles.front().projection);
 
 	std::cout << "Clearing trees.\n";
 	for(PointFile& pf : infiles)
@@ -329,17 +375,18 @@ int main(int argc, char** argv) {
 	// now smooth the main grid
 	std::cout << "Smoothing the grid.\n";
 	{
-		int crad = 10;	// Radius of kernel in cells.
+		int crad = 10;	// Radius of kernel in cells (total width, 21).
 
+		// Collect the variances within the kernel region. These are used to approximate the slope-ness
+		// of the terrain. TODO: Use an actual slope.
 		std::cout << "Collecting stats.\n";
+		std::vector<double> quantiles(crad); 	// Stores the boundaries for the equal-count partition of unique variance values.
 		std::vector<double> stats(cols * rows);
 		std::fill(stats.begin(), stats.end(), -9999.0);
-		double minvar = MAX_FLOAT;
-		double maxvar = MIN_FLOAT;
 		{
+			std::set<double> variances;				// Stores the unique values of the variances.
 			for(int row = 0; row < rows; ++row) {
 				for(int col = 0; col < cols; ++col) {
-
 					double v, mean = 0;
 					int ct = 0;
 					for(int rr = row - crad; rr < row + crad + 1; ++rr) {
@@ -367,23 +414,38 @@ int main(int argc, char** argv) {
 
 					var /= ct;
 
-					if(var < minvar) minvar = var;
-					if(var > maxvar) maxvar = var;
 					stats[row * cols + col] = var;
+
+					variances.insert(var);
 				}
 			}
-		}
 
-		// Make the smoothing kernels.
-		std::vector<std::vector<std::tuple<int, int, double>>> kernels(crad);
-		for(int i = 1; i <= crad; ++i) {
-			kernels[i - 1].resize((i * 2 + 1) * (i * 2 + 1));
-			for(int r = -i; r < i + 1; ++r) {
-				for(int c = -i; c < i + 1; ++c)
-					kernels[i - 1][(r + i) * (i * 2 + 1) + (c + i)] = std::make_tuple(c, r, 1.0 - std::min(1.0, (c * c + r * r) / std::pow(crad, 2)));
+			// Get the equal-area boundaries of the variance set.
+			int step = variances.size() / crad;
+			std::vector<double> variances0(variances.begin(), variances.end());
+			for(int i = 0; i < crad; ++i)
+				quantiles[i] = variances0[(i + 1) * step];
+
+			// Smooth the stats raster. There's a lot of noise here.
+			{
+				std::vector<double> gf;
+				gauss(gf, 1, 0.5);
+				convolve(stats, cols, rows, gf, 1);
 			}
+
+			saveGrid("stats.tif", stats, cols, rows, minx, miny, res, infiles.front().projection);
 		}
 
+		// Make the smoothing kernels. There are {crad} kernels, one for each
+		// radius from 1 to {crad} inclusive. The kernels are distance-weighted averages.
+		std::vector<std::vector<double>> kernels(crad);
+		{
+			std::vector<double> gf;
+			for(int i = 1; i <= crad; ++i)
+				gauss(kernels[i - 1], i, i * 0.5);
+		}
+
+		// Smooth the raster.
 		std::vector<double> smoothed(cols * rows);
 		std::fill(smoothed.begin(), smoothed.end(), -9999.0);
 		for(int row = 0; row < rows; ++row) {
@@ -393,144 +455,133 @@ int main(int argc, char** argv) {
 				// The lowest variance gets the largest kernel.
 				double var = stats[row * cols + col];
 				if(var == -9999.0) continue;
-				int varidx = crad - 1 - (int) (var - minvar) / (maxvar - minvar);
-				const std::vector<std::tuple<int, int, double>>& kernel = kernels[varidx];
+				int varidx = 0;
+				for(double q : quantiles) {
+					if(q < var)
+						++varidx;
+				}
+				convolve(grid, cols, rows, kernels[varidx], varidx + 1, col, row);
+			}
+		}
 
-				double v, sum = 0, weight = 0;
-				int ct = 0;
-				for(const auto& it : kernel) {
-					int cc = col + std::get<0>(it);
-					int rr = row + std::get<1>(it);
-					double w = std::get<2>(it);
-					if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows)
-							&& (v = grid[rr * cols + cc]) != -9999.0) {
-						sum += v * w;
-						weight += w;
-						++ct;
+		saveGrid("grid.tif", grid, cols, rows, minx, miny, res, infiles.front().projection);
+	}
+
+	if(false) {
+		// now adjust and write each file grid using the deviation.
+		std::cout << "Adjusting file grids.\n";
+		for(PointFile& pf : infiles) {
+			for(int pr = 0; pr < pf.rows; ++pr) {
+				for(int pc = 0; pc < pf.cols; ++pc) {
+					double pv = pf.grid[pr * pf.cols + pc];
+					if(pv != -9999.0) {
+						double px = pf.minx + pc * res + res * 0.5;
+						double py = pf.miny + pr * res + res * 0.5;
+						int gc = (int) (px - minx) / res;
+						int gr = (int) (py - miny) / res;
+						double gv = grid[gr * cols + gc];
+						if(gv == -9999.0)
+							throw std::runtime_error("Found illegal nodata in grid.");
+						pf.grid[pr * pf.cols + pc] = gv - pv;
 					}
 				}
-
-				if(ct)
-					smoothed[row * cols + col] = sum / weight;
 			}
 		}
-		grid.swap(smoothed);
-	}
 
-	// now adjust and write each file grid using the deviation.
-	std::cout << "Adjusting file grids.\n";
-	for(PointFile& pf : infiles) {
-		for(int pr = 0; pr < pf.rows; ++pr) {
-			for(int pc = 0; pc < pf.cols; ++pc) {
-				double pv = pf.grid[pr * pf.cols + pc];
-				if(pv != -9999.0) {
-					double px = pf.minx + pc * res + res * 0.5;
-					double py = pf.miny + pr * res + res * 0.5;
-					int gc = (int) (px - minx) / res;
-					int gr = (int) (py - miny) / res;
-					double gv = grid[gr * cols + gc];
-					if(gv == -9999.0)
-						throw std::runtime_error("Found illegal nodata in grid.");
-					pf.grid[pr * pf.cols + pc] = gv - pv;
-				}
-			}
-		}
-	}
+		//std::cout << "Saving grids.\n";
+		//for(PointFile& pf : infiles)
+		//	saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
+		//saveGrid(grid, cols, rows, minx, miny, res, infiles.front().projection);
 
-	std::cout << "Saving grids.\n";
-	for(PointFile& pf : infiles)
-		saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
-	saveGrid(grid, cols, rows, minx, miny, res, infiles.front().projection);
+		// now adjust each las file and write new ones.
+		std::cout << "Adjusting files...\n";
 
-	// now adjust each las file and write new ones.
-	std::cout << "Adjusting files...\n";
+		geo::util::makedir(outdir);
 
-	geo::util::makedir(outdir);
+		for(PointFile& pf : infiles) {
+			pdal::Option opt("filename", pf.file);
+			pdal::Options opts;
+			opts.add(opt);
 
-	for(PointFile& pf : infiles) {
-		pdal::Option opt("filename", pf.file);
-		pdal::Options opts;
-		opts.add(opt);
+			pdal::PointTable table;
+			pdal::LasReader rdr;
+			rdr.setOptions(opts);
+			rdr.prepare(table);
 
-		pdal::PointTable table;
-		pdal::LasReader rdr;
-		rdr.setOptions(opts);
-		rdr.prepare(table);
+			pdal::PointViewSet viewSet = rdr.execute(table);
+			pdal::PointViewPtr view = *viewSet.begin();
+			pdal::Dimension::IdList dims = view->dims();
+			pdal::LasHeader hdr = rdr.header();
 
-		pdal::PointViewSet viewSet = rdr.execute(table);
-		pdal::PointViewPtr view = *viewSet.begin();
-		pdal::Dimension::IdList dims = view->dims();
-		pdal::LasHeader hdr = rdr.header();
+			using namespace pdal::Dimension;
 
-		using namespace pdal::Dimension;
+			double minz = MAX_FLOAT;
+			double maxz = MIN_FLOAT;
 
-		double minz = MAX_FLOAT;
-		double maxz = MIN_FLOAT;
+			double x, y, z, cx, cy;
+			double d, v, w, ss, sw;
+			bool skip;
+			int col, row;
 
-		double x, y, z, cx, cy;
-		double d, v, w, ss, sw;
-		bool skip;
-		int col, row;
+			for (pdal::PointId idx = 0; idx < view->size(); ++idx) {
+				x = view->getFieldAs<double>(Id::X, idx);
+				y = view->getFieldAs<double>(Id::Y, idx);
+				z = view->getFieldAs<double>(Id::Z, idx);
 
-		for (pdal::PointId idx = 0; idx < view->size(); ++idx) {
-			x = view->getFieldAs<double>(Id::X, idx);
-			y = view->getFieldAs<double>(Id::Y, idx);
-			z = view->getFieldAs<double>(Id::Z, idx);
+				col = (int) (x - pf.minx) / res;
+				row = (int) (y - pf.miny) / res;
 
-			col = (int) (x - pf.minx) / res;
-			row = (int) (y - pf.miny) / res;
-
-			ss = 0;
-			sw = 0;
-			skip = false;
-			for(int rr = row - 1; !skip && rr < row + 2; ++rr) {
-				for(int cc = col - 1; !skip && cc < col + 2; ++cc) {
-					if(cc < 0 || rr < 0 || rr >= pf.rows || cc >= pf.cols) continue;
-					if((v = pf.grid[rr * pf.cols + cc]) != -9999.0) {
-						cx = pf.minx + cc * res + res * 0.5;
-						cy = pf.miny + rr * res + res * 0.5;
-						d = std::pow(cx - x, 2.0) + std::pow(cy - y, 2.0);
-						if(d == 0) {
-							ss = v;
-							sw = 1.0;
-							skip = true;
-							break;
-						} else {
-							w = 1.0 - std::min(1.0, d / (res * res));
-							ss += v * w;
-							sw += w;
+				ss = 0;
+				sw = 0;
+				skip = false;
+				for(int rr = row - 1; !skip && rr < row + 2; ++rr) {
+					for(int cc = col - 1; !skip && cc < col + 2; ++cc) {
+						if(cc < 0 || rr < 0 || rr >= pf.rows || cc >= pf.cols) continue;
+						if((v = pf.grid[rr * pf.cols + cc]) != -9999.0) {
+							cx = pf.minx + cc * res + res * 0.5;
+							cy = pf.miny + rr * res + res * 0.5;
+							d = std::pow(cx - x, 2.0) + std::pow(cy - y, 2.0);
+							if(d == 0) {
+								ss = v;
+								sw = 1.0;
+								skip = true;
+								break;
+							} else {
+								w = 1.0 - std::min(1.0, d / (res * res));
+								ss += v * w;
+								sw += w;
+							}
 						}
 					}
 				}
+
+				if(sw != 0) {
+					z += ss / sw;
+				} else {
+					std::cout << ss << ", " << sw << ", " << col << ", " << row << "\n";
+				}
+
+				view->setField(Id::Z, idx, z);
+
+				if(z < minz) minz = z;
+				if(z > maxz) maxz = z;
 			}
 
-			if(sw != 0) {
-				z += ss / sw;
-			} else {
-				std::cout << ss << ", " << sw << ", " << col << ", " << row << "\n";
-			}
+			std::string outfile = geo::util::join(outdir, geo::util::basename(pf.file) + "_adj.las");
+			if(geo::util::isfile(outfile))
+				geo::util::rem(outfile);
+			opt = pdal::Option("filename", outfile);
+			opts.replace(opt);
+			pdal::LasWriter wtr;
+			pdal::BufferReader brdr;
+			brdr.addView(view);
+			wtr.setInput(brdr);
+			wtr.setOptions(opts);
+			wtr.setSpatialReference(rdr.getSpatialReference());
 
-			view->setField(Id::Z, idx, z);
-
-			if(z < minz) minz = z;
-			if(z > maxz) maxz = z;
+			wtr.prepare(table);
+			wtr.execute(table);
 		}
-
-		std::string outfile = geo::util::join(outdir, geo::util::basename(pf.file) + "_adj.las");
-		if(geo::util::isfile(outfile))
-			geo::util::rem(outfile);
-		opt = pdal::Option("filename", outfile);
-		opts.replace(opt);
-		pdal::LasWriter wtr;
-		pdal::BufferReader brdr;
-		brdr.addView(view);
-		wtr.setInput(brdr);
-		wtr.setOptions(opts);
-		wtr.setSpatialReference(rdr.getSpatialReference());
-
-		wtr.prepare(table);
-		wtr.execute(table);
 	}
-
 	std::cout << "Done.\n";
 }
