@@ -43,14 +43,14 @@ constexpr double MAX_FLOAT = std::numeric_limits<double>::max();
 
 class Point {
 private:
-	double _x, _y, _z;
+	double _x, _y, _z, _w;
 
 public:
 
 	Point() : Point(0, 0, 0) {}
 
-	Point(double x, double y, double z) :
-		_x(x), _y(y), _z(z) {}
+	Point(double x, double y, double z, double weight = 1) :
+		_x(x), _y(y), _z(z), _w(weight) {}
 
 	double x() const {
 		return _x;
@@ -74,6 +74,14 @@ public:
 
 	void z(double z) {
 		_z = z;
+	}
+
+	double weight() const {
+		return _w;
+	}
+
+	void weight(double w) {
+		_w = w;
 	}
 
 };
