@@ -88,20 +88,20 @@ public:
 
 class PointFile {
 public:
+	geo::ds::mqtree<Point> tree;	// Tree to store points from this file.
+	std::vector<double> grid;		// The grid of local means for this file.
 	std::string file;				// The point source file.
+	std::string projection;			// The projection of the las file.
 	double minx, miny, maxx, maxy; 	// Boundaries.
 	double res;						// The grid size.
-	std::vector<double> grid;		// The grid of local means for this file.
-	int cols, rows;					// The grid size.
-	geo::ds::mqtree<Point> tree;	// Tree to store points from this file.
 	double weight;					// The weight given to the points from this file in the mean (0-1).
-	std::string projection;			// The projection of the las file.
+	int cols, rows;					// The grid size.
 
 	PointFile(const std::string& file, double res, double weight) :
 		file(file),
-		minx(MAX_FLOAT), miny(MAX_FLOAT), maxx(MIN_FLOAT), maxy(MIN_FLOAT), res(res),
-		cols(0), rows(0),
-		weight(weight) {}
+		minx(MAX_FLOAT), miny(MAX_FLOAT), maxx(MIN_FLOAT), maxy(MIN_FLOAT),
+		res(res), weight(weight),
+		cols(0), rows(0) {}
 
 	void init() {
 		pdal::Option opt("filename", file);
@@ -238,50 +238,63 @@ double bary(const Point& p, const Point& a, const Point& b, const Point& c) {
 	}
 }
 
-void gauss(std::vector<double>& arr, int size, double sd) {
+void gauss2d(std::vector<double>& arr, int size, double sd) {
 	arr.resize(std::pow(size * 2 + 1, 2));
-	double a = 1.0 / (2.0 * M_PI * sd * sd);
+	//double a = 1.0 / (2.0 * M_PI * sd * sd);
+	double sum = 0;
 	for(int r = -size; r < size + 1; ++r) {
-		for(int c = -size; c < size + 1; ++c) {
-			arr[(r + size) * (size * 2 + 1) + (c + size)] = a * std::exp(-double(c * c + r * r) / (2.0 * sd * sd));
-		}
+		for(int c = -size; c < size + 1; ++c)
+			sum += (arr[(r + size) * (size * 2 + 1) + (c + size)] = std::exp(-double(c * c + r * r) / (2.0 * sd * sd)));
+	}
+	if(sum != 1) {
+		for(double& v : arr)
+			v /= sum;
 	}
 }
 
-void convolve(std::vector<double>& data, int cols, int rows, const std::vector<double>& kernel, int size, int col = -1, int row = -1) {
+void convolve(const std::vector<double>& data, int cols, int rows,
+		const std::vector<double>& kernel, int size,
+		std::vector<double>& smoothed,
+		int col = -1, int row = -1) {
+
 	if(col == -1 && row == -1) {
-		double v, w, sum = 0, wt = 0;
-		std::vector<double> smoothed(data.size());
-		std::fill(smoothed.begin(), smoothed.end(), -9999.0);
+		double v, w, sum, wt;
 		for(int r = 0; r < rows; ++r) {
 			for(int c = 0; c < cols; ++c) {
-				for(int rr = r - size; rr < r + size + 1; ++rr) {
-					for(int cc = c - size; cc < c + size + 1; ++cc) {
-						if(cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
-						if((v = data[rr * cols + cc]) != -9999.0) {
+				sum = 0;
+				wt = 0;
+				for(int rr = -size; rr < size + 1; ++rr) {
+					for(int cc = -size; cc < size + 1; ++cc) {
+						int ccc = cc + c;
+						int rrr = rr + r;
+						if(ccc < 0 || rrr < 0 || ccc >= cols || rrr >= rows) continue;
+						if((v = data[rrr * cols + ccc]) != -9999.0) {
 							w = kernel[(rr + size) * (size * 2 + 1) + (cc + size)];
 							sum += v * w;
 							wt += w;
 						}
 					}
 				}
-				smoothed[r * cols + c] = sum / wt;	// Divide by wt to help with edge effects.
+				if(wt > 0)
+					smoothed[r * cols + c] = sum / wt;	// Divide by wt to help with edge effects. Usually it's 1.
 			}
 		}
-		data.swap(smoothed);
 	} else {
 		double v, w, sum = 0, wt = 0;
-		for(int rr = row - size; rr < row + size + 1; ++rr) {
-			for(int cc = col - size; cc < col + size + 1; ++cc) {
+		for(int r = -size; r < size + 1; ++r) {
+			for(int c = -size; c < size + 1; ++c) {
+				int cc = col + c;
+				int rr = row + r;
 				if(cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
 				if((v = data[rr * cols + cc]) != -9999.0) {
-					w = kernel[(rr + size) * (size * 2 + 1) + (cc + size)];
+					w = kernel[(r + size) * (size * 2 + 1) + (c + size)];
 					sum += v * w;
 					wt += w;
 				}
 			}
 		}
-		data[row * cols + col] = sum / wt;	// Divide by wt to help with edge effects.
+		if(wt > 0)
+			smoothed[row * cols + col] = sum / wt;	// Divide by wt to help with edge effects.
 	}
 }
 
@@ -335,9 +348,14 @@ int main(int argc, char** argv) {
 	std::vector<double> grid(cols * rows);
 	std::fill(grid.begin(), grid.end(), -9999.0);
 
+	std::vector<double> stats(cols * rows);
+	std::fill(stats.begin(), stats.end(), -9999.0);
+
 	Point pt(0, 0, 0);
 	std::vector<Point> pts;
 	auto ins = std::back_inserter(pts);
+
+	std::set<double> variances;				// Stores the unique values of the variances.
 
 	std::cout << "Creating grids.\n";
 	for(int row = 0; row < rows; ++row) {
@@ -348,16 +366,29 @@ int main(int argc, char** argv) {
 			pt.x(x);
 			pt.y(y);
 
-			double sum = 0;
-			double w = 0;
+			double var, sum = 0, w = 0;
+			size_t varct = 0;
 
 			for(PointFile& pf : infiles) {
 				size_t count = pf.tree.search(pt, res, ins);
 				if(count) {
-					double s = 0;
+
+					double s = 0, v = 0;
 					for(const Point& p : pts)
 						s += p.z();
 					s /= count;
+
+					for(const Point& p : pts)
+						v += std::pow(s - p.z(), 2.0);
+					v /= count;
+
+					// If the count is larger than the previous variance count,
+					// replace the variance with the new one.
+					if(count > varct) {
+						var = v;
+						varct = count;
+					}
+
 					sum += s * pf.weight;
 					w += pf.weight;
 					pf.set(x, y, s);
@@ -365,20 +396,23 @@ int main(int argc, char** argv) {
 				pts.clear();
 			}
 
-			if(w)
+			if(w) {
 				grid[row * cols + col] = sum / w;
+				stats[row * cols + col] = var;
+				variances.insert(var);
+			}
 		}
 	}
 
 	//std::cout << "Saving grids.\n";
 	//for(PointFile& pf : infiles)
 	//	saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
-	//saveGrid(grid, cols, rows, minx, miny, res, infiles.front().projection);
+	saveGrid("avg.tif", grid, cols, rows, minx, miny, res, infiles.front().projection);
+	saveGrid("stats_raw.tif", stats, cols, rows, minx, miny, res, infiles.front().projection);
 
 	std::cout << "Clearing trees.\n";
 	for(PointFile& pf : infiles)
 		pf.clearTree();
-
 
 	// now smooth the main grid
 	std::cout << "Smoothing the grid.\n";
@@ -388,57 +422,22 @@ int main(int argc, char** argv) {
 		// Collect the variances within the kernel region. These are used to approximate the slope-ness
 		// of the terrain. TODO: Use an actual slope.
 		std::cout << "Collecting stats.\n";
-		std::vector<double> quantiles(crad); 	// Stores the boundaries for the equal-count partition of unique variance values.
-		std::vector<double> stats(cols * rows);
-		std::fill(stats.begin(), stats.end(), -9999.0);
+		std::vector<double> quantiles(crad - 1); 	// Stores the boundaries for the equal-count partition of unique variance values.
 		{
-			std::set<double> variances;				// Stores the unique values of the variances.
-			for(int row = 0; row < rows; ++row) {
-				for(int col = 0; col < cols; ++col) {
-					double v, mean = 0;
-					int ct = 0;
-					for(int rr = row - crad; rr < row + crad + 1; ++rr) {
-						for(int cc = col - crad; cc < col + crad + 1; ++cc) {
-							if(cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
-							if((v = grid[rr * cols + cc]) != -9999.0) {
-								mean += v;
-								++ct;
-							}
-						}
-					}
-
-					if(!ct) continue;
-
-					mean /= ct;
-
-					double var = 0;
-					for(int rr = row - crad; rr < row + crad + 1; ++rr) {
-						for(int cc = col - crad; cc < col + crad + 1; ++cc) {
-							if(cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
-							if((v = grid[rr * cols + cc]) != -9999.0)
-								var += std::pow(v - mean, 2.0);
-						}
-					}
-
-					var /= ct;
-
-					stats[row * cols + col] = var;
-
-					variances.insert(var);
-				}
-			}
-
 			// Get the equal-area boundaries of the variance set.
 			int step = variances.size() / crad;
 			std::vector<double> variances0(variances.begin(), variances.end());
-			for(int i = 0; i < crad; ++i)
+			for(int i = 0; i < crad - 1; ++i)
 				quantiles[i] = variances0[(i + 1) * step];
 
 			// Smooth the stats raster. There's a lot of noise here.
 			{
+				std::vector<double> smoothed(stats.size());
+				std::fill(smoothed.begin(), smoothed.end(), -9999.0);
 				std::vector<double> gf;
-				gauss(gf, 1, 0.5);
-				convolve(stats, cols, rows, gf, 1);
+				gauss2d(gf, 5, 2);
+				convolve(stats, cols, rows, gf, 1, smoothed);
+				stats.swap(smoothed);
 			}
 
 			saveGrid("stats.tif", stats, cols, rows, minx, miny, res, infiles.front().projection);
@@ -450,7 +449,7 @@ int main(int argc, char** argv) {
 		{
 			std::vector<double> gf;
 			for(int i = 1; i <= crad; ++i)
-				gauss(kernels[i - 1], i, i * 0.5);
+				gauss2d(kernels[i - 1], i, i * 0.33);
 		}
 
 		// Smooth the raster.
@@ -463,19 +462,22 @@ int main(int argc, char** argv) {
 				// The lowest variance gets the largest kernel.
 				double var = stats[row * cols + col];
 				if(var == -9999.0) continue;
-				int varidx = 0;
+				size_t varidx = 0;
 				for(double q : quantiles) {
 					if(q < var)
 						++varidx;
 				}
-				convolve(grid, cols, rows, kernels[varidx], varidx + 1, col, row);
+
+				convolve(grid, cols, rows, kernels[varidx], varidx + 1, smoothed, col, row);
 			}
 		}
+
+		grid.swap(smoothed);
 
 		saveGrid("grid.tif", grid, cols, rows, minx, miny, res, infiles.front().projection);
 	}
 
-	if(false) {
+	if(true) {
 		// now adjust and write each file grid using the deviation.
 		std::cout << "Adjusting file grids.\n";
 		for(PointFile& pf : infiles) {
