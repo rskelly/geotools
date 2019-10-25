@@ -407,8 +407,8 @@ int main(int argc, char** argv) {
 	//std::cout << "Saving grids.\n";
 	//for(PointFile& pf : infiles)
 	//	saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
-	saveGrid("avg.tif", grid, cols, rows, minx, miny, res, infiles.front().projection);
-	saveGrid("stats_raw.tif", stats, cols, rows, minx, miny, res, infiles.front().projection);
+	saveGrid(geo::util::join(outdir, "avg.tif"), grid, cols, rows, minx, miny, res, infiles.front().projection);
+	saveGrid(geo::util::join(outdir, "stats_raw.tif"), stats, cols, rows, minx, miny, res, infiles.front().projection);
 
 	std::cout << "Clearing trees.\n";
 	for(PointFile& pf : infiles)
@@ -440,7 +440,7 @@ int main(int argc, char** argv) {
 				stats.swap(smoothed);
 			}
 
-			saveGrid("stats.tif", stats, cols, rows, minx, miny, res, infiles.front().projection);
+			saveGrid(geo::util::join(outdir, "stats.tif"), stats, cols, rows, minx, miny, res, infiles.front().projection);
 		}
 
 		// Make the smoothing kernels. There are {crad} kernels, one for each
@@ -474,7 +474,7 @@ int main(int argc, char** argv) {
 
 		grid.swap(smoothed);
 
-		saveGrid("grid.tif", grid, cols, rows, minx, miny, res, infiles.front().projection);
+		saveGrid(geo::util::join(outdir, "grid.tif"), grid, cols, rows, minx, miny, res, infiles.front().projection);
 	}
 
 	if(true) {
