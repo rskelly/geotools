@@ -106,4 +106,4 @@ target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES
 
 # Install ################################################################################################
 
-install(TARGETS pc2grid pcmatch convolve contrem reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS pc2grid pcnorm pcmatch convolve contrem reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 

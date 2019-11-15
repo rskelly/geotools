@@ -42,7 +42,7 @@ void buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 	rows = (int) std::ceil((bounds[3] - bounds[2]) / res);
 
 	std::vector<float> weights(cols * rows);
-
+	size_t count = 0;
 	{
 		// To compute weighted mean, need weights and values arrays.
 		grid.resize(cols * rows);
@@ -88,11 +88,17 @@ void buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 							// Accumulate the weighted heights and weights.
 							grid[r * cols + c] += pz * w;
 							weights[r * cols + c] += w;
+							++count;
 						}
 					}
 				}
 			}
 		}
+	}
+
+	if(!count) {
+		std::cout << "There are no ground points. Quitting.\n";
+		return 1;
 	}
 
 	// Normalize by weights.
