@@ -29,7 +29,7 @@ void getBounds(liblas::Reader& rdr, double* bounds) {
 	}
 }
 
-void buildGrid(const std::vector<std::string>& infiles, double* bounds, double res, int& cols, int& rows, std::vector<float>& grid) {
+bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double res, int& cols, int& rows, std::vector<float>& grid) {
 
 	// Increase bounds enough to add 2 cells all around.
 	bounds[0] -= res;
@@ -98,7 +98,7 @@ void buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 
 	if(!count) {
 		std::cout << "There are no ground points. Quitting.\n";
-		return 1;
+		return false;
 	}
 
 	// Normalize by weights.
@@ -149,6 +149,7 @@ void buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 			grid[i] = s / w;
 		}
 	}
+	return true;
 }
 
 double bary(double x, double y,
@@ -253,7 +254,8 @@ int main(int argc, char** argv) {
 	std::vector<float> grid;
 
 	std::cout << "Building grid\n";
-	buildGrid(infiles, gbounds, resolution, cols, rows, grid);
+	if(!buildGrid(infiles, gbounds, resolution, cols, rows, grid))
+		return 1;
 
 	std::ofstream output;
 	liblas::WriterFactory wf;
@@ -267,5 +269,5 @@ int main(int argc, char** argv) {
 	whdr->SetMax(bounds[1], bounds[3], gbounds[5]);
 
 	wtr.SetHeader(*whdr);
-
+	return 0;
 }
