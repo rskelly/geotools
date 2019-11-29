@@ -94,6 +94,9 @@ target_link_libraries (pcnorm ${LIBLAS_LIBRARY})
 add_executable (pcmatch src/pcmatch.cpp)
 target_link_libraries (pcmatch geoutil ${PDAL_LIBRARIES})
 
+add_executable (pcmatch3 src/pcmatch3.cpp)
+target_link_libraries (pcmatch3 geoutil ${PDAL_LIBRARIES})
+
 add_executable (sbet2csv src/sbet2csv.cpp)
 target_link_libraries (sbet2csv geoutil ${PROJ_LIBRARY} ${GEOS_LIBRARY})
 
@@ -106,4 +109,4 @@ target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES
 
 # Install ################################################################################################
 
-install(TARGETS pc2grid pcnorm pcmatch convolve contrem reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS pc2grid pcnorm pcmatch3 convolve contrem reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 

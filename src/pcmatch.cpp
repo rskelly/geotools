@@ -76,6 +76,14 @@ public:
 		_z = z;
 	}
 
+	double& operator[](int i) {
+		switch(i % 3) {
+		case 0: return _x;
+		case 1: return _y;
+		default: return _z;
+		}
+	}
+
 	double weight() const {
 		return _w;
 	}
@@ -194,8 +202,29 @@ public:
 
 };
 
+class PointSet {
+public:
+
+	std::vector<Point> points;
+
+	PointSet(const std::string& file) {
+		std::ifstream in(file);
+		std::string line;
+		std::string cell;
+		Point pt;
+		while(std::getline(in, line)) {
+			std::stringstream ss(line);
+			int c = 0;
+			while(std::getline(ss, cell, ',') && c < 3) {
+				pt[c++] = atof(cell.c_str());
+			}
+			points.push_back(std::move(pt));
+		}
+	}
+};
+
 void usage() {
-	std::cout << "Usage: cloudmatch <outfile> <infile [infile [...]]>\n";
+	std::cout << "Usage: pcmatch <outdir> <point set (csv)> <infile [infile [...]]>\n";
 }
 
 void saveGrid(const std::string& file, const std::vector<double> grid, int cols, int rows, double minx, double miny, double res, const std::string& proj) {
@@ -305,20 +334,27 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	double res = 20;
+	double radius = 20;
+	std::vector<std::string> args;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg(argv[i]);
 		if(arg == "-r") {
-			res = atof(argv[++i]);
+			radius = atof(argv[++i]);
+		} else {
+			args.push_back(argv[i]);
 		}
 	}
 
 	std::cout << "Creating input entities.\n";
-	std::string outdir = argv[1];
+	std::string outdir = args[0];
+	std::string points = args[1];
 	std::vector<PointFile> infiles;
-	for(int i = 2; i < argc; ++i)
-		infiles.emplace_back(argv[i], res, 1);
+	for(size_t i = 2; i < args.size(); ++i)
+		infiles.emplace_back(args[i], radius, 1);
+
+	std::cout << "Load point set.\n";
+	PointSet pointSet(points);
 
 	std::cout << "Initializing entities and bounds.\n";
 	double minx = MAX_FLOAT;
@@ -333,265 +369,243 @@ int main(int argc, char** argv) {
 		if(maxy < pf.maxy) maxy = pf.maxy;
 	}
 
-	minx = std::floor(minx / res) * res;
-	miny = std::floor(miny / res) * res;
-	maxx = std::floor(maxx / res) * res + res;
-	maxy = std::floor(maxy / res) * res + res;
-
 	std::cout << "Building trees.\n";
-	for(PointFile& pf : infiles)
+	for(PointFile& pf : infiles) {
+		std::cout << pf.file << "\n";
 		pf.buildTree();
-
-	int cols = (int) std::ceil((maxx - minx) / res);
-	int rows = (int) std::ceil((maxy - miny) / res);
-
-	std::vector<double> grid(cols * rows);
-	std::fill(grid.begin(), grid.end(), -9999.0);
-
-	std::vector<double> stats(cols * rows);
-	std::fill(stats.begin(), stats.end(), -9999.0);
+	}
 
 	Point pt(0, 0, 0);
 	std::vector<Point> pts;
 	auto ins = std::back_inserter(pts);
 
-	std::set<double> variances;				// Stores the unique values of the variances.
+	std::cout << "Calculating neighbourhood stats.\n";
 
-	std::cout << "Creating grids.\n";
-	for(int row = 0; row < rows; ++row) {
-		for(int col = 0; col < cols; ++col) {
-			double x = minx + col * res + res * 0.5;
-			double y = miny + row * res + res * 0.5;
+	std::ofstream csv(geo::util::join(outdir, "stats.csv"));
+	csv << "file,x,y,weighted_mean,mean,variance\n";
 
-			pt.x(x);
-			pt.y(y);
-
-			double var, sum = 0, w = 0;
-			size_t varct = 0;
-
-			for(PointFile& pf : infiles) {
-				size_t count = pf.tree.search(pt, res, ins);
-				if(count) {
-
-					double s = 0, v = 0;
-					for(const Point& p : pts)
-						s += p.z();
-					s /= count;
-
-					for(const Point& p : pts)
-						v += std::pow(s - p.z(), 2.0);
-					v /= count;
-
-					// If the count is larger than the previous variance count,
-					// replace the variance with the new one.
-					if(count > varct) {
-						var = v;
-						varct = count;
-					}
-
-					sum += s * pf.weight;
-					w += pf.weight;
-					pf.set(x, y, s);
-				}
-				pts.clear();
-			}
-
-			if(w) {
-				grid[row * cols + col] = sum / w;
-				stats[row * cols + col] = var;
-				variances.insert(var);
-			}
-		}
-	}
-
-	//std::cout << "Saving grids.\n";
-	//for(PointFile& pf : infiles)
-	//	saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
-	saveGrid(geo::util::join(outdir, "avg.tif"), grid, cols, rows, minx, miny, res, infiles.front().projection);
-	saveGrid(geo::util::join(outdir, "stats_raw.tif"), stats, cols, rows, minx, miny, res, infiles.front().projection);
-
-	std::cout << "Clearing trees.\n";
-	for(PointFile& pf : infiles)
-		pf.clearTree();
-
-	// now smooth the main grid
-	std::cout << "Smoothing the grid.\n";
-	{
-		int crad = 10;	// Radius of kernel in cells (total width, 21).
-
-		// Collect the variances within the kernel region. These are used to approximate the slope-ness
-		// of the terrain. TODO: Use an actual slope.
-		std::cout << "Collecting stats.\n";
-		std::vector<double> quantiles(crad - 1); 	// Stores the boundaries for the equal-count partition of unique variance values.
-		{
-			// Get the equal-area boundaries of the variance set.
-			int step = variances.size() / crad;
-			std::vector<double> variances0(variances.begin(), variances.end());
-			for(int i = 0; i < crad - 1; ++i)
-				quantiles[i] = variances0[(i + 1) * step];
-
-			// Smooth the stats raster. There's a lot of noise here.
-			{
-				std::vector<double> smoothed(stats.size());
-				std::fill(smoothed.begin(), smoothed.end(), -9999.0);
-				std::vector<double> gf;
-				gauss2d(gf, 5, 2);
-				convolve(stats, cols, rows, gf, 1, smoothed);
-				stats.swap(smoothed);
-			}
-
-			saveGrid(geo::util::join(outdir, "stats.tif"), stats, cols, rows, minx, miny, res, infiles.front().projection);
-		}
-
-		// Make the smoothing kernels. There are {crad} kernels, one for each
-		// radius from 1 to {crad} inclusive. The kernels are distance-weighted averages.
-		std::vector<std::vector<double>> kernels(crad);
-		{
-			std::vector<double> gf;
-			for(int i = 1; i <= crad; ++i)
-				gauss2d(kernels[i - 1], i, i * 0.33);
-		}
-
-		// Smooth the raster.
-		std::vector<double> smoothed(cols * rows);
-		std::fill(smoothed.begin(), smoothed.end(), -9999.0);
-		for(int row = 0; row < rows; ++row) {
-			for(int col = 0; col < cols; ++col) {
-
-				// Get the correct kernel for the variance for this cell.
-				// The lowest variance gets the largest kernel.
-				double var = stats[row * cols + col];
-				if(var == -9999.0) continue;
-				size_t varidx = 0;
-				for(double q : quantiles) {
-					if(q < var)
-						++varidx;
-				}
-
-				convolve(grid, cols, rows, kernels[varidx], varidx + 1, smoothed, col, row);
-			}
-		}
-
-		grid.swap(smoothed);
-
-		saveGrid(geo::util::join(outdir, "grid.tif"), grid, cols, rows, minx, miny, res, infiles.front().projection);
-	}
-
-	if(true) {
-		// now adjust and write each file grid using the deviation.
-		std::cout << "Adjusting file grids.\n";
-		for(PointFile& pf : infiles) {
-			for(int pr = 0; pr < pf.rows; ++pr) {
-				for(int pc = 0; pc < pf.cols; ++pc) {
-					double pv = pf.grid[pr * pf.cols + pc];
-					if(pv != -9999.0) {
-						double px = pf.minx + pc * res + res * 0.5;
-						double py = pf.miny + pr * res + res * 0.5;
-						int gc = (int) (px - minx) / res;
-						int gr = (int) (py - miny) / res;
-						double gv = grid[gr * cols + gc];
-						if(gv == -9999.0)
-							throw std::runtime_error("Found illegal nodata in grid.");
-						pf.grid[pr * pf.cols + pc] = gv - pv;
-					}
-				}
-			}
-		}
-
-		//std::cout << "Saving grids.\n";
-		//for(PointFile& pf : infiles)
-		//	saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
-		//saveGrid(grid, cols, rows, minx, miny, res, infiles.front().projection);
-
-		// now adjust each las file and write new ones.
-		std::cout << "Adjusting files...\n";
-
-		geo::util::makedir(outdir);
+	for(const Point& pt0 : pointSet.points) {
 
 		for(PointFile& pf : infiles) {
-			pdal::Option opt("filename", pf.file);
-			pdal::Options opts;
-			opts.add(opt);
 
-			pdal::PointTable table;
-			pdal::LasReader rdr;
-			rdr.setOptions(opts);
-			rdr.prepare(table);
+			size_t count = pf.tree.search(pt0, radius, ins);
 
-			pdal::PointViewSet viewSet = rdr.execute(table);
-			pdal::PointViewPtr view = *viewSet.begin();
-			pdal::Dimension::IdList dims = view->dims();
-			pdal::LasHeader hdr = rdr.header();
+			if(count) {
 
-			using namespace pdal::Dimension;
-
-			double minz = MAX_FLOAT;
-			double maxz = MIN_FLOAT;
-
-			double x, y, z, cx, cy;
-			double d, v, w, ss, sw;
-			bool skip;
-			int col, row;
-
-			for (pdal::PointId idx = 0; idx < view->size(); ++idx) {
-				x = view->getFieldAs<double>(Id::X, idx);
-				y = view->getFieldAs<double>(Id::Y, idx);
-				z = view->getFieldAs<double>(Id::Z, idx);
-
-				col = (int) (x - pf.minx) / res;
-				row = (int) (y - pf.miny) / res;
-
-				ss = 0;
-				sw = 0;
-				skip = false;
-				for(int rr = row - 1; !skip && rr < row + 2; ++rr) {
-					for(int cc = col - 1; !skip && cc < col + 2; ++cc) {
-						if(cc < 0 || rr < 0 || rr >= pf.rows || cc >= pf.cols) continue;
-						if((v = pf.grid[rr * pf.cols + cc]) != -9999.0) {
-							cx = pf.minx + cc * res + res * 0.5;
-							cy = pf.miny + rr * res + res * 0.5;
-							d = std::pow(cx - x, 2.0) + std::pow(cy - y, 2.0);
-							if(d == 0) {
-								ss = v;
-								sw = 1.0;
-								skip = true;
-								break;
-							} else {
-								w = 1.0 - std::min(1.0, d / (res * res));
-								ss += v * w;
-								sw += w;
-							}
-						}
+				// Get the mean and distance weighted mean.
+				double mean = 0, wmean = 0, wt = 0, w;
+				for(const Point& p : pts) {
+					w = 1.0 - (std::pow(p.x() - pt0.x(), 2.0) + std::pow(p.y() - pt0.y(), 2.0)) / (radius * radius);
+					if(w > 0) {
+						wmean += p.z() * w;
+						mean += p.z();
+						wt += w;
 					}
 				}
+				wmean /= wt;
+				mean /= count;
 
-				if(sw != 0) {
-					z += ss / sw;
-				} else {
-					std::cout << ss << ", " << sw << ", " << col << ", " << row << "\n";
-				}
+				// Get the variance.
+				double var = 0;
+				for(const Point& p : pts)
+					var += std::pow(mean - p.z(), 2.0);
+				var /= count;
 
-				view->setField(Id::Z, idx, z);
-
-				if(z < minz) minz = z;
-				if(z > maxz) maxz = z;
+				csv << pf.file << "," << pt0.x() << "," << pt0.y() << "," << wmean << "," << mean << "," << var << "\n";
 			}
-
-			std::string outfile = geo::util::join(outdir, geo::util::basename(pf.file) + "_adj.las");
-			if(geo::util::isfile(outfile))
-				geo::util::rem(outfile);
-			opt = pdal::Option("filename", outfile);
-			opts.replace(opt);
-			pdal::LasWriter wtr;
-			pdal::BufferReader brdr;
-			brdr.addView(view);
-			wtr.setInput(brdr);
-			wtr.setOptions(opts);
-			wtr.setSpatialReference(rdr.getSpatialReference());
-
-			wtr.prepare(table);
-			wtr.execute(table);
+			pts.clear();
 		}
+
 	}
+
+//	//std::cout << "Saving grids.\n";
+//	//for(PointFile& pf : infiles)
+//	//	saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
+//	saveGrid(geo::util::join(outdir, "avg.tif"), grid, cols, rows, minx, miny, res, infiles.front().projection);
+//	saveGrid(geo::util::join(outdir, "stats_raw.tif"), stats, cols, rows, minx, miny, res, infiles.front().projection);
+//
+//	std::cout << "Clearing trees.\n";
+//	for(PointFile& pf : infiles)
+//		pf.clearTree();
+//
+//	// now smooth the main grid
+//	std::cout << "Smoothing the grid.\n";
+//	{
+//		int crad = 10;	// Radius of kernel in cells (total width, 21).
+//
+//		// Collect the variances within the kernel region. These are used to approximate the slope-ness
+//		// of the terrain. TODO: Use an actual slope.
+//		std::cout << "Collecting stats.\n";
+//		std::vector<double> quantiles(crad - 1); 	// Stores the boundaries for the equal-count partition of unique variance values.
+//		{
+//			// Get the equal-area boundaries of the variance set.
+//			int step = variances.size() / crad;
+//			std::vector<double> variances0(variances.begin(), variances.end());
+//			for(int i = 0; i < crad - 1; ++i)
+//				quantiles[i] = variances0[(i + 1) * step];
+//
+//			// Smooth the stats raster. There's a lot of noise here.
+//			{
+//				std::vector<double> smoothed(stats.size());
+//				std::fill(smoothed.begin(), smoothed.end(), -9999.0);
+//				std::vector<double> gf;
+//				gauss2d(gf, 5, 2);
+//				convolve(stats, cols, rows, gf, 1, smoothed);
+//				stats.swap(smoothed);
+//			}
+//
+//			saveGrid(geo::util::join(outdir, "stats.tif"), stats, cols, rows, minx, miny, res, infiles.front().projection);
+//		}
+//
+//		// Make the smoothing kernels. There are {crad} kernels, one for each
+//		// radius from 1 to {crad} inclusive. The kernels are distance-weighted averages.
+//		std::vector<std::vector<double>> kernels(crad);
+//		{
+//			std::vector<double> gf;
+//			for(int i = 1; i <= crad; ++i)
+//				gauss2d(kernels[i - 1], i, i * 0.33);
+//		}
+//
+//		// Smooth the raster.
+//		std::vector<double> smoothed(cols * rows);
+//		std::fill(smoothed.begin(), smoothed.end(), -9999.0);
+//		for(int row = 0; row < rows; ++row) {
+//			for(int col = 0; col < cols; ++col) {
+//
+//				// Get the correct kernel for the variance for this cell.
+//				// The lowest variance gets the largest kernel.
+//				double var = stats[row * cols + col];
+//				if(var == -9999.0) continue;
+//				size_t varidx = 0;
+//				for(double q : quantiles) {
+//					if(q < var)
+//						++varidx;
+//				}
+//
+//				convolve(grid, cols, rows, kernels[varidx], varidx + 1, smoothed, col, row);
+//			}
+//		}
+//
+//		grid.swap(smoothed);
+//
+//		saveGrid(geo::util::join(outdir, "grid.tif"), grid, cols, rows, minx, miny, res, infiles.front().projection);
+//	}
+//
+//	if(true) {
+//		// now adjust and write each file grid using the deviation.
+//		std::cout << "Adjusting file grids.\n";
+//		for(PointFile& pf : infiles) {
+//			for(int pr = 0; pr < pf.rows; ++pr) {
+//				for(int pc = 0; pc < pf.cols; ++pc) {
+//					double pv = pf.grid[pr * pf.cols + pc];
+//					if(pv != -9999.0) {
+//						double px = pf.minx + pc * res + res * 0.5;
+//						double py = pf.miny + pr * res + res * 0.5;
+//						int gc = (int) (px - minx) / res;
+//						int gr = (int) (py - miny) / res;
+//						double gv = grid[gr * cols + gc];
+//						if(gv == -9999.0)
+//							throw std::runtime_error("Found illegal nodata in grid.");
+//						pf.grid[pr * pf.cols + pc] = gv - pv;
+//					}
+//				}
+//			}
+//		}
+//
+//		//std::cout << "Saving grids.\n";
+//		//for(PointFile& pf : infiles)
+//		//	saveGrid(pf.grid, pf.cols, pf.rows, pf.minx, pf.miny, res, pf.projection);
+//		//saveGrid(grid, cols, rows, minx, miny, res, infiles.front().projection);
+//
+//		// now adjust each las file and write new ones.
+//		std::cout << "Adjusting files...\n";
+//
+//		geo::util::makedir(outdir);
+//
+//		for(PointFile& pf : infiles) {
+//			pdal::Option opt("filename", pf.file);
+//			pdal::Options opts;
+//			opts.add(opt);
+//
+//			pdal::PointTable table;
+//			pdal::LasReader rdr;
+//			rdr.setOptions(opts);
+//			rdr.prepare(table);
+//
+//			pdal::PointViewSet viewSet = rdr.execute(table);
+//			pdal::PointViewPtr view = *viewSet.begin();
+//			pdal::Dimension::IdList dims = view->dims();
+//			pdal::LasHeader hdr = rdr.header();
+//
+//			using namespace pdal::Dimension;
+//
+//			double minz = MAX_FLOAT;
+//			double maxz = MIN_FLOAT;
+//
+//			double x, y, z, cx, cy;
+//			double d, v, w, ss, sw;
+//			bool skip;
+//			int col, row;
+//
+//			for (pdal::PointId idx = 0; idx < view->size(); ++idx) {
+//				x = view->getFieldAs<double>(Id::X, idx);
+//				y = view->getFieldAs<double>(Id::Y, idx);
+//				z = view->getFieldAs<double>(Id::Z, idx);
+//
+//				col = (int) (x - pf.minx) / res;
+//				row = (int) (y - pf.miny) / res;
+//
+//				ss = 0;
+//				sw = 0;
+//				skip = false;
+//				for(int rr = row - 1; !skip && rr < row + 2; ++rr) {
+//					for(int cc = col - 1; !skip && cc < col + 2; ++cc) {
+//						if(cc < 0 || rr < 0 || rr >= pf.rows || cc >= pf.cols) continue;
+//						if((v = pf.grid[rr * pf.cols + cc]) != -9999.0) {
+//							cx = pf.minx + cc * res + res * 0.5;
+//							cy = pf.miny + rr * res + res * 0.5;
+//							d = std::pow(cx - x, 2.0) + std::pow(cy - y, 2.0);
+//							if(d == 0) {
+//								ss = v;
+//								sw = 1.0;
+//								skip = true;
+//								break;
+//							} else {
+//								w = 1.0 - std::min(1.0, d / (res * res));
+//								ss += v * w;
+//								sw += w;
+//							}
+//						}
+//					}
+//				}
+//
+//				if(sw != 0) {
+//					z += ss / sw;
+//				} else {
+//					std::cout << ss << ", " << sw << ", " << col << ", " << row << "\n";
+//				}
+//
+//				view->setField(Id::Z, idx, z);
+//
+//				if(z < minz) minz = z;
+//				if(z > maxz) maxz = z;
+//			}
+//
+//			std::string outfile = geo::util::join(outdir, geo::util::basename(pf.file) + "_adj.las");
+//			if(geo::util::isfile(outfile))
+//				geo::util::rem(outfile);
+//			opt = pdal::Option("filename", outfile);
+//			opts.replace(opt);
+//			pdal::LasWriter wtr;
+//			pdal::BufferReader brdr;
+//			brdr.addView(view);
+//			wtr.setInput(brdr);
+//			wtr.setOptions(opts);
+//			wtr.setSpatialReference(rdr.getSpatialReference());
+//
+//			wtr.prepare(table);
+//			wtr.execute(table);
+//		}
+//	}
 	std::cout << "Done.\n";
 }
