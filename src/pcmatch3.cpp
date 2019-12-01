@@ -338,10 +338,7 @@ int main(int argc, char** argv) {
 	}
 
 	std::ofstream output(outfile);
-	output << "x,y";
-	for(PointFile& pf : infiles)
-		output << "," << pf.file;
-	output << "\n";
+	output << "file,x,y,z\n";
 
 	double radius = 10;
 	std::vector<Point> tres;
