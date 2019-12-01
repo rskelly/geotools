@@ -314,8 +314,10 @@ int main(int argc, char** argv) {
 		infiles.emplace_back(argv[i], 20, 1);
 
 	std::cout << "Building trees.\n";
-	for(PointFile& pf : infiles)
+	for(PointFile& pf : infiles) {
+		pf.init();
 		pf.buildTree();
+	}
 
 	std::vector<std::pair<double, double>> pts;
 	{
@@ -345,7 +347,6 @@ int main(int argc, char** argv) {
 	std::vector<Point> tres;
 	auto iter = std::back_inserter(tres);
 	for(const auto& pt : pts) {
-		output << pt.first << "," << pt.second;
 		for(PointFile& pf : infiles) {
 			pf.tree.search(Point(pt.first, pt.second, 0), radius, iter);
 			double s = 0, w = 0;
@@ -361,9 +362,10 @@ int main(int argc, char** argv) {
 					w += d;
 				}
 			}
-			output << "," << (s / w);
+			tres.clear();
+			if(w > 0)
+				output << pf.file << "," << pt.first << "," << pt.second << "," << (s/w) << "\n";
 		}
-		output << ",";
 	}
 
 	std::cout << "Done.\n";
