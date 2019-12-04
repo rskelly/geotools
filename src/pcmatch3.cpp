@@ -337,8 +337,8 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	std::ofstream output(outfile);
-	output << "file,x,y,z\n";
+	std::ofstream output(outfile, std::ios::app);
+	output << std::setprecision(4) << std::fixed << "file,x,y,z\n";
 
 	double radius = 10;
 	std::vector<Point> tres;

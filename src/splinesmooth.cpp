@@ -82,8 +82,8 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	if(tpl.empty() && (xres <= 0 || yres <= 0)) {
-		std::cerr << "If a template is not given, xres and yres must be positive nonzero.\n";
+	if(tpl.empty() && (xres == 0 || yres == 0)) {
+		std::cerr << "If a template is not given, xres and yres must be nonzero.\n";
 		usage();
 		return 1;
 	}
@@ -202,15 +202,20 @@ int main(int argc, char** argv) {
 	yres = props.resY();
 	int cols = props.cols();
 	int rows = props.rows();
-	for(int c = 0; c < cols; ++c)
-		x.push_back(props.toX(c));
-	for(int r = 0; r < rows; ++r)
-		y.push_back(props.toY(r));
-
+	x.resize(cols * 100);
+	y.resize(cols * 100);
+	z.resize(cols * 100);
+	for(int r = 0; r < 100; ++r) {
+		for(int c = 0; c < cols; ++c) {
+			x[c] = props.toX(c);
+			y[c] = props.toY(r);
+		}
+	}
 	bvs.evaluate(x, y, z);
-
-	for(size_t i = 0; i < x.size(); ++i)
+	for(size_t i = 0; i < cols * 100; ++i)
 		outgrid.set(x[i], y[i], z[i], 0);
+
+
 
 }
 
