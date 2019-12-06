@@ -211,7 +211,7 @@ int main(int argc, char** argv) {
 			y[c] = props.toY(r);
 		}
 	}
-	bvs.evaluate(x, y, z);
+ 	bvs.evaluate(x, y, z);
 	for(size_t i = 0; i < cols * 100; ++i)
 		outgrid.set(x[i], y[i], z[i], 0);
 
