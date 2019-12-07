@@ -198,22 +198,19 @@ int main(int argc, char** argv) {
 	z.clear();
 	w.clear();
 
-	xres = props.resX();
-	yres = props.resY();
 	int cols = props.cols();
 	int rows = props.rows();
-	x.resize(cols * 100);
-	y.resize(cols * 100);
-	z.resize(cols * 100);
-	for(int r = 0; r < 100; ++r) {
+	x.resize(1);
+	y.resize(1);
+	z.resize(1);
+	for(int r = 0; r < rows; ++r) {
 		for(int c = 0; c < cols; ++c) {
-			x[c] = props.toX(c);
-			y[c] = props.toY(r);
+			x[0] = props.toX(c);	// TODO: This only seems to work one cell at a time...
+			y[0] = props.toY(r);
+			bvs.evaluate(x, y, z);
+			outgrid.set(x[0], y[0], z[0], 0);
 		}
 	}
- 	bvs.evaluate(x, y, z);
-	for(size_t i = 0; i < cols * 100; ++i)
-		outgrid.set(x[i], y[i], z[i], 0);
 
 
 
