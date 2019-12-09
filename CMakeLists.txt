@@ -70,9 +70,9 @@ target_link_libraries(geotools_reader geoann ${GDAL_LIBRARY})
 add_library (geotools_writer SHARED src/writer.cpp)
 target_link_libraries(geotools_writer geotools_stats ${GDAL_LIBRARY})
 
-add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
-target_include_directories(contrem PUBLIC contrem_autogen/include)
-target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geoutil geoann geotools_plot geotools_reader geotools_writer)
+#add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
+#target_include_directories(contrem PUBLIC contrem_autogen/include)
+#target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geoutil geoann geotools_plot geotools_reader geotools_writer)
 
 add_executable (convolve src/convolve_app.cpp src/convolve.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
@@ -109,4 +109,4 @@ target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES
 
 # Install ################################################################################################
 
-install(TARGETS pc2grid pcnorm pcmatch3 convolve contrem reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS pc2grid pcnorm pcmatch3 convolve  reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
