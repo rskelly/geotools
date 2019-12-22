@@ -103,10 +103,16 @@ target_link_libraries (sbet2csv geoutil ${PROJ_LIBRARY} ${GEOS_LIBRARY})
 add_executable (splinesmooth src/splinesmooth.cpp)
 target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
+add_executable (idw src/idw.cpp)
+target_link_libraries (idw geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+
+add_executable (rastermatch src/rastermatch.cpp)
+target_link_libraries (rastermatch geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+
 #add_executable (polygonize src/polygonize.cpp)
 #target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
 
 
 # Install ################################################################################################
 
-install(TARGETS pc2grid pcnorm pcmatch3 convolve  reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS pc2grid pcnorm pcmatch3 convolve idw reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
