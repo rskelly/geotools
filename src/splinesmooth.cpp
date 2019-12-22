@@ -8,6 +8,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <fstream>
 
 #include "util.hpp"
 #include "grid.hpp"
@@ -50,8 +51,8 @@ int main(int argc, char** argv) {
 	std::vector<int> columns;		// Column indices for the csv file.
 	double minx, miny, maxx, maxy;	// The dataset bounds. If there's a template, use those bounds, otherwise use the buffered point bounds.
 	bool hasTemplate = false;		// Set to true if a template is loaded.
-	GridProps props;				// Properties for the output grid.
 	double smooth = 0;				// The smoothing parameter for the bivariate spline.
+	bool csv = false;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
@@ -82,8 +83,13 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	if(tpl.empty() && (xres == 0 || yres == 0)) {
-		std::cerr << "If a template is not given, xres and yres must be nonzero.\n";
+	if(args[2].find(".csv") != std::string::npos) {
+		std::cout << "CSV filename given. Using CSV mode.\n";
+		csv = true;
+	}
+
+	if(!csv && tpl.empty() && (xres == 0 || yres == 0)) {
+		std::cerr << "If a template is not given, and not in CSV mode, xres and yres must be nonzero.\n";
 		usage();
 		return 1;
 	}
@@ -100,6 +106,8 @@ int main(int argc, char** argv) {
 			return 1;
 		}
 	}
+
+	GridProps props;				// Properties for the output grid.
 
 	// Load the template raster.
 	if(!tpl.empty()) {
@@ -156,6 +164,7 @@ int main(int argc, char** argv) {
 			for(const CSVValue& v : cw)
 				w.push_back(v.asDouble());
 		}
+
 	}
 
 	// Set the bounds if there's no template.
@@ -177,44 +186,58 @@ int main(int argc, char** argv) {
 		maxx += buffer;
 		maxy += buffer;
 
+	}
+
+	std::cout << "Preparing bivariate spline with " << x.size() << " coordinates.\n";
+	BivariateSpline bvs;
+	bvs.init(smooth, x, y, z, w, minx, miny, maxx, maxy);
+
+	w.clear();
+
+	if(csv) {
+
+		std::ofstream csv(args[2]);
+		csv << "x,y,z\n";
+
+		std::vector<double> xx(1);
+		std::vector<double> yy(1);
+		std::vector<double> zz(1);
+		for(size_t i = 0; i < x.size(); ++i) {
+			xx[0] = x[i];
+			yy[0] = y[i];
+			bvs.evaluate(xx, yy, zz);
+			csv << xx[0] << "," << yy[0] << "," << zz[0] << "\n";
+		}
+
+	} else {
+		std::cout << "Starting raster...\n";
+
 		props.setResolution(xres, yres);
 		props.setProjection(projection);
 		props.setSrid(srid);
 		props.setBounds(Bounds(minx, miny, maxx, maxy));
-	}
+		props.setNoData(-9999.0);
+		props.setDataType(DataType::Float32);
+		props.setWritable(true);
+		props.setBands(1);
 
-	props.setNoData(-9999.0);
-	props.setDataType(DataType::Float32);
-	props.setWritable(true);
-	props.setBands(1);
+		Grid<float> outgrid(args[2], props);
 
-	Grid<float> outgrid(args[2], props);
-
-	BivariateSpline bvs;
-	bvs.init(smooth, x, y, z, w, minx, miny, maxx, maxy);
-
-	x.clear();
-	y.clear();
-	z.clear();
-	w.clear();
-
-	xres = props.resX();
-	yres = props.resY();
-	int cols = props.cols();
-	int rows = props.rows();
-	x.resize(cols * 100);
-	y.resize(cols * 100);
-	z.resize(cols * 100);
-	for(int r = 0; r < 100; ++r) {
-		for(int c = 0; c < cols; ++c) {
-			x[c] = props.toX(c);
-			y[c] = props.toY(r);
+		int cols = props.cols();
+		int rows = props.rows();
+		x.resize(1);
+		y.resize(1);
+		z.resize(1);
+		for(int r = 0; r < rows; ++r) {
+			std::cout << "Row " << r << " of " << rows << "\n";
+			for(int c = 0; c < cols; ++c) {
+				x[0] = props.toX(c);	// TODO: This only seems to work one cell at a time...
+				y[0] = props.toY(r);
+				bvs.evaluate(x, y, z);
+				outgrid.set(x[0], y[0], z[0], 0);
+			}
 		}
 	}
- 	bvs.evaluate(x, y, z);
-	for(size_t i = 0; i < cols * 100; ++i)
-		outgrid.set(x[i], y[i], z[i], 0);
-
 
 
 }

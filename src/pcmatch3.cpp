@@ -103,7 +103,7 @@ public:
 		res(res), weight(weight),
 		cols(0), rows(0) {}
 
-	void init() {
+	void init(double* bounds = nullptr) {
 		pdal::Option opt("filename", file);
 		pdal::Options opts;
 		opts.add(opt);
@@ -139,10 +139,17 @@ public:
 		grid.resize(cols * rows);
 		std::fill(grid.begin(), grid.end(), -9999.0);
 
-		tree.init(minx, miny, maxx, maxy);
+		if(bounds) {
+			if(minx < bounds[0]) bounds[0] = minx;
+			if(miny < bounds[1]) bounds[1] = miny;
+			if(maxx > bounds[2]) bounds[2] = maxx;
+			if(maxy > bounds[3]) bounds[3] = maxy;
+		} else {
+			tree.init(minx, miny, maxx, maxy);
+		}
 	}
 
-	void buildTree() {
+	void buildTree(geo::ds::mqtree<Point>* xtree = nullptr) {
 		std::cout << "Building tree for: " << file << "\n";
 		pdal::Option opt("filename", file);
 		pdal::Options opts;
@@ -167,7 +174,11 @@ public:
 				x = view->getFieldAs<double>(Id::X, idx);
 				y = view->getFieldAs<double>(Id::Y, idx);
 				z = view->getFieldAs<double>(Id::Z, idx);
-				tree.add(Point(x, y, z));
+				if(xtree) {
+					xtree->add(Point(x, y, z));
+				} else {
+					tree.add(Point(x, y, z));
+				}
 			}
 		}
 	}
@@ -191,6 +202,10 @@ public:
 		} else  {
 			return -9999.0;
 		}
+	}
+
+	~PointFile() {
+		tree.clear();
 	}
 
 };
@@ -306,64 +321,112 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	std::cout << "Creating input entities.\n";
-	std::string ptfile = argv[1];
-	std::string outfile = argv[2];
 	std::vector<PointFile> infiles;
-	for(int i = 3; i < argc; ++i)
-		infiles.emplace_back(argv[i], 20, 1);
+	bool sameTree = false;
 
-	std::cout << "Building trees.\n";
-	for(PointFile& pf : infiles) {
-		pf.init();
-		pf.buildTree();
-	}
-
-	std::vector<std::pair<double, double>> pts;
-	{
-		std::ifstream ptstr(ptfile);
-		std::string line, part;
-		std::stringstream ss;
-		std::getline(ptstr, line);	// Header
-		while(std::getline(ptstr, line)) {
-			ss << line;
-			std::getline(ss, part, ',');
-			double x = atof(part.c_str());
-			std::getline(ss, part, ',');
-			double y = atof(part.c_str());
-			pts.emplace_back(x, y);
-			ss.str("");
-			ss.clear();
+	try {
+		std::cout << "Creating input entities.\n";
+		std::vector<std::string> args;
+		for(int i = 1; i < argc; ++i) {
+			std::string arg = argv[i];
+			if(arg == "-s") {
+				sameTree = true;
+			} else {
+				args.push_back(arg);
+			}
 		}
-	}
+		std::string ptfile = args[0];
+		std::string outfile = args[1];
+		std::cout << ptfile << ", " << outfile;
+		for(size_t i = 2; i < args.size(); ++i) {
+			infiles.emplace_back(args[i], 20, 1);
+			std::cout << ", " << args[i] << "\n";
+		}
 
-	std::ofstream output(outfile, std::ios::app);
-	output << std::setprecision(4) << std::fixed << "file,x,y,z\n";
+		std::vector<std::pair<double, double>> pts;
+		{
+			std::ifstream ptstr(ptfile);
+			std::string line, part;
+			std::stringstream ss;
+			std::getline(ptstr, line);	// Header
+			while(std::getline(ptstr, line)) {
+				ss << line;
+				std::getline(ss, part, ',');
+				double x = atof(part.c_str());
+				std::getline(ss, part, ',');
+				double y = atof(part.c_str());
+				pts.emplace_back(x, y);
+				ss.str("");
+				ss.clear();
+			}
+		}
 
-	double radius = 10;
-	std::vector<Point> tres;
-	auto iter = std::back_inserter(tres);
-	for(const auto& pt : pts) {
-		for(PointFile& pf : infiles) {
-			pf.tree.search(Point(pt.first, pt.second, 0), radius, iter);
-			double s = 0, w = 0;
-			for(const Point& rp : tres) {
-				double d = std::pow(rp.x() - pt.first, 2.0) + std::pow(rp.y() - pt.second, 2.0);
-				if(d == 0) {
-					s = rp.z();
-					w = 1;
-					break;
-				} else {
-					d = 1 / d;
-					s += rp.z() * d;
-					w += d;
+		std::ofstream output(outfile, std::ios::app);
+		output << std::setprecision(4) << std::fixed << "file,x,y,z\n";
+
+		double radius = 10;
+		std::vector<Point> tres;
+		auto iter = std::back_inserter(tres);
+		if(sameTree) {
+			geo::ds::mqtree<Point> tree;
+			double bounds[] = {G_DBL_MAX_POS, G_DBL_MAX_POS, G_DBL_MIN_POS, G_DBL_MIN_POS};
+			for(PointFile& pf : infiles) {
+				std::cout << "Configuring tree: " << pf.file << "\n";
+				pf.init(bounds);
+			}
+			tree.init(bounds[0], bounds[1], bounds[2], bounds[3]);
+			std::cout << "Configuring tree\n";
+			for(PointFile& pf : infiles)
+				pf.buildTree(&tree);
+
+			for(const auto& pt : pts) {
+				tree.search(Point(pt.first, pt.second, 0), radius, iter);
+				double s = 0, w = 0;
+				for(const Point& rp : tres) {
+					double d = std::pow(rp.x() - pt.first, 2.0) + std::pow(rp.y() - pt.second, 2.0);
+					if(d == 0) {
+						s = rp.z();
+						w = 1;
+						break;
+					} else {
+						d = 1 / d;
+						s += rp.z() * d;
+						w += d;
+					}
+				}
+				tres.clear();
+				if(w > 0)
+					output << "," << pt.first << "," << pt.second << "," << (s/w) << "\n";
+			}
+		} else {
+			for(PointFile& pf : infiles) {
+				std::cout << "Building tree: " << pf.file << "\n";
+				pf.init();
+				pf.buildTree();
+				for(const auto& pt : pts) {
+					pf.tree.search(Point(pt.first, pt.second, 0), radius, iter);
+					double s = 0, w = 0;
+					for(const Point& rp : tres) {
+						double d = std::pow(rp.x() - pt.first, 2.0) + std::pow(rp.y() - pt.second, 2.0);
+						if(d == 0) {
+							s = rp.z();
+							w = 1;
+							break;
+						} else {
+							d = 1 / d;
+							s += rp.z() * d;
+							w += d;
+						}
+					}
+					tres.clear();
+					if(w > 0)
+						output << pf.file << "," << pt.first << "," << pt.second << "," << (s/w) << "\n";
 				}
 			}
-			tres.clear();
-			if(w > 0)
-				output << pf.file << "," << pt.first << "," << pt.second << "," << (s/w) << "\n";
 		}
+		std::cout << "Done.\n";
+	} catch(const std::runtime_error& ex) {
+		std::cerr << ex.what();
+		infiles.clear();
 	}
-
-	std::cout << "Done.\n";
 }
