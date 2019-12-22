@@ -206,7 +206,8 @@ int main(int argc, char** argv) {
 
 	if(argc < 6) {
 		std::cerr << "Usage: rastermerge [options] <input file 1> <input band 1> <input file 2> <input band 2> <output file>\n"
-				<< " -s <size>    The size of the window in pixels.\n";
+				<< " -s <size>    The size of the window in pixels.\n"
+				<< " -t <threads> The number of threads.\n";
 		return 1;
 	}
 
