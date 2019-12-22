@@ -5,6 +5,7 @@
  *      Author: rob
  */
 
+#define ACCEPT_USE_OF_DEPRECATED_PROJ_API_H
 
 #include <grid.hpp>
 #include <proj_api.h>

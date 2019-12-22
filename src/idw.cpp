@@ -18,8 +18,41 @@ using namespace geo::util;
 using namespace geo::util::csv;
 using namespace geo::grid;
 
+class Pt {
+public:
+	double _x, _y, _z;
+
+	Pt(double x = 0, double y = 0, double z = 0) :
+		_x(x), _y(y), _z(z) {}
+
+	void x(double x) {
+		_x = x;
+	}
+	void y(double y) {
+		_y = y;
+	}
+	void z(double z) {
+		_z = z;
+	}
+	double x() const {
+		return _x;
+	}
+	double y() const {
+		return _y;
+	}
+	double z() const {
+		return _z;
+	}
+	double& operator[](int idx) {
+		switch(idx) {
+		case 0: return _x;
+		case 1: return _y;
+		default: return _z;
+		}
+	}
+};
 void usage() {
-	std::cout << "Usage: splinesmooth [options] <points> <columns> <outfile>\n"
+	std::cout << "Usage: idw [options] <points> <columns> <outfile>\n"
 			" -rx <res x>        The output grid resolution in x.\n"
 			" -ry <res y>        The output grid resolution in y.\n"
 			" -s <srid>          The projection of the output grid.\n"
@@ -137,10 +170,7 @@ int main(int argc, char** argv) {
 	}
 
 	// Load the CSV data.
-	std::vector<double> x;
-	std::vector<double> y;
-	std::vector<double> z;
-	std::vector<double> w;
+	std::vector<Pt> pts;
 	{
 		CSV csv(args[0], header);
 		std::vector<CSVValue> cx = csv.column(columns[0]);
@@ -159,42 +189,21 @@ int main(int argc, char** argv) {
 				return 1;
 			}
 		}
-		for(const CSVValue& v : cx)
-			x.push_back(v.asDouble());
-		for(const CSVValue& v : cy)
-			y.push_back(v.asDouble());
-		for(const CSVValue& v : cz)
-			z.push_back(v.asDouble());
-		if(!cw.empty()) {
-			for(const CSVValue& v : cw)
-				w.push_back(v.asDouble());
-		}
-
+		for(size_t i = 0; i < cx.size(); ++i)
+			pts.emplace_back(cx[i].asDouble(), cy[i].asDouble(), cz[i].asDouble());
 	}
 
 	if(decimate < 1.) {
 		std::cout << "Decimating: " << decimate << "\n";
-		std::vector<size_t> idx(x.size());
-		for(size_t i = 0; i < x.size(); ++i)
+		std::vector<size_t> idx(pts.size());
+		for(size_t i = 0; i < pts.size(); ++i)
 			idx[i] = i;
 		std::random_shuffle(idx.begin(), idx.end());
-		size_t s = std::max(1, (int) std::ceil(x.size() * decimate));
-		std::vector<double> _x(s), _y(s), _z(s), _w;
-		bool dow = w.size() == x.size();
-		if(dow)
-			_w.resize(s);
-		for(size_t i = 0; i < s; ++i) {
-			_x[i] = x[idx[i]];
-			_y[i] = y[idx[i]];
-			_z[i] = z[idx[i]];
-			if(dow)
-				_w[i] = w[idx[i]];
-		}
-		_x.swap(x);
-		_y.swap(y);
-		_z.swap(z);
-		if(dow)
-			_w.swap(w);
+		size_t s = std::max(1, (int) std::ceil(pts.size() * decimate));
+		std::vector<Pt> _pts(s);
+		for(size_t i = 0; i < s; ++i)
+			_pts[i] = std::move(pts[idx[i]]);
+		pts.swap(_pts);
 	}
 
 	// Set the bounds if there's no template.
@@ -202,13 +211,11 @@ int main(int argc, char** argv) {
 		minx = miny = std::numeric_limits<double>::max();
 		maxx = maxy = std::numeric_limits<double>::lowest();
 
-		for(double xx : x) {
-			if(xx < minx) minx = xx;
-			if(xx > maxx) maxx = xx;
-		}
-		for(double yy : y) {
-			if(yy < miny) miny = yy;
-			if(yy > maxy) maxy = yy;
+		for(const Pt& p : pts) {
+			if(p.x() < minx) minx = p.x();
+			if(p.x() > maxx) maxx = p.x();
+			if(p.y() < miny) miny = p.y();
+			if(p.y() > maxy) maxy = p.y();
 		}
 
 		minx -= buffer;
@@ -218,25 +225,22 @@ int main(int argc, char** argv) {
 
 	}
 
-	std::cout << "Preparing bivariate spline with " << x.size() << " coordinates.\n";
-	BivariateSpline bvs;
-	bvs.init(smooth, x, y, z, w, minx, miny, maxx, maxy);
-
-	w.clear();
-
 	if(csv) {
 
 		std::ofstream csv(args[2]);
 		csv << "x,y,z\n";
 
-		std::vector<double> xx(1);
-		std::vector<double> yy(1);
-		std::vector<double> zz(1);
-		for(size_t i = 0; i < x.size(); ++i) {
-			xx[0] = x[i];
-			yy[0] = y[i];
-			bvs.evaluate(xx, yy, zz);
-			csv << xx[0] << "," << yy[0] << "," << zz[0] << "\n";
+		for(size_t i = 0; i < pts.size(); ++i) {
+			double x = pts[i].x();
+			double y = pts[i].z();
+			double s = 0;
+			double w = 0;
+			for(size_t j = 0; j < pts.size(); ++j) {
+				double d = 1.0 / std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0);
+				s += pts[j].z() * d;
+				w += d;
+			}
+			csv << pts[i].x() << "," << pts[i].y() << "," << (s / w) << "\n";
 		}
 
 	} else {
@@ -255,16 +259,28 @@ int main(int argc, char** argv) {
 
 		int cols = props.cols();
 		int rows = props.rows();
-		x.resize(1);
-		y.resize(1);
-		z.resize(1);
+
+		double sigma = 500.0;
+		double norm = 1.0 / (sigma * std::sqrt(2 * M_PI));
+
 		for(int r = 0; r < rows; ++r) {
 			std::cout << "Row " << r << " of " << rows << "\n";
 			for(int c = 0; c < cols; ++c) {
-				x[0] = props.toX(c);	// TODO: This only seems to work one cell at a time...
-				y[0] = props.toY(r);
-				bvs.evaluate(x, y, z);
-				outgrid.set(x[0], y[0], z[0], 0);
+				double x = props.toX(c);
+				double y = props.toY(r);
+				double s = 0;
+				double w = 0;
+				for(size_t j = 0; j < pts.size(); ++j) {
+					double d0 = std::sqrt(std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0));
+					double w0 = norm * std::exp(-0.5 * std::pow(d0 / sigma, 2.0));
+					s += pts[j].z() * w0;
+					w += w0;
+				}
+				if(w != 0) {
+					outgrid.set(x, y, s / w, 0);
+				} else {
+					outgrid.set(x, y, props.nodata(), 0);
+				}
 			}
 		}
 	}
