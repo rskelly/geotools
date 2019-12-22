@@ -124,9 +124,9 @@ int main(int argc, char** argv) {
 				if(av != anodata) {
 					for(int r = 0; r < size; ++r) {
 						for(int c = 0; c < size; ++c) {
-							double& ov = outvec[row * oprops.cols() + col];
+							double ov = outvec[row * oprops.cols() + col];
 							if(ov == tnodata)
-								ov = 0;
+								outvec[row * oprops.cols() + col] = 0;
 							if(tvec[r * size + c] != tnodata)
 								tvec[r * size + c] += (av - tv) * gvec[r * size + c];
 						}
