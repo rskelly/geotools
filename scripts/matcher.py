@@ -65,6 +65,7 @@ for inputs in inputs_list:
 		print('Computing difference...')
 		tmp = 'tmp.tif'
 		cmd = 'rastermerge -t {t} -s {s} {f1} {b1} {f2} {b2} {o}'.format(t = thread_count, s = window_size, f1 = f1, b1 = b1, f2 = f2, b2 = b2, o = tmp)
+		print(cmd)
 		if os.system(cmd) != 0:
 			print('Canceled')
 			sys.exit(1)

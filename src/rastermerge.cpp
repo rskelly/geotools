@@ -50,11 +50,18 @@ bool saveRaster(const std::string& tpl, const std::string& file, std::vector<flo
 		return false;
 	int cols = dst->GetRasterXSize();
 	int rows = dst->GetRasterYSize();
+	double trans[6];
+	dst->GetGeoTransform(trans);
 	GDALDriver* drv = dst->GetDriver();
-	GDALDataset* ds = static_cast<GDALDataset*>(drv->CreateCopy(file.c_str(), dst, 1, 0, 0, 0));
-	GDALClose(dst);
-	if(!ds)
+	GDALDataset* ds = static_cast<GDALDataset*>(drv->Create(file.c_str(), cols, rows, 1, GDT_Float32, 0));
+	if(!ds) {
+		GDALClose(dst);
 		return false;
+	}
+	ds->SetProjection(dst->GetProjectionRef());
+	ds->SetGeoTransform(trans);
+	ds->GetRasterBand(1)->SetNoDataValue(dst->GetRasterBand(1)->GetNoDataValue());
+	GDALClose(dst);
 	if(CE_None != ds->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, cols, rows, data.data(), cols, rows, GDT_Float32, 0, 0, 0)) {
 		GDALClose(ds);
 		return false;
@@ -168,7 +175,7 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 			}
 		}
 
-		double v0;
+		float v0;
 		for(int col = 0; col < src->cols; ++col) {
 			float s = 0;
 			float w = 0;
@@ -181,16 +188,56 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 						continue;
 					if(!std::isnan((v0 = src->data[rr * src->cols + cc]))) {
 						int d = (int) std::min(1000.0f, (float) (c * c + r * r) / rad2);
-						if(d == 0) {
-							s = v0;
-							w = 1;
-							halt = true;
-							break;
-						} else {
+						//std::cout << d << " " << c << " " << r << " " << (c * c + r * r) << " " << rad2 << "\n";
+						if(d < 1000){
 							float w0 = cos[d];
 							s += v0 * w0;
 							w += 1;
 						}
+					}
+				}
+			}
+			if(w > 0) {
+				std::lock_guard<std::mutex> lk(*dmtx);
+				dst->data[row * src->cols + col] = s / w;
+			}
+		}
+	}
+}
+
+
+void processGauss(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std::mutex* dmtx, int size, float sigma) {
+	int row;
+	while(!rowq->empty()) {
+		{
+			std::lock_guard<std::mutex> lk(*qmtx);
+			if(!rowq->empty()) {
+				row = rowq->front();
+				rowq->pop_front();
+				std::cout << "Row " << row << " of " << src->rows << "\n";
+			} else {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				continue;
+			}
+		}
+
+		float gain = 0.5;
+		float v0;
+		for(int col = 0; col < src->cols; ++col) {
+			float s = 0;
+			float w = 0;
+			bool halt = false;
+			for(int r = -size / 2; !halt && r < size / 2 + 1; ++r) {
+				for(int c = -size / 2; c < size / 2 + 1; ++c) {
+					int cc = col + c;
+					int rr = row + r;
+					if(cc < 0 || rr < 0 || cc >= src->cols || rr >= src->rows)
+						continue;
+					if(!std::isnan((v0 = src->data[rr * src->cols + cc]))) {
+						float w0 = std::exp(-0.5 * (c * c + r * r) / (sigma * sigma));
+						//std::cout << d << " " << c << " " << r << " " << (c * c + r * r) << " " << rad2 << "\n";
+						s += v0 * w0;
+						w += gain;
 					}
 				}
 			}
@@ -207,7 +254,8 @@ int main(int argc, char** argv) {
 	if(argc < 6) {
 		std::cerr << "Usage: rastermerge [options] <input file 1> <input band 1> <input file 2> <input band 2> <output file>\n"
 				<< " -s <size>    The size of the window in pixels.\n"
-				<< " -t <threads> The number of threads.\n";
+				<< " -t <threads> The number of threads.\n"
+				<< " -d           Preserve the difference raster in /tmp/diff.tif\n";
 		return 1;
 	}
 
@@ -215,6 +263,7 @@ int main(int argc, char** argv) {
 	std::vector<int> bands;
 	int size = 501;
 	int tcount = 4;
+	bool diff = false;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg(argv[i]);
@@ -222,6 +271,8 @@ int main(int argc, char** argv) {
 			size = atoi(argv[++i]);
 			if(size % 2 == 0)
 				++size;
+		} else if(arg == "-d") {
+			diff = true;
 		} else if(arg == "-t") {
 			tcount = atoi(argv[++i]);
 			if(tcount < 1)
@@ -272,13 +323,16 @@ int main(int argc, char** argv) {
 		}
 	}
 
+	if(diff)
+		saveRaster(file2, "/tmp/diff.tif", src.data);
+
 	Ctx dst = src;
 	std::fill(dst.data.begin(), dst.data.end(), 0);
 
 	{
 
-		float cos[1000];
-		for(int i = 0; i < 1000; ++i)
+		float cos[1001];
+		for(int i = 0; i <= 1000; ++i)
 			cos[i] = std::cos((float) i / 1000 * M_PI) / 2.0 + 0.5;
 
 		std::list<int> rowq;
@@ -289,7 +343,7 @@ int main(int argc, char** argv) {
 		std::mutex dmtx;
 		std::vector<std::thread> threads;
 		for(int i = 0; i < tcount; ++i) {
-			threads.emplace_back(processCos, &rowq, &qmtx, &src, &dst, &dmtx, size, cos);
+			threads.emplace_back(processGauss, &rowq, &qmtx, &src, &dst, &dmtx, size, (float) size * 0.25);
 		}
 		for(int i = 0; i < tcount; ++i) {
 			if(threads[i].joinable())
