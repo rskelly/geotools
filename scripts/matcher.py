@@ -32,12 +32,14 @@ with open(inputs_file, 'r') as f:
 			if len(inputs):
 				inputs_list.append(inputs)
 				inputs = []
+		elif line.startswith('#'):
+			pass # Comment
 		else:
 			inputs.append(line.split(':'))
 		line = f.readline()
 
 	if len(inputs):
-		inputs.append(inputs)
+		inputs_list.append(inputs)
 
 
 # Outputs list -- same format as inputs but with the matche filesnames replacing the input
@@ -64,8 +66,7 @@ for inputs in inputs_list:
 		# Compute the difference between the rasters.
 		print('Computing difference...')
 		tmp = 'tmp.tif'
-		cmd = 'rastermerge -t {t} -s {s} {f1} {b1} {f2} {b2} {o}'.format(t = thread_count, s = window_size, f1 = f1, b1 = b1, f2 = f2, b2 = b2, o = tmp)
-		print(cmd)
+		cmd = 'rastermerge -m gauss -t {t} -s {s} {f1} {b1} {f2} {b2} {o}'.format(t = thread_count, s = window_size, f1 = f1, b1 = b1, f2 = f2, b2 = b2, o = tmp)
 		if os.system(cmd) != 0:
 			print('Canceled')
 			sys.exit(1)
