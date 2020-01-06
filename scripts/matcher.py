@@ -2,14 +2,20 @@
 
 import os
 import sys
+import shutil
+
+mask = '/media/rob/robdata/work/ec/DEM/mask_sd0_1_ct20_f35.tif'
 
 try:
-	inputs_file = sys.argv[1]
-	outputs_list = sys.argv[2]
-	window_size = int(sys.argv[3])
-	thread_count = int(sys.argv[4])
+	method = sys.argv[1]
+	resamp = sys.argv[2]
+	inputs_file = sys.argv[3]
+	outputs_list = sys.argv[4]
+	window_size = int(sys.argv[5])
+	thread_count = int(sys.argv[6])
 except: 
-	print('Usage: matcher.py <input list> <output list> <window size> <thread count>')
+	print('Usage: matcher.py <type> <resample (1 for no effect)> <input list> <output list> <window size> <thread count>')
+	print(' types: idw, gauss, cosine. Gauss, cosine decay to zero, idw doesn\'t.')
 	sys.exit(1)
 
 # Load the inputs list. A text file with entries in the form:
@@ -47,13 +53,25 @@ with open(inputs_file, 'r') as f:
 
 ol = open(outputs_list, 'w')
 
+# Add processed files to the anchor set for the next iteration.
+accum = True
+
 # Iterate over the blocks.
 for inputs in inputs_list:
 
 	# Iterate over the pairs of files.
 	for i in range(len(inputs) - 1):
 
-		f1, b1 = inputs[i]
+		anchors = []
+
+		if accum:
+			for j in range(i + 1):
+				f1, b1 = inputs[j]
+				anchors.extend([f1, b1])
+		else:
+			f1, b1 = inputs[i]
+			anchors.extend([f1, b1])
+
 		f2, b2 = inputs[i + 1]
 
 		outfile = os.path.splitext(f2)[0] + '_shift.tif'
@@ -63,20 +81,28 @@ for inputs in inputs_list:
 			ol.write('{f}:{b}\n'.format(f = f1, b = b1))
 		ol.write('{f}:{b}\n'.format(f = outfile, b = 1))
 
+		# Configure params from the anchor list.
+		print(anchors)
+		fparam = ' '.join(list(map(str, anchors)))
+
 		# Compute the difference between the rasters.
 		print('Computing difference...')
-		tmp = 'tmp.tif'
-		cmd = 'rastermerge -m gauss -t {t} -s {s} {f1} {b1} {f2} {b2} {o}'.format(t = thread_count, s = window_size, f1 = f1, b1 = b1, f2 = f2, b2 = b2, o = tmp)
-		if os.system(cmd) != 0:
-			print('Canceled')
-			sys.exit(1)
+		tmp = outfile #'tmp.tif'
+		cmd = 'rastermerge -d -r {r} -m {m} -t {t} -s {s} -k {k} {kb} {f} {f2} {b2} {o}'.format(k = mask, kb = 1, r = resamp, m = method, t = thread_count, s = window_size, f = fparam, b1 = b1, f2 = f2, b2 = b2, o = tmp)
+		print(cmd)
 
-		# Add the difference back into the source file to create the new matched file.
-		print('Calculating shift...', outfile)
-		cmd = 'gdal_calc.py -A {f2} --A_band={b2} -B {t} --calc="(A + B)" --overwrite --outfile="{f}"'.format(f2 = f2, b2 = b2, f = outfile, t = tmp)
 		if os.system(cmd) != 0:
 			print('Canceled')
 			sys.exit(1)
+		
+		# Add the difference back into the source file to create the new matched file.
+		#print('Calculating shift...', outfile)
+		#cmd = 'gdal_calc.py -A {f2} --A_band={b2} -B {t} --calc="(A + B)" --overwrite --outfile="{f}"'.format(f2 = f2, b2 = b2, f = outfile, t = tmp)
+		#if os.system(cmd) != 0:
+		#	print('Canceled')
+		#	sys.exit(1)
+
+		#shutil.move(tmp, outfile)
 
 		inputs[i + 1] = (outfile, 1)
 
