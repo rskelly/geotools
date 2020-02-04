@@ -18,27 +18,6 @@
 #include <pcl/point_cloud.h>
 #include <pcl/kdtree/kdtree_flann.h>
 
-class Pt {
-public:
-	float _x, _y, _z;
-	Pt(float x, float y, float z) :
-		_x(x), _y(y), _z(z) {}
-	Pt() : Pt(0, 0, 0) {}
-	float operator[](int idx) {
-		switch(idx % 3) {
-		case 0: return _x;
-		case 1: return _y;
-		default: return _z;
-		}
-	}
-	void x(float x) { _x = x; }
-	void y(float y) { _y = y; }
-	void z(float z) { _z = z; }
-	float x() const { return _x; }
-	float y() const { return _y; }
-	float z() const { return _z; }
-};
-
 class Ctx {
 private:
 	std::vector<float> _data;
@@ -271,7 +250,8 @@ bool smooth(std::vector<bool>& filled, std::vector<float>& src, std::vector<floa
 	return false;
 }
 
-void processIDW(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std::mutex* dmtx, int size) {
+void processIDW(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::PointXYZ>* tree,
+		Ctx* data, std::mutex* dmtx, int ncount) {
 	int row;
 	while(!rowq->empty()) {
 		{
@@ -279,40 +259,42 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 			if(!rowq->empty()) {
 				row = rowq->front();
 				rowq->pop_front();
-				std::cout << "Row " << row << " of " << src->rows << "\n";
+				std::cout << "Row " << row << " of " << data->rows << "\n";
 			} else {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				continue;
 			}
 		}
-		float v0;
-		for(int col = 0; col < src->cols; ++col) {
-			float s = 0;
-			float w = 0;
-			bool halt = false;
-			for(int r = -size / 2; !halt && r < size / 2 + 1; ++r) {
-				for(int c = -size / 2; c < size / 2 + 1; ++c) {
-					int cc = col + c;
-					int rr = row + r;
-					if(cc < 0 || rr < 0 || cc >= src->cols || rr >= src->rows)
-						continue;
-					if(!std::isnan((v0 = src->get(rr * src->cols + cc)))) {
-						float d = (float) (c * c + r * r);
-						if(d == 0) {
-							s = v0;
+		size_t count;
+		std::vector<int> indices;
+		std::vector<float> dist;
+		for(int col = 0; col < data->cols; ++col) {
+			float& v = data->get(row * data->cols + col);
+			if(v != data->nd && !std::isnan(v)) {
+				float x = toX(col, data->trans);
+				float y = toY(row, data->trans);
+				pcl::PointXYZ q(x, y, 0);
+				if((count = tree->nearestKSearch(q, ncount, indices, dist))) {
+					float s = 0;
+					float w = 0;
+					for(int idx : indices) {
+						pcl::PointXYZ pt = tree->getInputCloud()->at(idx);
+						float d0 = std::sqrt(std::pow(pt.x - x, 2.0) + std::pow(pt.y - y, 2.0));
+						if(d0 == 0) {
+							s = pt.z;
 							w = 1;
 							break;
 						} else {
-							float w0 = 1.0 / d;
-							s += v0 * w0;
+							float w0 = 1.0 / d0;
+							s += pt.z * w0;
 							w += w0;
 						}
 					}
+					if(w) {
+						std::lock_guard<std::mutex> lk(*dmtx);
+						v += s / w;
+					}
 				}
-			}
-			if(w > 0) {
-				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->get(row * src->cols + col) = s / w;
 			}
 		}
 	}
@@ -606,8 +588,8 @@ int main(int argc, char** argv) {
 
 		std::vector<float> values;
 
-		for(int row1 = 0; row1 < data1.rows; ++row1) {
-			for(int col1 = 0; col1 < data1.cols; ++col1) {
+		for(int row1 = 0; row1 < data1.rows; row1 += size) {
+			for(int col1 = 0; col1 < data1.cols; col1 += size) {
 
 				for(int r1 = row1 - size / 2; r1 < row1 + size / 2 + 1; ++r1) {
 					for(int c1 = col1 - size / 2; c1 < col1 + size / 2 + 1; ++c1) {
@@ -674,14 +656,18 @@ int main(int argc, char** argv) {
 				threads.emplace_back(processCos, &rowq, &qmtx, &tree, &data1, &dmtx, size, cos);
 				*/
 		} else if(method == "idw") {
-//			for(int i = 0; i < tcount; ++i)
-//				threads.emplace_back(processIDW, &rowq, &qmtx, &tree, &dst, &dmtx, size);
+
+			for(int i = 0; i < tcount; ++i)
+				threads.emplace_back(processIDW, &rowq, &qmtx, &tree, &data1, &dmtx, size);
+
 		} else if(method == "dw") {
 			//for(int i = 0; i < tcount; ++i)
 				//threads.emplace_back(processDW, &rowq, &qmtx, &tree, &data1, &dmtx, radius);
 		} else if(method == "med") {
+
 			for(int i = 0; i < tcount; ++i)
 				threads.emplace_back(processDW, &rowq, &qmtx, &tree, &data1, &dmtx, count);
+
 		} else {
 			std::cerr << "Unknown method: " << method << "\n";
 			return 1;
