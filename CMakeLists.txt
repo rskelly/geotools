@@ -40,6 +40,7 @@ find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Eigen3 REQUIRED)
 find_package (PythonLibs 2.7)
 find_package (PDAL REQUIRED)
+find_package (PCL REQUIRED)
 
 find_library (GEOS_LIBRARY geos_c)
 
@@ -49,7 +50,8 @@ add_subdirectory (libgeo)
 
 include_directories(BEFORE SYSTEM ./libgeo/include ./libgeo/ann/include ./include /usr/local/include /usr/include 
 	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS}
-	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}) 
+	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}
+	${PCL_INCLUDE_DIRS}) 
 
 link_directories(. /usr/local/lib /usr/lib)
 
@@ -110,7 +112,7 @@ add_executable (rastermatch src/rastermatch.cpp)
 target_link_libraries (rastermatch geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
 add_executable (rastermerge src/rastermerge.cpp)
-target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY} ${PCL_LIBRARIES})
 
 #add_executable (polygonize src/polygonize.cpp)
 #target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})

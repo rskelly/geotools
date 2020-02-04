@@ -3,19 +3,20 @@
 import os
 import sys
 import shutil
+import json
 
 mask = '/media/rob/robdata/work/ec/DEM/mask_sd0_1_ct20_f35.tif'
 
 try:
 	method = sys.argv[1]
-	resamp = sys.argv[2]
-	inputs_file = sys.argv[3]
-	outputs_list = sys.argv[4]
-	window_size = int(sys.argv[5])
+	inputs_file = sys.argv[2]
+	outputs_list = sys.argv[3]
+	window_size = int(sys.argv[4])
+	neighbours = int(sys.argv[5])
 	thread_count = int(sys.argv[6])
 except: 
-	print('Usage: matcher.py <type> <resample (1 for no effect)> <input list> <output list> <window size> <thread count>')
-	print(' types: idw, gauss, cosine. Gauss, cosine decay to zero, idw doesn\'t.')
+	print('Usage: matcher.py <method> <input list> <output list> <window size> <neighbours> <thread count>')
+	print(' types: dw, idw, gauss, cosine. Gauss, cosine decay to zero, idw doesn\'t.')
 	sys.exit(1)
 
 # Load the inputs list. A text file with entries in the form:
@@ -27,25 +28,9 @@ except:
 # 
 # A blank line signifies the start of a new list of inputs.
 
-inputs_list = []
 
 with open(inputs_file, 'r') as f:
-	inputs = []
-	line = f.readline()
-	while line:
-		line = line.strip()
-		if line == '':
-			if len(inputs):
-				inputs_list.append(inputs)
-				inputs = []
-		elif line.startswith('#'):
-			pass # Comment
-		else:
-			inputs.append(line.split(':'))
-		line = f.readline()
-
-	if len(inputs):
-		inputs_list.append(inputs)
+	inputs_list = json.loads(f.read())
 
 
 # Outputs list -- same format as inputs but with the matche filesnames replacing the input
@@ -55,9 +40,16 @@ ol = open(outputs_list, 'w')
 
 # Add processed files to the anchor set for the next iteration.
 accum = True
+skip = False
 
 # Iterate over the blocks.
-for inputs in inputs_list:
+for obj in inputs_list:
+	
+	if not obj.get('run', False):
+		continue
+
+	mergefile = obj['outfile']
+	inputs = obj['infiles']
 
 	# Iterate over the pairs of files.
 	for i in range(len(inputs) - 1):
@@ -74,36 +66,47 @@ for inputs in inputs_list:
 
 		f2, b2 = inputs[i + 1]
 
-		outfile = os.path.splitext(f2)[0] + '_shift.tif'
-
-		# Write out the first one unchanged, then every subsequent one with the shift.
+		# Rename the first file as shifted (but with no shift); has only one band ,
+		# which makes mosaicing easier.
 		if i == 0:
+			outfile = os.path.splitext(f1)[0] + '_shift.tif'
+			cmd = 'gdal_translate -b {b} {f1} {f2}'.format(b = b1, f1 = f1, f2 = outfile)
+			print(cmd)
+			os.system(cmd)
 			ol.write('{f}:{b}\n'.format(f = f1, b = b1))
+			inputs[i] = (outfile, 1)
+	
+		outfile = os.path.splitext(f2)[0] + '_shift.tif'
 		ol.write('{f}:{b}\n'.format(f = outfile, b = 1))
+		inputs[i + 1] = (outfile, 1)
 
 		# Configure params from the anchor list.
-		print(anchors)
+		# print(anchors)
 		fparam = ' '.join(list(map(str, anchors)))
 
 		# Compute the difference between the rasters.
 		print('Computing difference...')
-		tmp = outfile #'tmp.tif'
-		cmd = 'rastermerge -d -r {r} -m {m} -t {t} -s {s} -k {k} {kb} {f} {f2} {b2} {o}'.format(k = mask, kb = 1, r = resamp, m = method, t = thread_count, s = window_size, f = fparam, b1 = b1, f2 = f2, b2 = b2, o = tmp)
+		msk = ' -k {k} {kb} '.format(k = mask, kb = 1)
+		cmd = 'rastermerge -m {m} -t {t} -s {s} -c {c}{mask}{f} {f2} {b2} {o}'.format(c = neighbours, m = method, t = thread_count, s = window_size, f = fparam, b1 = b1, f2 = f2, b2 = b2, o = outfile, mask = msk)
 		print(cmd)
 
-		if os.system(cmd) != 0:
+		if not skip and os.system(cmd) != 0:
 			print('Canceled')
 			sys.exit(1)
 		
-		# Add the difference back into the source file to create the new matched file.
-		#print('Calculating shift...', outfile)
-		#cmd = 'gdal_calc.py -A {f2} --A_band={b2} -B {t} --calc="(A + B)" --overwrite --outfile="{f}"'.format(f2 = f2, b2 = b2, f = outfile, t = tmp)
-		#if os.system(cmd) != 0:
-		#	print('Canceled')
-		#	sys.exit(1)
+	cmd = 'gdalbuildvrt /tmp/tmp.vrt {i}'.format(i = ' '.join([x[0] for x in inputs]))
+	print(cmd)
 
-		#shutil.move(tmp, outfile)
+	if not skip and os.system(cmd) != 0:
+		print('Canceled')
+		sys.exit(1)
 
-		inputs[i + 1] = (outfile, 1)
+	cmd = 'gdal_translate /tmp/tmp.vrt {o}'.format(o = mergefile)
+	print(cmd)
+	
+	if not skip and os.system(cmd) != 0:
+		print('Canceled')
+		sys.exit(1)
 
 	ol.write('\n')
+

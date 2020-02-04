@@ -11,14 +11,39 @@
 #include <list>
 #include <thread>
 #include <mutex>
+#include <unordered_set>
 
 #include <gdal_priv.h>
 
-#include "ds/mqtree.hpp"
+#include <pcl/point_cloud.h>
+#include <pcl/kdtree/kdtree_flann.h>
+
+class Pt {
+public:
+	float _x, _y, _z;
+	Pt(float x, float y, float z) :
+		_x(x), _y(y), _z(z) {}
+	Pt() : Pt(0, 0, 0) {}
+	float operator[](int idx) {
+		switch(idx % 3) {
+		case 0: return _x;
+		case 1: return _y;
+		default: return _z;
+		}
+	}
+	void x(float x) { _x = x; }
+	void y(float y) { _y = y; }
+	void z(float z) { _z = z; }
+	float x() const { return _x; }
+	float y() const { return _y; }
+	float z() const { return _z; }
+};
 
 class Ctx {
+private:
+	std::vector<float> _data;
+
 public:
-	std::vector<float> data;
 	int cols;
 	int rows;
 	double trans[6];
@@ -30,26 +55,60 @@ public:
 		rows = other.rows;
 		nd = other.nd;
 		projection = other.projection;
-		data.resize(other.data.size());
+		_data.resize(other.size());
 		for(int i = 0; i < 6; ++i)
 			trans[i] = other.trans[i];
 		return *this;
 	}
+
+	size_t size() const {
+		return _data.size();
+	}
+
+	void resize(size_t i) {
+		_data.resize(i);
+	}
+
+	std::vector<float>& data() {
+		return _data;
+	}
+
+	float& get(size_t i) {
+		if(i < _data.size())
+			return _data[i];
+		throw std::runtime_error("Invalid index.");
+	}
+
+	float minx() const {
+		return trans[1] < 0 ? trans[0] + cols * trans[1] : trans[0];
+	}
+
+	float maxx() const {
+		return trans[1] > 0 ? trans[0] + cols * trans[1] : trans[0];
+	}
+
+	float miny() const {
+		return trans[5] < 0 ? trans[3] + rows * trans[5] : trans[3];
+	}
+
+	float maxy() const {
+		return trans[5] > 0 ? trans[3] + cols * trans[5] : trans[3];
+	}
 };
 
-int toCol(double x, double* trans) {
+int toCol(float x, double* trans) {
 	return (int) (x - trans[0]) / trans[1];
 }
 
-int toRow(double y, double* trans) {
+int toRow(float y, double* trans) {
 	return (int) (y - trans[3]) / trans[5];
 }
 
-double toX(int col, double* trans) {
+float toX(int col, double* trans) {
 	return (col * trans[1]) + trans[0] + trans[1] * 0.5;
 }
 
-double toY(int row, double* trans) {
+float toY(int row, double* trans) {
 	return (row * trans[5]) + trans[3] + trans[5] * 0.5;
 }
 
@@ -66,9 +125,9 @@ bool loadRaster(const std::string& file, int band, Ctx& data) {
 	ds->GetGeoTransform(data.trans);
 	GDALRasterBand* bnd = ds->GetRasterBand(band);
 	data.nd = bnd->GetNoDataValue();
-	data.data.resize(data.cols * data.rows);
+	data.resize(data.cols * data.rows);
 	data.projection = ds->GetProjectionRef();
-	if(CE_None != bnd->RasterIO(GF_Read, 0, 0, data.cols, data.rows, data.data.data(), data.cols, data.rows, GDT_Float32, 0, 0, 0)) {
+	if(CE_None != bnd->RasterIO(GF_Read, 0, 0, data.cols, data.rows, data.data().data(), data.cols, data.rows, GDT_Float32, 0, 0, 0)) {
 		GDALClose(ds);
 		return false;
 	}
@@ -81,8 +140,8 @@ bool loadRasters(const std::vector<std::string>& files, std::vector<int> bands, 
 	GDALAllRegister();
 
 	double trans[6];
-	double minx = 99999999.0, miny = 999999999.0;
-	double maxx = -99999999.0, maxy = -99999999.0;
+	float minx = 99999999.0, miny = 999999999.0;
+	float maxx = -99999999.0, maxy = -99999999.0;
 	int cols, rows;
 
 	for(size_t i = 0; i < (size_t) count; ++i) {
@@ -119,8 +178,9 @@ bool loadRasters(const std::vector<std::string>& files, std::vector<int> bands, 
 	trans[5] *= resample;
 	data.cols = (int) std::ceil((maxx - minx) / std::abs(trans[1]));
 	data.rows = (int) std::ceil((maxy - miny) / std::abs(trans[5]));
-	data.data.resize(data.cols * data.rows);
-	std::fill(data.data.begin(), data.data.end(), std::nan(""));
+	data.resize(data.cols * data.rows);
+	data.nd = std::nan("");
+	std::fill(data.data().begin(), data.data().end(), data.nd);
 	for(int i = 0; i < 6; ++i)
 		data.trans[i] = trans[i];
 
@@ -153,15 +213,16 @@ bool loadRasters(const std::vector<std::string>& files, std::vector<int> bands, 
 				int cc = toCol(x, data.trans);
 				int rr = toRow(y, data.trans);
 				if(!(cc < 0 || rr < 0 || cc >= data.cols || rr >= data.rows)) {
-					double v = buf[r * (cols / resample) + c];
+					float v = buf[r * (cols / resample) + c];
 					if(v != nd)
-						data.data[rr * data.cols + cc] = v;
+						data.get(rr * data.cols + cc) = v;
 				}
 			}
 		}
 
 		GDALClose(ds);
 	}
+
 	return true;
 }
 
@@ -174,7 +235,7 @@ bool saveRaster(const std::string& file, Ctx& data) {
 	ds->SetProjection(data.projection.c_str());
 	ds->SetGeoTransform(data.trans);
 	ds->GetRasterBand(1)->SetNoDataValue(data.nd);
-	if(CE_None != ds->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, data.cols, data.rows, data.data.data(), data.cols, data.rows, GDT_Float32, 0, 0, 0)) {
+	if(CE_None != ds->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, data.cols, data.rows, data.data().data(), data.cols, data.rows, GDT_Float32, 0, 0, 0)) {
 		GDALClose(ds);
 		return false;
 	}
@@ -191,7 +252,7 @@ bool smooth(std::vector<bool>& filled, std::vector<float>& src, std::vector<floa
 		return false;
 	float t = 0, w = 0;
 	int n = 0;
-	double v;
+	float v;
 	for(int r = 0; r < rows; ++r) {
 		for(int c = 0; c < cols; ++c) {
 			if(!std::isnan((v = src[r * cols + c]))) {
@@ -224,7 +285,7 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 				continue;
 			}
 		}
-		double v0;
+		float v0;
 		for(int col = 0; col < src->cols; ++col) {
 			float s = 0;
 			float w = 0;
@@ -235,7 +296,7 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 					int rr = row + r;
 					if(cc < 0 || rr < 0 || cc >= src->cols || rr >= src->rows)
 						continue;
-					if(!std::isnan((v0 = src->data[rr * src->cols + cc]))) {
+					if(!std::isnan((v0 = src->get(rr * src->cols + cc)))) {
 						float d = (float) (c * c + r * r);
 						if(d == 0) {
 							s = v0;
@@ -251,13 +312,14 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 			}
 			if(w > 0) {
 				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->data[row * src->cols + col] = s / w;
+				dst->get(row * src->cols + col) = s / w;
 			}
 		}
 	}
 }
 
-void processDW(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std::mutex* dmtx, int size) {
+void processDW(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::PointXYZ>* tree,
+		Ctx* data, std::mutex* dmtx, int ncount) {
 	int row;
 	while(!rowq->empty()) {
 		{
@@ -265,38 +327,115 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std::
 			if(!rowq->empty()) {
 				row = rowq->front();
 				rowq->pop_front();
-				std::cout << "Row " << row << " of " << src->rows << "\n";
+				std::cout << "Row " << row << " of " << data->rows << "\n";
 			} else {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				continue;
 			}
 		}
-		double v0;
-		for(int col = 0; col < src->cols; ++col) {
-			float s = 0;
-			float w = 0;
-			bool halt = false;
-			for(int r = -size / 2; !halt && r < size / 2 + 1; ++r) {
-				for(int c = -size / 2; c < size / 2 + 1; ++c) {
-					int cc = col + c;
-					int rr = row + r;
-					if(cc < 0 || rr < 0 || cc >= src->cols || rr >= src->rows)
-						continue;
-					if(!std::isnan((v0 = src->data[rr * src->cols + cc]))) {
-						float d = (float) (c * c + r * r);
-						float w0 = std::max(0.0, std::min(1.0, d / std::pow((float) size / 2.0, 2.0)));
-						s += v0 * w0;
+		size_t count;
+		std::vector<int> indices;
+		std::vector<float> dist;
+		for(int col = 0; col < data->cols; ++col) {
+			float& v = data->get(row * data->cols + col);
+			if(v != data->nd && !std::isnan(v)) {
+				float x = toX(col, data->trans);
+				float y = toY(row, data->trans);
+				pcl::PointXYZ q(x, y, 0);
+				if((count = tree->nearestKSearch(q, ncount, indices, dist))) {
+					float maxd = 0;
+					for(float d : dist)
+						maxd = std::max(maxd, d);
+					maxd = std::sqrt(maxd);
+					float s = 0;
+					float w = 0;
+					for(int idx : indices) {
+						pcl::PointXYZ pt = tree->getInputCloud()->at(idx);
+						float d0 = std::sqrt(std::pow(pt.x - x, 2.0) + std::pow(pt.y - y, 2.0));
+						float w0 = 1.0 - d0 / maxd;
+						s += pt.z * w0;
 						w += w0;
 					}
+					if(w) {
+						std::lock_guard<std::mutex> lk(*dmtx);
+						v += s / w;
+					}
 				}
-			}
-			if(w > 0) {
-				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->data[row * src->cols + col] = s / w;
 			}
 		}
 	}
 }
+
+float median(std::vector<float>& vals) {
+	if(!vals.empty()) {
+		std::sort(vals.begin(), vals.end());
+		size_t c = vals.size();
+		if(c % 2 == 0) {
+			return (vals[c / 2] + vals[c / 2 + 1]) / 2.0;
+		} else {
+			return vals[c / 2];
+		}
+	}
+	return std::nan("");
+}
+
+size_t medstats(Ctx& data, int col, int row, int c, int r, float& dist, float& med) {
+	int rad = 3;
+	float v;
+	std::vector<float> vals;
+	for(int rr = r - rad; rr < r + rad + 1; ++rr) {
+		for(int cc = c - rad; cc < c + rad + 1; ++cc) {
+			if(cc < 0 || rr < 0 || cc >= data.cols || rr >= data.rows)
+				continue;
+			v = data.get(rr * data.cols + cc);
+			if(v != data.nd && !std::isnan(v))
+				vals.push_back(v);
+		}
+	}
+	med = median(vals);
+	dist = std::pow(c - col, 2) + std::pow(r - row, 2);
+	return vals.size();
+}
+
+/*
+void processMedian(std::list<int>* rowq, std::mutex* qmtx, Ctx* data, Ctx* med, std::mutex* dmtx, int size) {
+	std::vector<float> rowBuf(data->cols);
+	int row;
+	while(!rowq->empty()) {
+		{
+			std::lock_guard<std::mutex> lk(*qmtx);
+			if(!rowq->empty()) {
+				row = rowq->front();
+				rowq->pop_front();
+				std::cout << "Row " << row << " of " << data->rows << "\n";
+			} else {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				continue;
+			}
+		}
+
+		std::vector<float> values;
+		values.reserve(std::pow(size * 2 + 1, 2));
+		size_t idx = 0;
+		float v;
+		for(int col = 0; col < data->cols; ++col) {
+			int(int r = row - size; r < row + size + 1; ++r) {
+				for(int c = col - size; c < col + size + 1; ++c) {
+					if(c < 0 || r < 0 || c >= data->cols || r >= data->rows ||
+							mask->data[r * mask->rows + c] != 1) {
+						v = data->data[r * data->cols + c];
+						if(v != data->nd || !std::isnan(v)) {
+							values[idx++] = v;
+						}
+					}
+				}
+			}
+		}
+		std::lock_guard<std::mutex> lk(*dmtx);
+		std::memcpy(data->data.data() + row * data->cols, rowBuf.data(), data->cols);
+	}
+}
+*/
 
 void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std::mutex* dmtx, int size, float* cos) {
 	float rad2 = std::pow(size / 2.0, 2.0) / 1000;	// Because the cosine lookup has 1000 elements.
@@ -325,7 +464,7 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 					int rr = row + r;
 					if(cc < 0 || rr < 0 || cc >= src->cols || rr >= src->rows)
 						continue;
-					if(!std::isnan((v0 = src->data[rr * src->cols + cc]))) {
+					if(!std::isnan((v0 = src->get(rr * src->cols + cc)))) {
 						int d = (int) std::min(1000.0f, (float) (c * c + r * r) / rad2);
 						//std::cout << d << " " << c << " " << r << " " << (c * c + r * r) << " " << rad2 << "\n";
 						if(d < 1000){
@@ -338,7 +477,7 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 			}
 			if(w > 0) {
 				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->data[row * src->cols + col] = s / w;
+				dst->get(row * src->cols + col) = s / w;
 			}
 		}
 	}
@@ -372,7 +511,7 @@ void processGauss(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, st
 					int rr = row + r;
 					if(cc < 0 || rr < 0 || cc >= src->cols || rr >= src->rows)
 						continue;
-					if(!std::isnan((v0 = src->data[rr * src->cols + cc]))) {
+					if(!std::isnan((v0 = src->get(rr * src->cols + cc)))) {
 						float w0 = std::exp(-0.5 * (c * c + r * r) / (sigma * sigma));
 						//std::cout << d << " " << c << " " << r << " " << (c * c + r * r) << " " << rad2 << "\n";
 						s += v0 * w0;
@@ -382,7 +521,7 @@ void processGauss(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, st
 			}
 			if(w > 0) {
 				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->data[row * src->cols + col] = s / w;
+				dst->get(row * src->cols + col) = s / w;
 			}
 		}
 	}
@@ -392,22 +531,20 @@ int main(int argc, char** argv) {
 
 	if(argc < 6) {
 		std::cerr << "Usage: rastermerge [options] <<anchor file 1> <anchor band 1> [<anchor file 2> <anchor band 2> [...]]> <target file 2> <target band 2> <output file>\n"
-				<< " -s <size>          The size of the window in pixels.\n"
+				<< " -s <size>          The size of the median window in pixels.\n"
+				<< " -c <count>         Number of neighbours to consider.\n"
 				<< " -t <threads>       The number of threads.\n"
-				<< " -d                 Preserve the difference raster in /tmp/diff.tif\n"
 				<< " -m <method>        The method: idw, dw, gauss, cosine. Default IDW.\n"
-				<< " -k <mask> <band>   A mask file. Pixel value 1 is kept.\n"
-				<< " -r <resample>      Resample the anchor rasters. 1 is native resolution; 2 is half; 4 is quarter, etc.\n";
+				<< " -k <mask> <band>   A mask file. Pixel value 1 is kept.\n";
 		return 1;
 	}
 
 	std::vector<std::string> files;
 	std::vector<int> bands;
-	float radius = 100;
+	int size = 11;
+	int count = 20;
 	int tcount = 4;
-	bool diff = false;
-	std::string method = "idw";
-	int resample = 1;
+	std::string method = "dw";
 	std::string outfile;
 	std::string maskfile;
 	int maskband = 0;
@@ -415,14 +552,16 @@ int main(int argc, char** argv) {
 	for(int i = 1; i < argc; ++i) {
 		std::string arg(argv[i]);
 		if(arg == "-s") {
-			radius = atof(argv[++i]);
-		} else if(arg == "-d") {
-			diff = true;
-		} else if(arg == "-r") {
-			resample = atoi(argv[++i]);
+			size = atoi(argv[++i]);
+			if(size % 2 == 0)
+				++size;
 		} else if(arg == "-k") {
 			maskfile = argv[++i];
 			maskband = atoi(argv[++i]);
+		} else if(arg == "-c") {
+			count = atoi(argv[++i]);
+			if(count < 1)
+				count = 20;
 		} else if(arg == "-t") {
 			tcount = atoi(argv[++i]);
 			if(tcount < 1)
@@ -442,14 +581,13 @@ int main(int argc, char** argv) {
 	std::string targetFile = files.back();
 	int targetBand = bands.back();
 
-	std::string filebase = outfile.substr(0, outfile.find('.'));
-	std::cout << filebase << "\n";
+	Ctx data1;
 
-	Ctx rdiff;
+	pcl::KdTreeFLANN<pcl::PointXYZ> tree;
+	pcl::PointCloud<pcl::PointXYZ>::Ptr pts(new pcl::PointCloud<pcl::PointXYZ>);
 
 	{
 
-		Ctx data1;
 		loadRaster(targetFile, targetBand, data1);
 
 		Ctx data2;
@@ -460,137 +598,102 @@ int main(int argc, char** argv) {
 		if(hasMask)
 			loadRaster(maskfile, maskband, mask);
 
-		bool tonan;
+		int cols = (int) std::ceil((float) data1.cols / size);
+		int rows = (int) std::ceil((float) data1.rows / size);
+		pts->width = cols;
+		pts->height = rows;
+		pts->points.resize(pts->width * pts->height);
+
+		std::vector<float> values;
+
 		for(int row1 = 0; row1 < data1.rows; ++row1) {
 			for(int col1 = 0; col1 < data1.cols; ++col1) {
-				tonan = true;
-				double v1 = data1.data[row1 * data1.cols + col1];
-				if(v1 != data1.nd) {
-					double x = toX(col1, data1.trans);
-					double y = toY(row1, data1.trans);
-					int col2 = toCol(x, data2.trans);
-					int row2 = toRow(y, data2.trans);
-					int mc = toCol(x, mask.trans);
-					int mr = toRow(y, mask.trans);
-					if(!(col2 < 0 || row2 < 0 || col2 >= data2.cols || row2 >= data2.rows) && !(mc < 0 || mr < 0 || mc >= mask.cols || mr >= mask.rows)) {
-						if(!hasMask || mask.data[mr * mask.cols + mc] == 1) {
-							double v2 = data2.data[row2 * data2.cols + col2];
-							if(v2 != data2.nd) {
-								data1.data[row1 * data1.cols + col1] = v2 - v1;
-								tonan = false;
+
+				for(int r1 = row1 - size / 2; r1 < row1 + size / 2 + 1; ++r1) {
+					for(int c1 = col1 - size / 2; c1 < col1 + size / 2 + 1; ++c1) {
+
+						if(!(c1 < 0 || r1 < 0 || c1 >= data1.cols || r1 >= data1.rows)) {
+
+							float v1 = data1.get(r1 * data1.cols + c1);
+							if(v1 != data1.nd && !std::isnan(v1)) {
+
+								float x = toX(c1, data1.trans);
+								float y = toY(r1, data1.trans);
+								int c2 = toCol(x, data2.trans);
+								int r2 = toRow(y, data2.trans);
+								int mc = toCol(x, mask.trans);
+								int mr = toRow(y, mask.trans);
+
+								if(!(c2 < 0 || r2 < 0 || c2 >= data2.cols || r2 >= data2.rows)
+										&& (!hasMask || !(mc < 0 || mr < 0 || mc >= mask.cols || mr >= mask.rows))) {
+
+									if(!hasMask || mask.get(mr * mask.cols + mc) == 1) {
+
+										float v2 = data2.get(r2 * data2.cols + c2);
+										if(v2 != data2.nd && !std::isnan(v2))
+											values.push_back(v2 - v1);
+
+									}
+								}
 							}
 						}
 					}
 				}
-				if(tonan)
-					data1.data[row1 * data1.cols + col1] = std::nan("");
-			}
-		}
-
-		if(diff) {
-			saveRaster(filebase + "_diff.tif", data1);
-			saveRaster("/tmp/data2.tif", data2);
-		}
-
-		if(resample == 1) {
-			rdiff = data1;
-			rdiff.data.swap(data1.data);
-		} else {
-			rdiff = data1;
-			rdiff.cols = (int) std::ceil((float) rdiff.cols / resample);
-			rdiff.rows = (int) std::ceil((float) rdiff.rows / resample);
-			rdiff.trans[1] *= resample;
-			rdiff.trans[5] *= resample;
-			rdiff.data.resize(rdiff.cols * rdiff.rows);
-			std::fill(rdiff.data.begin(), rdiff.data.end(), 0);
-			std::vector<int> counts(rdiff.cols * rdiff.rows);
-			std::fill(counts.begin(), counts.end(), 0);
-			float v;
-			for(int row = 0; row < data1.rows; ++row) {
-				for(int col = 0; col < data1.cols; ++col) {
-					int cc = col / resample;
-					int rr = row / resample;
-					if(!std::isnan(v = data1.data[row * data1.cols + col])) {
-						rdiff.data[rr * rdiff.cols + cc] += v;
-						++counts[rr * rdiff.cols + cc];
-					}
-				}
-			}
-			for(size_t i = 0; i < rdiff.data.size(); ++i) {
-				if(counts[i]) {
-					rdiff.data[i] /= counts[i];
-				} else {
-					rdiff.data[i] = std::nan("");
+				if(values.size() > 2) {
+					float x = toX(col1, data1.trans);
+					float y = toY(row1, data1.trans);
+					float m = median(values);
+					pts->points.emplace_back(x, y, m);
+					values.clear();
 				}
 			}
 		}
+
+		tree.setInputCloud(pts);
 	}
 
 	{
 
-		Ctx dst = rdiff;
-		std::fill(dst.data.begin(), dst.data.end(), 0);
-
 		std::list<int> rowq;
-		for(int row = 0; row < rdiff.rows; ++row)
+		for(int row = 0; row < data1.rows; ++row)
 			rowq.push_back(row);
 
 		std::mutex qmtx;
 		std::mutex dmtx;
 		std::vector<std::thread> threads;
 
-		int size = (radius * 2) / std::abs(rdiff.trans[1]);
-		if(size % 2 == 0)
-			size++;
 		if(method == "gauss") {
-			for(int i = 0; i < tcount; ++i)
-				threads.emplace_back(processGauss, &rowq, &qmtx, &rdiff, &dst, &dmtx, size, (float) size * 0.25);
+//			for(int i = 0; i < tcount; ++i)
+//				threads.emplace_back(processGauss, &rowq, &qmtx, &tree, &dst, &dmtx, size, (float) size * 0.25);
 		} else if(method == "cosine") {
+			/*
 			float cos[1001];
 			for(int i = 0; i <= 1000; ++i)
 				cos[i] = std::cos((float) i / 1000 * M_PI) / 2.0 + 0.5;
 			for(int i = 0; i < tcount; ++i)
-				threads.emplace_back(processCos, &rowq, &qmtx, &rdiff, &dst, &dmtx, size, cos);
+				threads.emplace_back(processCos, &rowq, &qmtx, &tree, &data1, &dmtx, size, cos);
+				*/
 		} else if(method == "idw") {
-			for(int i = 0; i < tcount; ++i)
-				threads.emplace_back(processIDW, &rowq, &qmtx, &rdiff, &dst, &dmtx, size);
+//			for(int i = 0; i < tcount; ++i)
+//				threads.emplace_back(processIDW, &rowq, &qmtx, &tree, &dst, &dmtx, size);
 		} else if(method == "dw") {
+			//for(int i = 0; i < tcount; ++i)
+				//threads.emplace_back(processDW, &rowq, &qmtx, &tree, &data1, &dmtx, radius);
+		} else if(method == "med") {
 			for(int i = 0; i < tcount; ++i)
-				threads.emplace_back(processDW, &rowq, &qmtx, &rdiff, &dst, &dmtx, size);
+				threads.emplace_back(processDW, &rowq, &qmtx, &tree, &data1, &dmtx, count);
 		} else {
 			std::cerr << "Unknown method: " << method << "\n";
 			return 1;
 		}
 
-		for(int i = 0; i < tcount; ++i) {
-			if(threads[i].joinable())
-				threads[i].join();
-		}
-
-		rdiff.data.swap(dst.data);
-	}
-
-	Ctx final;
-	loadRaster(targetFile, targetBand, final);
-
-	double v;
-	for(int row = 0; row < final.rows; ++row) {
-		for(int col = 0; col < final.cols; ++col) {
-			if((v = final.data[row * final.cols + col]) != final.nd) {
-				float x = toX(col, final.trans);
-				float y = toY(row, final.trans);
-				int c = toCol(x, rdiff.trans);
-				int r = toRow(y, rdiff.trans);
-				float f = rdiff.data[r * rdiff.cols + c];
-				final.data[row * final.cols + col] = v + f;
-			}
+		for(std::thread& t : threads) {
+			if(t.joinable())
+				t.join();
 		}
 	}
 
-	if(diff)
-		saveRaster(filebase + "_diff_smooth.tif", rdiff);
-
-	saveRaster(outfile, final);
+	saveRaster(outfile, data1);
 
 	return 0;
 }
