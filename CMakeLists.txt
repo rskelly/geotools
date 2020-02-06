@@ -41,6 +41,7 @@ find_package (Eigen3 REQUIRED)
 find_package (PythonLibs 2.7)
 find_package (PDAL REQUIRED)
 find_package (PCL REQUIRED)
+find_package (CGAL REQUIRED)
 
 find_library (GEOS_LIBRARY geos_c)
 
@@ -51,7 +52,7 @@ add_subdirectory (libgeo)
 include_directories(BEFORE SYSTEM ./libgeo/include ./libgeo/ann/include ./include /usr/local/include /usr/include 
 	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS}
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}
-	${PCL_INCLUDE_DIRS}) 
+	${PCL_INCLUDE_DIRS} ${CGAL_INCLUDE_DIRS}) 
 
 link_directories(. /usr/local/lib /usr/lib)
 
@@ -91,7 +92,7 @@ add_executable (pc2grid src/pc2grid.cpp)
 target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY})
 
 add_executable (pcnorm src/pcnorm.cpp)
-target_link_libraries (pcnorm ${LIBLAS_LIBRARY})
+target_link_libraries (pcnorm ${LIBLAS_LIBRARY} ${PDAL_LIBRARIES} ${CGAL_LIBRARY} gmp)
 
 add_executable (pcmatch src/pcmatch.cpp)
 target_link_libraries (pcmatch geoutil ${PDAL_LIBRARIES})
