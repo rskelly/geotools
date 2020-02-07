@@ -8,7 +8,20 @@
 #include <limits>
 #include <fstream>
 
+
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Projection_traits_xy_3.h>
+#include <CGAL/Delaunay_triangulation_2.h>
+#include <fstream>
+
 #include "pointcloud_reader.hpp"
+
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+typedef CGAL::Projection_traits_xy_3<K>  Gt;
+typedef CGAL::Delaunay_triangulation_2<Gt> Delaunay;
+typedef K::Point_3   Point;
+typedef Gt::Point_2  Point2;
+typedef CGAL::Delaunay_triangulation_2<Gt>::Face_handle FaceHandle;
 
 size_t buildGrid(const std::string& infile, double* bounds, double res, int& cols, int& rows, std::vector<double>& grid) {
 
@@ -98,6 +111,50 @@ double bary(double x, double y,
 	return (w0 * z0) + (w1 * z1) + (w2 * z2);
 }
 
+bool buildMesh(std::vector<double>& grid, int cols, int rows, double* bounds, double res, Delaunay& mesh) {
+
+	std::vector<Point> pts;
+	for(int r = 0; r < rows; ++r) {
+		for(int c = 0; c < cols; ++c) {
+			double x = bounds[0] + c * res + res * 0.5;
+			double y = bounds[1] + r * res + res * 0.5;
+			pts.emplace_back(x, y, grid[r * cols + c]);
+		}
+	}
+	mesh = Delaunay(pts.begin(), pts.end());
+	std::cout << "Delaunay: " << mesh.number_of_vertices() << "vertices.\n";
+	return true;
+}
+
+bool normalize(const std::string& infile, Delaunay& mesh, const std::string& outfile) {
+
+	pointcloud_reader rdr;
+
+	double x, y, z;
+	int cls;
+	FaceHandle faceh;
+
+	rdr.open(infile, false);
+
+	std::cout << std::setprecision(3) << std::fixed;
+	size_t n = 0;
+	while(rdr.next(x, y, z, cls)) {
+		Point2 pt(x, y, z);
+		faceh = mesh.locate(pt, faceh);
+		auto v1 = faceh->vertex(0)->point();
+		auto v2 = faceh->vertex(1)->point();
+		auto v3 = faceh->vertex(2)->point();
+		double zi = bary(x, y, v1.x(), v1.y(), v1.z(), v2.x(), v2.y(), v2.z(), v3.x(), v3.y(), v3.z());
+		rdr.setZ(zi);
+		if(++n % 1000 == 0)
+			std::cout << n << " of " << rdr.size() << " (" << ((float) n / rdr.size()) << "%)\n";
+	}
+
+	rdr.save(outfile);
+
+	return true;
+}
+
 bool normalizeRaster(const std::string& infile, std::vector<double>& grid, double* bounds,
 		double res, int cols, int rows, const std::string& outfile) {
 
@@ -167,6 +224,7 @@ int main(int argc, char** argv) {
 	double bounds[6];
 	int cols, rows;
 	std::vector<double> grid;
+	Delaunay mesh;
 
 	std::cout << "Building grid.\n";
 	if(!buildGrid(infile, bounds, resolution, cols, rows, grid)) {
@@ -174,7 +232,15 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
+	//std::cout << "Building mesh.\n";
+	//if(!buildMesh(grid, cols, rows, bounds, resolution, mesh)) {
+	//	std::cerr << "Failed to build mesh.\n";
+	//	return 1;
+	//}
+	//grid.clear();
+
 	std::cout << "Normalizing.\n";
+	//if(!normalize(infile, mesh, outfile)) {
 	if(!normalizeRaster(infile, grid, bounds, resolution, cols, rows, outfile)) {
 		std::cerr << "Failed to normalize.\n";
 		return 1;

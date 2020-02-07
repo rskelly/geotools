@@ -92,7 +92,7 @@ add_executable (pc2grid src/pc2grid.cpp)
 target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY})
 
 add_executable (pcnorm src/pcnorm.cpp)
-target_link_libraries (pcnorm ${PDAL_LIBRARIES})
+target_link_libraries (pcnorm ${PDAL_LIBRARIES} ${CGAL_LIBRARY} gmp)
 
 add_executable (pcmatch src/pcmatch.cpp)
 target_link_libraries (pcmatch geoutil ${PDAL_LIBRARIES})
