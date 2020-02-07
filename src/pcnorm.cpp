@@ -34,6 +34,11 @@ size_t buildGrid(const std::string& infile, double* bounds, double res, int& col
 	rdr.open(infile, true);
 	rdr.extendBounds(bounds);
 
+	bounds[0] -= res;
+	bounds[1] -= res;
+	bounds[3] += res;
+	bounds[4] += res;
+
 	// Get grid size.
 	cols = (int) std::ceil((bounds[3] - bounds[0]) / res);
 	rows = (int) std::ceil((bounds[4] - bounds[1]) / res);
