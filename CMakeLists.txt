@@ -91,6 +91,9 @@ add_executable(boresight src/boresight.cpp)
 add_executable (pc2grid src/pc2grid.cpp)
 target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY})
 
+add_executable (metacopy src/metacopy.cpp)
+target_link_libraries (metacopy geoutil geogrid)
+
 add_executable (pcnorm src/pcnorm.cpp)
 target_link_libraries (pcnorm ${PDAL_LIBRARIES} ${CGAL_LIBRARY} gmp)
 
