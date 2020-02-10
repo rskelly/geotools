@@ -124,4 +124,4 @@ target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBR
 
 # Install ################################################################################################
 
-install(TARGETS pc2grid rastermerge pcnorm pcmatch3 convolve reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS metacopy pc2grid rastermerge pcnorm pcmatch3 convolve reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
