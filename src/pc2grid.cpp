@@ -49,7 +49,9 @@ void usage() {
 			<< " -o <max radius>  Fill voids. Does this by doubling the search radius iteratively.\n"
 			<< "                  the point count in this cells remains at zero. Quits when radius is exceeded.\n"
 			<< " -b <bounds>      A comma-delimited list of coordinates, minx, miny, maxx, maxy giving the size of the\n"
-			<< "                  raster in projected coordinates.\n";
+			<< "                  raster in projected coordinates.\n"
+			<< " -q               If given, points are prefiltered before adding to tree. When this is done,\n"
+			<< "                  full and filtered lists passed into computers are identical.\n";
 
 	PCPointFilter::printHelp(std::cerr);
 
@@ -83,6 +85,7 @@ int main(int argc, char** argv) {
 	double bounds[4] = {std::nan("")};
 	std::string templ;
 	std::string projection;
+	bool prefilter = false;
 
 	for(int i = 1; i < argc; ++i) {
 		if(filter.parseArgs(i, argv))
@@ -123,6 +126,8 @@ int main(int argc, char** argv) {
 				g_runerr("Not enough parts in the bounds string.");
 			for(size_t i = 0; i < 4; ++i)
 				bounds[i] = atof(parts[i].c_str());
+		} else if(v == "-q") {
+			prefilter = true;
 		} else {
 			args.push_back(argv[i]);
 		}
@@ -157,6 +162,7 @@ int main(int argc, char** argv) {
 		r.setThin(thin);
 		r.setNoData(nodata);
 		r.setBounds(bounds);
+		r.setPrefilter(prefilter);
 		r.rasterize(args[0], types, resX, resY, easting, northing, radius, projection, useHeader, voids, maxRadius);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
