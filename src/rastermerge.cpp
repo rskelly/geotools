@@ -164,6 +164,7 @@ bool loadRasters(const std::vector<std::string>& files, std::vector<int> bands, 
 		data.trans[i] = trans[i];
 
 	std::vector<float> buf;
+	std::vector<int> counts;
 
 	for(size_t i = 0; i < (size_t) count; ++i) {
 		std::string file = files[i];
@@ -253,6 +254,7 @@ bool smooth(std::vector<bool>& filled, std::vector<float>& src, std::vector<floa
 void processIDW(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::PointXYZ>* tree,
 		Ctx* data, std::mutex* dmtx, int ncount) {
 	int row;
+	float ex = 2.0;
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
@@ -285,7 +287,7 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::Po
 							w = 1;
 							break;
 						} else {
-							float w0 = 1.0 / d0;
+							float w0 = 1.0 / std::pow(d0, ex);
 							s += pt.z * w0;
 							w += w0;
 						}
@@ -586,7 +588,8 @@ int main(int argc, char** argv) {
 		pts->height = rows;
 		pts->points.resize(pts->width * pts->height);
 
-		std::vector<float> values;
+		std::vector<float> values1;
+		std::vector<float> values2;
 
 		for(int row1 = 0; row1 < data1.rows; row1 += size) {
 			for(int col1 = 0; col1 < data1.cols; col1 += size) {
@@ -612,21 +615,24 @@ int main(int argc, char** argv) {
 									if(!hasMask || mask.get(mr * mask.cols + mc) == 1) {
 
 										float v2 = data2.get(r2 * data2.cols + c2);
-										if(v2 != data2.nd && !std::isnan(v2))
-											values.push_back(v2 - v1);
-
+										if(v2 != data2.nd && !std::isnan(v2)) {
+											values1.push_back(v1);
+											values2.push_back(v2);
+										}
 									}
 								}
 							}
 						}
 					}
 				}
-				if(values.size() > 2) {
+				if(!values1.empty()) {
 					float x = toX(col1, data1.trans);
 					float y = toY(row1, data1.trans);
-					float m = median(values);
-					pts->points.emplace_back(x, y, m);
-					values.clear();
+					float m1 = median(values1);
+					float m2 = median(values2);
+					pts->points.emplace_back(x, y, m2 - m1);
+					values1.clear();
+					values2.clear();
 				}
 			}
 		}
@@ -658,11 +664,13 @@ int main(int argc, char** argv) {
 		} else if(method == "idw") {
 
 			for(int i = 0; i < tcount; ++i)
-				threads.emplace_back(processIDW, &rowq, &qmtx, &tree, &data1, &dmtx, size);
+				threads.emplace_back(processIDW, &rowq, &qmtx, &tree, &data1, &dmtx, count);
 
 		} else if(method == "dw") {
-			//for(int i = 0; i < tcount; ++i)
-				//threads.emplace_back(processDW, &rowq, &qmtx, &tree, &data1, &dmtx, radius);
+
+			for(int i = 0; i < tcount; ++i)
+				threads.emplace_back(processDW, &rowq, &qmtx, &tree, &data1, &dmtx, count);
+
 		} else if(method == "med") {
 
 			for(int i = 0; i < tcount; ++i)

@@ -5,7 +5,7 @@ import sys
 import shutil
 import json
 
-mask = '/media/rob/robdata/work/ec/DEM/mask_sd0_1_ct20_f35.tif'
+mask = '/media/rob/robdata/work/ec/DEM/mask_sd0_1_ct20_f25.tif'
 
 try:
 	method = sys.argv[1]
@@ -40,6 +40,8 @@ ol = open(outputs_list, 'w')
 
 # Add processed files to the anchor set for the next iteration.
 accum = True
+
+# Skip the command invocation
 skip = False
 
 # Iterate over the blocks.
@@ -50,6 +52,17 @@ for obj in inputs_list:
 
 	mergefile = obj['outfile']
 	inputs = obj['infiles']
+	usemask = obj['usemask']
+
+	# Rename the first file as shifted (but with no shift); has only one band ,
+	# which makes mosaicing easier.
+	f1, b1 = inputs[0]
+	outfile = os.path.splitext(f1)[0] + '_shift.tif'
+	cmd = 'gdal_translate -b {b} {f1} {f2}'.format(b = b1, f1 = f1, f2 = outfile)
+	print(cmd)
+	os.system(cmd)
+	ol.write('{f}:{b}\n'.format(f = f1, b = b1))
+	inputs[0] = (outfile, 1)
 
 	# Iterate over the pairs of files.
 	for i in range(len(inputs) - 1):
@@ -65,16 +78,6 @@ for obj in inputs_list:
 			anchors.extend([f1, b1])
 
 		f2, b2 = inputs[i + 1]
-
-		# Rename the first file as shifted (but with no shift); has only one band ,
-		# which makes mosaicing easier.
-		if i == 0:
-			outfile = os.path.splitext(f1)[0] + '_shift.tif'
-			cmd = 'gdal_translate -b {b} {f1} {f2}'.format(b = b1, f1 = f1, f2 = outfile)
-			print(cmd)
-			os.system(cmd)
-			ol.write('{f}:{b}\n'.format(f = f1, b = b1))
-			inputs[i] = (outfile, 1)
 	
 		outfile = os.path.splitext(f2)[0] + '_shift.tif'
 		ol.write('{f}:{b}\n'.format(f = outfile, b = 1))
@@ -86,7 +89,9 @@ for obj in inputs_list:
 
 		# Compute the difference between the rasters.
 		print('Computing difference...')
-		msk = ' -k {k} {kb} '.format(k = mask, kb = 1)
+		msk = ' '
+		if usemask:
+			msk = ' -k {k} {kb} '.format(k = mask, kb = 1)
 		cmd = 'rastermerge -m {m} -t {t} -s {s} -c {c}{mask}{f} {f2} {b2} {o}'.format(c = neighbours, m = method, t = thread_count, s = window_size, f = fparam, b1 = b1, f2 = f2, b2 = b2, o = outfile, mask = msk)
 		print(cmd)
 
