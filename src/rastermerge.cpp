@@ -18,6 +18,9 @@
 #include <pcl/point_cloud.h>
 #include <pcl/kdtree/kdtree_flann.h>
 
+/**
+ * Contains a raster grid and related data/methods.
+ */
 class Ctx {
 private:
 	std::vector<float> _data;
@@ -73,102 +76,26 @@ public:
 	float maxy() const {
 		return trans[5] > 0 ? trans[3] + cols * trans[5] : trans[3];
 	}
-};
 
-int toCol(float x, double* trans) {
-	return (int) (x - trans[0]) / trans[1];
-}
-
-int toRow(float y, double* trans) {
-	return (int) (y - trans[3]) / trans[5];
-}
-
-float toX(int col, double* trans) {
-	return (col * trans[1]) + trans[0] + trans[1] * 0.5;
-}
-
-float toY(int row, double* trans) {
-	return (row * trans[5]) + trans[3] + trans[5] * 0.5;
-}
-
-bool loadRaster(const std::string& file, int band, Ctx& data) {
-
-	GDALAllRegister();
-
-	GDALDataset* ds = static_cast<GDALDataset*>(GDALOpen(file.c_str(), GA_ReadOnly));
-	if(!ds)
-		return false;
-	ds->GetGeoTransform(data.trans);
-	data.cols = ds->GetRasterXSize();
-	data.rows = ds->GetRasterYSize();
-	ds->GetGeoTransform(data.trans);
-	GDALRasterBand* bnd = ds->GetRasterBand(band);
-	data.nd = bnd->GetNoDataValue();
-	data.resize(data.cols * data.rows);
-	data.projection = ds->GetProjectionRef();
-	if(CE_None != bnd->RasterIO(GF_Read, 0, 0, data.cols, data.rows, data.data().data(), data.cols, data.rows, GDT_Float32, 0, 0, 0)) {
-		GDALClose(ds);
-		return false;
-	}
-	GDALClose(ds);
-	return true;
-}
-
-bool loadRasters(const std::vector<std::string>& files, std::vector<int> bands, int count, int resample, Ctx& data) {
-
-	GDALAllRegister();
-
-	double trans[6];
-	float minx = 99999999.0, miny = 999999999.0;
-	float maxx = -99999999.0, maxy = -99999999.0;
-	int cols, rows;
-
-	for(size_t i = 0; i < (size_t) count; ++i) {
-		std::string file = files[i];
-		int band = bands[i];
-
-		GDALDataset* ds = static_cast<GDALDataset*>(GDALOpen(file.c_str(), GA_ReadOnly));
-		if(!ds)
-			return false;
-		ds->GetGeoTransform(trans);
-		cols = ds->GetRasterXSize();
-		rows = ds->GetRasterYSize();
-		data.nd = ds->GetRasterBand(band)->GetNoDataValue();
-		data.projection = ds->GetProjectionRef();
-
-		double bounds[4] = {
-			trans[1] > 0 ? trans[0] : trans[0] + cols * trans[1],
-			trans[5] > 0 ? trans[3] : trans[3] + rows * trans[5],
-			trans[1] < 0 ? trans[0] : trans[0] + cols * trans[1],
-			trans[5] < 0 ? trans[3] : trans[3] + rows * trans[5],
-		};
-
-		if(bounds[0] < minx) minx = bounds[0];
-		if(bounds[1] < miny) miny = bounds[1];
-		if(bounds[2] > maxy) maxx = bounds[2];
-		if(bounds[3] > maxy) maxy = bounds[3];
-
-		GDALClose(ds);
+	int toCol(float x) {
+		return (int) (x - trans[0]) / trans[1];
 	}
 
-	trans[0] = trans[1] > 0 ? minx : maxx;
-	trans[3] = trans[5] > 0 ? miny : maxy;
-	trans[1] *= resample;
-	trans[5] *= resample;
-	data.cols = (int) std::ceil((maxx - minx) / std::abs(trans[1]));
-	data.rows = (int) std::ceil((maxy - miny) / std::abs(trans[5]));
-	data.resize(data.cols * data.rows);
-	data.nd = std::nan("");
-	std::fill(data.data().begin(), data.data().end(), data.nd);
-	for(int i = 0; i < 6; ++i)
-		data.trans[i] = trans[i];
+	int toRow(float y) {
+		return (int) (y - trans[3]) / trans[5];
+	}
 
-	std::vector<float> buf;
-	std::vector<int> counts;
+	float toX(int col) {
+		return (col * trans[1]) + trans[0] + trans[1] * 0.5;
+	}
 
-	for(size_t i = 0; i < (size_t) count; ++i) {
-		std::string file = files[i];
-		int band = bands[i];
+	float toY(int row) {
+		return (row * trans[5]) + trans[3] + trans[5] * 0.5;
+	}
+
+	bool load(const std::string& file, int band) {
+
+		GDALAllRegister();
 
 		GDALDataset* ds = static_cast<GDALDataset*>(GDALOpen(file.c_str(), GA_ReadOnly));
 		if(!ds)
@@ -177,51 +104,152 @@ bool loadRasters(const std::vector<std::string>& files, std::vector<int> bands, 
 		cols = ds->GetRasterXSize();
 		rows = ds->GetRasterYSize();
 		ds->GetGeoTransform(trans);
-		buf.resize((cols / resample) * (rows / resample));
 		GDALRasterBand* bnd = ds->GetRasterBand(band);
-		if(CE_None != bnd->RasterIO(GF_Read, 0, 0, cols, rows, buf.data(), cols / resample, rows / resample, GDT_Float32, 0, 0, 0)) {
+		nd = bnd->GetNoDataValue();
+		resize(cols * rows);
+		projection = ds->GetProjectionRef();
+		if(CE_None != bnd->RasterIO(GF_Read, 0, 0, cols, rows, data().data(), cols, rows, GDT_Float32, 0, 0, 0)) {
 			GDALClose(ds);
 			return false;
 		}
+		GDALClose(ds);
+		return true;
+	}
+
+	bool load(const std::vector<std::string>& files, std::vector<int> bands, int count, int resample) {
+
+		GDALAllRegister();
+
+		float minx = 99999999.0, miny = 999999999.0;
+		float maxx = -99999999.0, maxy = -99999999.0;
+
+		for(size_t i = 0; i < (size_t) count; ++i) {
+			std::string file = files[i];
+			int band = bands[i];
+
+			GDALDataset* ds = static_cast<GDALDataset*>(GDALOpen(file.c_str(), GA_ReadOnly));
+			if(!ds)
+				return false;
+			ds->GetGeoTransform(trans);
+			int cols = ds->GetRasterXSize();
+			int rows = ds->GetRasterYSize();
+			nd = ds->GetRasterBand(band)->GetNoDataValue();
+			projection = ds->GetProjectionRef();
+
+			double bounds[4] = {
+				trans[1] > 0 ? trans[0] : trans[0] + cols * trans[1],
+				trans[5] > 0 ? trans[3] : trans[3] + rows * trans[5],
+				trans[1] < 0 ? trans[0] : trans[0] + cols * trans[1],
+				trans[5] < 0 ? trans[3] : trans[3] + rows * trans[5],
+			};
+
+			if(bounds[0] < minx) minx = bounds[0];
+			if(bounds[1] < miny) miny = bounds[1];
+			if(bounds[2] > maxy) maxx = bounds[2];
+			if(bounds[3] > maxy) maxy = bounds[3];
+
+			GDALClose(ds);
+		}
+
+		trans[0] = trans[1] > 0 ? minx : maxx;
+		trans[3] = trans[5] > 0 ? miny : maxy;
 		trans[1] *= resample;
 		trans[5] *= resample;
-		float nd = bnd->GetNoDataValue();
-		for(int r = 0; r < rows / resample; ++r) {
-			for(int c = 0; c < cols / resample; ++c) {
-				float x = toX(c, trans);
-				float y = toY(r, trans);
-				int cc = toCol(x, data.trans);
-				int rr = toRow(y, data.trans);
-				if(!(cc < 0 || rr < 0 || cc >= data.cols || rr >= data.rows)) {
-					float v = buf[r * (cols / resample) + c];
-					if(v != nd)
-						data.get(rr * data.cols + cc) = v;
+		cols = (int) std::ceil((maxx - minx) / std::abs(trans[1]));
+		rows = (int) std::ceil((maxy - miny) / std::abs(trans[5]));
+		resize(cols * rows);
+		nd = std::nan("");
+		std::fill(data().begin(), data().end(), nd);
+
+		std::vector<float> buf;
+		std::vector<int> counts;
+
+		for(size_t i = 0; i < (size_t) count; ++i) {
+			std::string file = files[i];
+			int band = bands[i];
+
+			GDALDataset* ds = static_cast<GDALDataset*>(GDALOpen(file.c_str(), GA_ReadOnly));
+			if(!ds)
+				return false;
+			ds->GetGeoTransform(trans);
+			cols = ds->GetRasterXSize();
+			rows = ds->GetRasterYSize();
+			ds->GetGeoTransform(trans);
+			buf.resize((cols / resample) * (rows / resample));
+			GDALRasterBand* bnd = ds->GetRasterBand(band);
+			if(CE_None != bnd->RasterIO(GF_Read, 0, 0, cols, rows, buf.data(), cols / resample, rows / resample, GDT_Float32, 0, 0, 0)) {
+				GDALClose(ds);
+				return false;
+			}
+			trans[1] *= resample;
+			trans[5] *= resample;
+			float nd = bnd->GetNoDataValue();
+			for(int r = 0; r < rows / resample; ++r) {
+				for(int c = 0; c < cols / resample; ++c) {
+					float x = toX(c);
+					float y = toY(r);
+					int cc = toCol(x);
+					int rr = toRow(y);
+					if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows)) {
+						float v = buf[r * (cols / resample) + c];
+						if(v != nd)
+							get(rr * cols + cc) = v;
+					}
+				}
+			}
+
+			GDALClose(ds);
+		}
+
+		return true;
+	}
+
+	bool save(const std::string& file) {
+		GDALDriverManager* dm = GetGDALDriverManager();
+		GDALDriver* drv = dm->GetDriverByName("GTiff");
+		GDALDataset* ds = drv->Create(file.c_str(), cols, rows, 1, GDT_Float32, 0);
+		if(!ds)
+			return false;
+		ds->SetProjection(projection.c_str());
+		ds->SetGeoTransform(trans);
+		ds->GetRasterBand(1)->SetNoDataValue(nd);
+		if(CE_None != ds->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, cols, rows, data().data(), cols, rows, GDT_Float32, 0, 0, 0)) {
+			GDALClose(ds);
+			return false;
+		}
+		GDALClose(ds);
+		return true;
+	}
+
+	// Get the median for the cell neighbourhood with radius.
+	// Return nan if something goes wrong.
+	float median(int col, int row, float radius) {
+		if(col < 0 || row < 0 || col >= cols || row >= rows)
+			return std::nan("");
+		int o = std::min(1, (int) std::ceil(radius * std::abs(trans[1])));
+		std::vector<float> values;
+		float v;
+		for(int r = row - o; r < row + o + 1; ++r) {
+			for(int c = col - o; c < col + o + 1; ++c) {
+				if(!(c < 0 || r < 0 || c >= cols || r >= rows)
+						&& (v = _data[r * cols + c]) != nd) {
+					values.push_back(v);
 				}
 			}
 		}
-
-		GDALClose(ds);
+		if(values.empty()) {
+			return std::nan("");
+		} else {
+			std::sort(values.begin(), values.end());
+			if(values.size() % 2 == 0) {
+				return (values[values.size() / 2] + values[values.size() / 2 + 1]) / 2.0;
+			} else {
+				return values[values.size() / 2];
+			}
+		}
 	}
 
-	return true;
-}
-
-bool saveRaster(const std::string& file, Ctx& data) {
-	GDALDriverManager* dm = GetGDALDriverManager();
-	GDALDriver* drv = dm->GetDriverByName("GTiff");
-	GDALDataset* ds = drv->Create(file.c_str(), data.cols, data.rows, 1, GDT_Float32, 0);
-	if(!ds)
-		return false;
-	ds->SetProjection(data.projection.c_str());
-	ds->SetGeoTransform(data.trans);
-	ds->GetRasterBand(1)->SetNoDataValue(data.nd);
-	if(CE_None != ds->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, data.cols, data.rows, data.data().data(), data.cols, data.rows, GDT_Float32, 0, 0, 0)) {
-		GDALClose(ds);
-		return false;
-	}
-	GDALClose(ds);
-	return true;
-}
+};
 
 
 
@@ -252,7 +280,7 @@ bool smooth(std::vector<bool>& filled, std::vector<float>& src, std::vector<floa
 }
 
 void processIDW(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::PointXYZ>* tree,
-		Ctx* data, std::mutex* dmtx, int ncount) {
+		Ctx* data, std::mutex* dmtx, float radius, int ncount) {
 	int row;
 	float ex = 2.0;
 	while(!rowq->empty()) {
@@ -273,10 +301,10 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::Po
 		for(int col = 0; col < data->cols; ++col) {
 			float& v = data->get(row * data->cols + col);
 			if(v != data->nd && !std::isnan(v)) {
-				float x = toX(col, data->trans);
-				float y = toY(row, data->trans);
+				float x = data->toX(col);
+				float y = data->toY(row);
 				pcl::PointXYZ q(x, y, 0);
-				if((count = tree->nearestKSearch(q, ncount, indices, dist))) {
+				if((count = tree->radiusSearch(q, radius * radius, indices, dist, ncount))) {
 					float s = 0;
 					float w = 0;
 					for(int idx : indices) {
@@ -323,8 +351,8 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::Poi
 		for(int col = 0; col < data->cols; ++col) {
 			float& v = data->get(row * data->cols + col);
 			if(v != data->nd && !std::isnan(v)) {
-				float x = toX(col, data->trans);
-				float y = toY(row, data->trans);
+				float x = data->toX(col);
+				float y = data->toY(row);
 				pcl::PointXYZ q(x, y, 0);
 				if((count = tree->nearestKSearch(q, ncount, indices, dist))) {
 					float maxd = 0;
@@ -532,6 +560,7 @@ int main(int argc, char** argv) {
 	std::string outfile;
 	std::string maskfile;
 	int maskband = 0;
+	float radius = 0;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg(argv[i]);
@@ -544,14 +573,14 @@ int main(int argc, char** argv) {
 			maskband = atoi(argv[++i]);
 		} else if(arg == "-c") {
 			count = atoi(argv[++i]);
-			if(count < 1)
-				count = 20;
 		} else if(arg == "-t") {
 			tcount = atoi(argv[++i]);
 			if(tcount < 1)
 				tcount = 1;
 		} else if(arg == "-m") {
 			method = argv[++i];
+		} else if(arg == "-r") {
+			radius = atof(argv[++i]);
 		} else {
 			if(i < argc - 1) {
 				files.push_back(arg);
@@ -572,15 +601,15 @@ int main(int argc, char** argv) {
 
 	{
 
-		loadRaster(targetFile, targetBand, data1);
+		data1.load(targetFile, targetBand);
 
 		Ctx data2;
-		loadRasters(files, bands, files.size() - 1, 1, data2);
+		data2.load(files, bands, files.size() - 1, 1);
 
 		bool hasMask = !maskfile.empty();
 		Ctx mask;
 		if(hasMask)
-			loadRaster(maskfile, maskband, mask);
+			mask.load(maskfile, maskband);
 
 		int cols = (int) std::ceil((float) data1.cols / size);
 		int rows = (int) std::ceil((float) data1.rows / size);
@@ -599,22 +628,22 @@ int main(int argc, char** argv) {
 
 						if(!(c1 < 0 || r1 < 0 || c1 >= data1.cols || r1 >= data1.rows)) {
 
-							float v1 = data1.get(r1 * data1.cols + c1);
+							float v1 = data1.median(c1, r1, 10); //get(r1 * data1.cols + c1);
 							if(v1 != data1.nd && !std::isnan(v1)) {
 
-								float x = toX(c1, data1.trans);
-								float y = toY(r1, data1.trans);
-								int c2 = toCol(x, data2.trans);
-								int r2 = toRow(y, data2.trans);
-								int mc = toCol(x, mask.trans);
-								int mr = toRow(y, mask.trans);
+								float x = data1.toX(c1);
+								float y = data1.toY(r1);
+								int c2 = data2.toCol(x);
+								int r2 = data2.toRow(y);
+								int mc = hasMask ? mask.toCol(x) : 0;
+								int mr = hasMask ? mask.toRow(y) : 0;
 
 								if(!(c2 < 0 || r2 < 0 || c2 >= data2.cols || r2 >= data2.rows)
 										&& (!hasMask || !(mc < 0 || mr < 0 || mc >= mask.cols || mr >= mask.rows))) {
 
 									if(!hasMask || mask.get(mr * mask.cols + mc) == 1) {
 
-										float v2 = data2.get(r2 * data2.cols + c2);
+										float v2 = data2.median(c2, r2, 10); //get(r2 * data2.cols + c2);
 										if(v2 != data2.nd && !std::isnan(v2)) {
 											values1.push_back(v1);
 											values2.push_back(v2);
@@ -626,8 +655,8 @@ int main(int argc, char** argv) {
 					}
 				}
 				if(!values1.empty()) {
-					float x = toX(col1, data1.trans);
-					float y = toY(row1, data1.trans);
+					float x = data1.toX(col1);
+					float y = data1.toY(row1);
 					float m1 = median(values1);
 					float m2 = median(values2);
 					pts->points.emplace_back(x, y, m2 - m1);
@@ -664,7 +693,7 @@ int main(int argc, char** argv) {
 		} else if(method == "idw") {
 
 			for(int i = 0; i < tcount; ++i)
-				threads.emplace_back(processIDW, &rowq, &qmtx, &tree, &data1, &dmtx, count);
+				threads.emplace_back(processIDW, &rowq, &qmtx, &tree, &data1, &dmtx, radius, count);
 
 		} else if(method == "dw") {
 
@@ -687,7 +716,7 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	saveRaster(outfile, data1);
+	data1.save(outfile);
 
 	return 0;
 }

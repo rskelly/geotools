@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
 	std::vector<float> tvec(size * size);
 
 	std::vector<float> gvec(size * size);
-	Grid<float>::gaussianWeights(gvec.data(), size, size / 2, 0);
+	Grid<float>::gaussianWeights(gvec.data(), size, (float) size / 2, 0.0f);
 
 	std::vector<float> outvec(oprops.cols() * oprops.rows());
 	std::fill(outvec.begin(), outvec.end(), tnodata);
