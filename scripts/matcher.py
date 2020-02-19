@@ -99,7 +99,7 @@ for obj in inputs_list:
 			print('Canceled')
 			sys.exit(1)
 		
-	cmd = 'gdalbuildvrt /tmp/tmp.vrt {i}'.format(i = ' '.join([x[0] for x in inputs]))
+	cmd = 'gdalbuildvrt /tmp/tmp.vrt -tr 10 10 {i}'.format(i = ' '.join([x[0] for x in inputs]))
 	print(cmd)
 
 	if not skip and os.system(cmd) != 0:
