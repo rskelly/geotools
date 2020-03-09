@@ -116,7 +116,7 @@ add_executable (rastermatch src/rastermatch.cpp)
 target_link_libraries (rastermatch geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
 add_executable (rastermerge src/rastermerge.cpp)
-target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY} ${PCL_LIBRARIES})
+target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY} ${PCL_LIBRARIES} ${CGAL_LIBRARY} gmp)
 
 #add_executable (polygonize src/polygonize.cpp)
 #target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})

@@ -5,17 +5,14 @@ import sys
 import shutil
 import json
 
-mask = '/media/rob/robdata/work/ec/DEM/mask_sd0_1_ct20_f25.tif'
+mask = '/media/rob/robdata/work/ec/DEM/mask_f35.tif' #'/media/rob/robdata/work/ec/DEM/mask_sd0_1_ct20_f35.tif'
 
 try:
-	method = sys.argv[1]
-	inputs_file = sys.argv[2]
-	outputs_list = sys.argv[3]
-	window_size = int(sys.argv[4])
-	neighbours = int(sys.argv[5])
-	thread_count = int(sys.argv[6])
+	inputs_file = sys.argv[1]
+	outputs_list = sys.argv[2]
+	thread_count = int(sys.argv[3])
 except: 
-	print('Usage: matcher.py <method> <input list> <output list> <window size> <neighbours> <thread count>')
+	print('Usage: matcher.py <input list> <output list> <thread count>')
 	print(' types: dw, idw, gauss, cosine. Gauss, cosine decay to zero, idw doesn\'t.')
 	sys.exit(1)
 
@@ -52,66 +49,131 @@ for obj in inputs_list:
 
 	mergefile = obj['outfile']
 	inputs = obj['infiles']
-	usemask = obj['usemask']
+	usemask = False
+	try:
+		usemask = obj['usemask']
+	except: pass
+	
+	trans_from, trans_to = obj.get('transform', [False, False])
+	do_trans = trans_from and trans_to
 
-	# Rename the first file as shifted (but with no shift); has only one band ,
-	# which makes mosaicing easier.
-	f1, b1 = inputs[0]
-	outfile = os.path.splitext(f1)[0] + '_shift.tif'
-	cmd = 'gdal_translate -b {b} {f1} {f2}'.format(b = b1, f1 = f1, f2 = outfile)
-	print(cmd)
-	os.system(cmd)
-	ol.write('{f}:{b}\n'.format(f = f1, b = b1))
-	inputs[0] = (outfile, 1)
+	param_iters = len(obj['params'])
+	param_iter = 0
+	inter_files = []
 
-	# Iterate over the pairs of files.
-	for i in range(len(inputs) - 1):
+	print('iterations', param_iters)
 
-		anchors = []
+	for param_obj in obj['params']:
 
-		if accum:
-			for j in range(i + 1):
-				f1, b1 = inputs[j]
-				anchors.extend([f1, b1])
+		param_iter += 1
+
+		step_size = param_obj['step']
+		radius = param_obj['radius']
+		window_radius = param_obj['window']
+		edges = param_obj.get('edges', False)
+		method = param_obj['type']
+		ncount = param_obj['count']
+		exponent = param_obj['exponent']
+
+		# Rename the first file as shifted (but with no shift); has only one band ,
+		# which makes mosaicing easier.
+		f1, b1 = inputs[0]
+		if param_iter < param_iters:
+			outfile = os.path.splitext(f1)[0] + '_shift_iter_{}.tif'.format(param_iter)
+			inter_files.append(outfile)
 		else:
-			f1, b1 = inputs[i]
-			anchors.extend([f1, b1])
+			outfile = os.path.splitext(f1)[0] + '_shift.tif'
 
-		f2, b2 = inputs[i + 1]
-	
-		outfile = os.path.splitext(f2)[0] + '_shift.tif'
-		ol.write('{f}:{b}\n'.format(f = outfile, b = 1))
-		inputs[i + 1] = (outfile, 1)
+		if param_iter == 1:
+			cmd = 'gdal_translate -b {b} {f1} {f2}'.format(b = b1, f1 = f1, f2 = outfile)
+			print(cmd)
+			os.system(cmd)
+			ol.write('{f}:{b}\n'.format(f = f1, b = b1))
+			inputs[0] = (outfile, 1)
 
-		# Configure params from the anchor list.
-		# print(anchors)
-		fparam = ' '.join(list(map(str, anchors)))
+		# Iterate over the pairs of files.
+		for i in range(len(inputs) - 1):
 
-		# Compute the difference between the rasters.
-		print('Computing difference...')
-		msk = ' '
-		if usemask:
-			msk = ' -k {k} {kb} '.format(k = mask, kb = 1)
-		cmd = 'rastermerge -m {m} -t {t} -s {s} -c {c}{mask}{f} {f2} {b2} {o}'.format(c = neighbours, m = method, t = thread_count, s = window_size, f = fparam, b1 = b1, f2 = f2, b2 = b2, o = outfile, mask = msk)
-		print(cmd)
+			anchors = []
 
-		if not skip and os.system(cmd) != 0:
-			print('Canceled')
-			sys.exit(1)
+			if accum:
+				for j in range(i + 1):
+					f1, b1 = inputs[j]
+					anchors.extend([f1, b1])
+			else:
+				f1, b1 = inputs[i]
+				anchors.extend([f1, b1])
+
+			f2, b2 = inputs[i + 1]
 		
-	cmd = 'gdalbuildvrt /tmp/tmp.vrt -tr 10 10 {i}'.format(i = ' '.join([x[0] for x in inputs]))
+			if param_iter < param_iters:
+				outfile = os.path.splitext(f2)[0] + '_shift_iter_{}.tif'.format(param_iter)
+				inter_files.append(outfile)
+			else:
+				outfile = os.path.splitext(f2)[0] + '_shift.tif'
+
+			ol.write('{f}:{b}\n'.format(f = outfile, b = 1))
+			inputs[i + 1] = (outfile, 1)
+
+			# Configure params from the anchor list.
+			# print(anchors)
+			fparam = ' '.join(list(map(str, anchors)))
+
+			# Compute the difference between the rasters.
+			print('Computing difference...')
+
+			cmd = 'rastermerge {x} {n} {r} {m} {t} {s} {d} {mask} {fp} {f2} {b2} {o}'.format(
+				fp = fparam, 
+				m = '-m {}'.format(method), 
+				t = '-t {}'.format(thread_count), 
+				s = '-s {}'.format(step_size), 
+				r = '-r {}'.format(radius), 
+				d = '-d {}'.format(window_radius),
+				n = '-c {}'.format(ncount),
+				x = '-x' if edges else '',
+				b1 = b1, 
+				f2 = f2, 
+				b2 = b2, 
+				o = outfile, 
+				mask = '-k {k} {kb}'.format(k = mask, kb = 1) if usemask else ' '
+			)
+			print(cmd)
+
+			if not skip and os.system(cmd) != 0:
+				print('Canceled')
+				sys.exit(1)
+		
+	cmd = 'gdalbuildvrt /tmp/tmp.vrt -tr 10 10 {i}'.format(i = ' '.join([x[0] for x in inputs[::-1]])) # TODO: Use averaging tool.
 	print(cmd)
 
 	if not skip and os.system(cmd) != 0:
 		print('Canceled')
 		sys.exit(1)
 
-	cmd = 'gdal_translate /tmp/tmp.vrt {o}'.format(o = mergefile)
+	cmd = 'gdal_translate /tmp/tmp.vrt {o}'.format(
+		o = '/tmp/tmp.tif' if do_trans else mergefile
+	)
 	print(cmd)
 	
 	if not skip and os.system(cmd) != 0:
 		print('Canceled')
 		sys.exit(1)
+
+	if do_trans:
+		print('Transform', trans_from, trans_to)
+		cmd = 'gdalwarp -s_srs {s} -t_srs {t} {f} {o}'.format(
+			s = trans_from,
+			t = trans_to,
+			f = '/tmp/tmp.tif', 
+			o = mergefile
+		)
+		print(cmd)
+		if not skip and os.system(cmd) != 0:
+			print('Transform Cancelled')
+			sys.exit(1)
+
+	#for filename in inter_files:
+	# os.unlink(filename)
 
 	ol.write('\n')
 

@@ -7,6 +7,8 @@ computes the weighted mean of remaining layers using the counts.
 The files should overlap according to the order that results
 from a lexicographic sort on the filenames.
 
+If there's no count layer, assume 1 for each weight.
+
 Only works with UTM.
 '''
 
@@ -58,14 +60,14 @@ def to_c(x, trans):
 def to_r(y, trans):
     return int((y - trans[3]) / trans[5])
 
-def merge(outfile, infiles):
+def merge(outfile, infiles, has_counts = True):
     
-    infiles.sort(key = lambda a: os.path.basename(a))
+    #infiles.sort(key = lambda a: os.path.basename(a))
     
     bounds, resx, resy, cols, rows, drv, bands, proj = get_bounds(infiles)
     trans = [bounds[0] if resx > 0 else bounds[2], resx, 0., bounds[1] if resy > 0 else bounds[3], 0., resy]
     
-    ds = gdal.GetDriverByName("GTiff").Create(outfile, cols, rows, bands, gdal.GDT_Float32)
+    ds = gdal.GetDriverByName("GTiff").Create(outfile, cols, rows, bands if has_counts else bands + 1, gdal.GDT_Float32)
     ds.SetGeoTransform(trans)
     ds.SetProjection(proj)
         
@@ -98,20 +100,26 @@ def merge(outfile, infiles):
                 # The length of the out grid buffer.
                 colst = min(cols - c, cols1)
                 vbuf = band1.ReadAsArray(0, r1, colst, 1)
-                
-                if b == 0:
-                    idx = vbuf[0,...] != nd
-                    counts[r,c:c + colst][idx] += vbuf[0,idx]
-                else:
+
+                idx = vbuf[0,...] != nd
+                counts[r,c:c + colst][idx] += (vbuf[0,idx] if has_counts else 1)
+
+                if not has_counts or b > 0:
                     # Get the count layer.
-                    cbuf = ds1.GetRasterBand(1).ReadAsArray(0, r1, colst, 1)
+                    cbuf = None
+                    if has_counts:
+                        ds1.GetRasterBand(1).ReadAsArray(0, r1, colst, 1)
                     # Multiply the non-nd values by the count and add to sums.
                     idx = vbuf[0,...] != nd
-                    sums[r,c:c + colst][idx] += vbuf[0,idx] * cbuf[0,idx]
+                    sums[r,c:c + colst][idx] += vbuf[0,idx] * (cbuf[0,idx] if has_counts else 1)
             
         if b == 0:
             band.WriteArray(counts, 0, 0)
-        else:
+
+        if not has_counts:
+            band = ds.GetRasterBand(b + 2)
+    
+        if (not has_counts and b == 0) or b > 0:
             # Calculate weighted mean and set nodata.
             sums[counts > 0] /= counts[counts > 0]
             sums[counts == 0] = nd
@@ -121,10 +129,18 @@ def merge(outfile, infiles):
 if __name__ == '__main__':
 
     try:    
-        outfile = sys.argv[1]
-        infiles = sys.argv[2:]
-        
-        merge(outfile, infiles)
+        has_counts = True
+        outfile = None
+        infiles = None
+        for i in range(1, len(sys.argv)):
+            if sys.argv[i] == '-c':
+                has_counts = False
+            elif not outfile:
+                outfile = sys.argv[i]
+            else:
+                infiles = sys.argv[i:]
+                break
+        merge(outfile, infiles, has_counts)
     except Exception as e:
         print(e)
         print('Usage: pc2grid_merge.py <outfile> <infiles*>')
