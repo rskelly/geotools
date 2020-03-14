@@ -58,9 +58,6 @@ link_directories(BEFORE SYSTEM ${PDAL_LIBRARY_DIRS})
 
 # Build support libraries ################################################################################
 
-#add_library (geotools_util SHARED src/geo_util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp src/plotter.cpp)
-#target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES} geoann)
-
 add_library (geotools_plot SHARED src/plotter.cpp)
 target_link_libraries(geotools_plot ${PYTHON_LIBRARIES})
 
