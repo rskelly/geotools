@@ -5,8 +5,6 @@
  *      Author: rob
  */
 
-#include "../include/reflectance.hpp"
-
 #include <string>
 #include <iostream>
 #include <iomanip>
@@ -17,12 +15,14 @@
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMessageBox>
 
+#include "reflectance.hpp"
 #include "reader.hpp"
 #include "grid.hpp"
 #include "ui/reflectance_ui.hpp"
 
 using namespace hlrg::reflectance;
 using namespace hlrg::reader;
+using namespace geo::grid;
 
 namespace {
 
