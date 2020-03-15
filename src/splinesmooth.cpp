@@ -57,6 +57,9 @@ int main(int argc, char** argv) {
 	bool csv = false;
 	double decimate = 1;
 
+	minx = miny = G_DBL_MAX_POS;
+	maxx = maxy = G_DBL_MAX_NEG;
+
 	for(int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
 		if(arg == "-rx") {
