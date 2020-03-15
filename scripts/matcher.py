@@ -5,8 +5,6 @@ import sys
 import shutil
 import json
 
-mask = '/media/rob/robdata/work/ec/DEM/mask_f35.tif' #'/media/rob/robdata/work/ec/DEM/mask_sd0_1_ct20_f35.tif'
-
 try:
 	inputs_file = sys.argv[1]
 	outputs_list = sys.argv[2]
@@ -27,8 +25,11 @@ except:
 
 
 with open(inputs_file, 'r') as f:
-	inputs_list = json.loads(f.read())
+	input_obj = json.loads(f.read())
 
+inputs_list = input_obj['jobs']
+g_usemask = input_obj.get('usemask', None)
+mask = input_obj.get('mask', None)
 
 # Outputs list -- same format as inputs but with the matche filesnames replacing the input
 # filenames.
@@ -49,10 +50,7 @@ for obj in inputs_list:
 
 	mergefile = obj['outfile']
 	inputs = obj['infiles']
-	usemask = False
-	try:
-		usemask = obj['usemask']
-	except: pass
+	usemask = obj.get('usemask', False) if g_usemask is None else g_usemask # Use if set on the object but override if global is set.
 	
 	trans_from, trans_to = obj.get('transform', [False, False])
 	do_trans = trans_from and trans_to
