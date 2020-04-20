@@ -38,18 +38,18 @@ typedef Delaunay::Vertex Vertex;
  */
 class Ctx {
 private:
-	std::vector<double> _data;
+	std::vector<float> _data;
 
 public:
 	int cols;
 	int rows;
 	double trans[6];
-	double nd;
+	float nd;
 	std::string projection;
 /*
 	static Ctx fromTriangulation(const std::string& ptsfile, const std::string& layer,
 			const std::string& idcol, const std::vector<int>& ids,
-			double resx, double resy, const std::string& prprojection) {
+			float resx, float resy, const std::string& prprojection) {
 
 		GDALAllRegister();
 
@@ -81,7 +81,7 @@ public:
 		GDALClose(ds);
 		  for(int r = 0; r < rows; ++r) {
 			  for(int c = 0; c < cols; ++c) {
-				  double& v = get(c, r);
+				  float& v = get(c, r);
 				  if(v != nd && !std::isnan(v))
 					  points.emplace_back(toX(c), toY(r), v);
 			  }
@@ -89,21 +89,21 @@ public:
 
 		  int rad = std::max(cols, rows) * 100;
 		  for(int i = 0; i < 360; ++i) {
-			  int c = cols / 2 + std::cos((double) i * M_PI / 180.) * rad;
-			  int r = rows / 2 + std::sin((double) i * M_PI / 180.) * rad;
+			  int c = cols / 2 + std::cos((float) i * M_PI / 180.) * rad;
+			  int r = rows / 2 + std::sin((float) i * M_PI / 180.) * rad;
 			  points.emplace_back(toX(c), toY(r), 0);
 		  }
 
 		  Delaunay d(points.begin(), points.end());
 		  Face_handle h;
-		  std::vector<double> vertices(9);
+		  std::vector<float> vertices(9);
 
 		  for(int r = 0; r < rows; ++r) {
 			  for(int c = 0; c < cols; ++c) {
-				  double& v = get(c, r);
+				  float& v = get(c, r);
 				  if(v == nd || std::isnan(v)) {
-					  double x = toX(c);
-					  double y = toY(r);
+					  float x = toX(c);
+					  float y = toY(r);
 					  h = d.locate(Point(x, y, 0), h);
 					  for(int i = 0; i < 3; ++i) {
 						  Point t = h->vertex(i)->point();
@@ -129,8 +129,8 @@ public:
 		return *this;
 	}
 
-	Ctx& operator+=(double v) {
-		for(double& f : data()) {
+	Ctx& operator+=(float v) {
+		for(float& f : data()) {
 			if(f != nd && !std::isnan(f))
 				f += v;
 		}
@@ -145,7 +145,7 @@ public:
 		_data.resize(i);
 	}
 
-	std::vector<double>& data() {
+	std::vector<float>& data() {
 		return _data;
 	}
 
@@ -155,14 +155,14 @@ public:
 			ct = 0;
 			for(int row = 0; row < rows; ++row) {
 				for(int col = 0; col < cols; ++col) {
-					double& v = get(col, row);
+					float& v = get(col, row);
 					if(v == nd) {
 						int c = 0;
-						double s = 0;
+						float s = 0;
 						for(int r = row - 1; r < row + 2; ++r) {
 							for(int c = col - 1; c < col + 2; ++c) {
 								if(c >= 0 && r >= 0 && c < cols && r < rows) {
-									double& vv = get(c, r);
+									float& vv = get(c, r);
 									if(vv != nd) {
 										s += vv;
 										++c;
@@ -180,20 +180,20 @@ public:
 		} while(ct);
 	}
 
-	double bary(double x, double y, const std::vector<double>& v) {
-		double x1 = v[0];
-		double y1 = v[1];
-		double z1 = v[2];
-		double x2 = v[3];
-		double y2 = v[4];
-		double z2 = v[5];
-		double x3 = v[6];
-		double y3 = v[7];
-		double z3 = v[8];
-		double w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3));
-		double w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3));
-		double w3 = 1 - w1 - w2;
-		double z = (z1 * w1) + (z2 * w2) + (z3 * w3);
+	float bary(float x, float y, const std::vector<float>& v) {
+		float x1 = v[0];
+		float y1 = v[1];
+		float z1 = v[2];
+		float x2 = v[3];
+		float y2 = v[4];
+		float z2 = v[5];
+		float x3 = v[6];
+		float y3 = v[7];
+		float z3 = v[8];
+		float w1 = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3));
+		float w2 = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / ((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3));
+		float w3 = 1 - w1 - w2;
+		float z = (z1 * w1) + (z2 * w2) + (z3 * w3);
 		return z;
 	}
 
@@ -201,7 +201,7 @@ public:
 	  std::vector<Point> points;
 	  for(int r = 0; r < rows; ++r) {
 		  for(int c = 0; c < cols; ++c) {
-			  double& v = get(c, r);
+			  float& v = get(c, r);
 			  if(v != nd && !std::isnan(v))
 				  points.emplace_back(toX(c), toY(r), v);
 		  }
@@ -209,21 +209,21 @@ public:
 
 	  int rad = std::max(cols, rows) * 100;
 	  for(int i = 0; i < 360; ++i) {
-		  int c = cols / 2 + std::cos((double) i * M_PI / 180.) * rad;
-		  int r = rows / 2 + std::sin((double) i * M_PI / 180.) * rad;
+		  int c = cols / 2 + std::cos((float) i * M_PI / 180.) * rad;
+		  int r = rows / 2 + std::sin((float) i * M_PI / 180.) * rad;
 		  points.emplace_back(toX(c), toY(r), 0);
 	  }
 
 	  Delaunay d(points.begin(), points.end());
 	  Face_handle h;
-	  std::vector<double> vertices(9);
+	  std::vector<float> vertices(9);
 
 	  for(int r = 0; r < rows; ++r) {
 		  for(int c = 0; c < cols; ++c) {
-			  double& v = get(c, r);
+			  float& v = get(c, r);
 			  if(v == nd || std::isnan(v)) {
-				  double x = toX(c);
-				  double y = toY(r);
+				  float x = toX(c);
+				  float y = toY(r);
 				  h = d.locate(Point(x, y, 0), h);
 				  for(int i = 0; i < 3; ++i) {
 					  Point t = h->vertex(i)->point();
@@ -237,7 +237,7 @@ public:
 	  }
 	}
 
-	void resample(double scale) {
+	void resample(float scale) {
 		cols = (int) std::ceil(cols / scale);
 		rows = (int) std::ceil(rows / scale);
 		trans[1] *= scale;
@@ -245,49 +245,49 @@ public:
 		_data.resize(cols * rows);
 	}
 
-	double& get(size_t i) {
+	float& get(size_t i) {
 		if(i < _data.size())
 			return _data[i];
 		throw std::runtime_error("Invalid index.");
 	}
 
-	double& get(int col, int row) {
+	float& get(int col, int row) {
 		return get(row * cols + col);
 	}
 
-	double& get(double x, double y) {
+	float& get(float x, float y) {
 		return get(toCol(x), toRow(y));
 	}
 
-	double minx() const {
+	float minx() const {
 		return trans[1] < 0 ? trans[0] + (cols + 1) * trans[1] : trans[0];
 	}
 
-	double maxx() const {
+	float maxx() const {
 		return trans[1] > 0 ? trans[0] + (cols + 1) * trans[1] : trans[0];
 	}
 
-	double miny() const {
+	float miny() const {
 		return trans[5] < 0 ? trans[3] + (rows + 1) * trans[5] : trans[3];
 	}
 
-	double maxy() const {
+	float maxy() const {
 		return trans[5] > 0 ? trans[3] + (rows + 1) * trans[5] : trans[3];
 	}
 
-	int toCol(double x) {
+	int toCol(float x) {
 		return (int) (x - trans[0]) / trans[1];
 	}
 
-	int toRow(double y) {
+	int toRow(float y) {
 		return (int) (y - trans[3]) / trans[5];
 	}
 
-	double toX(int col) {
+	float toX(int col) {
 		return (col * trans[1]) + trans[0] + trans[1] * 0.5;
 	}
 
-	double toY(int row) {
+	float toY(int row) {
 		return (row * trans[5]) + trans[3] + trans[5] * 0.5;
 	}
 
@@ -346,7 +346,7 @@ public:
 		nd = bnd->GetNoDataValue();
 		resize(cols * rows);
 		projection = ds->GetProjectionRef();
-		if(CE_None != bnd->RasterIO(GF_Read, 0, 0, cols, rows, data().data(), cols, rows, GDT_Float64, 0, 0, 0)) {
+		if(CE_None != bnd->RasterIO(GF_Read, 0, 0, cols, rows, data().data(), cols, rows, GDT_Float32, 0, 0, 0)) {
 			GDALClose(ds);
 			return false;
 		}
@@ -358,7 +358,7 @@ public:
 
 		GDALAllRegister();
 
-		double minx, miny, maxx, maxy;
+		float minx, miny, maxx, maxy;
 
 		minx = miny = G_DBL_MAX_POS;
 		maxx = maxy = G_DBL_MAX_NEG;
@@ -386,21 +386,21 @@ public:
 
 			if(trans0[1] > 0) {
 				trans[0] = std::min(trans[0], trans0[0]);
-				minx = std::min(minx, trans0[0]);
-				maxx = std::max(maxx, trans0[0] + cs * trans0[1]);
+				minx = std::min(minx, (float) trans0[0]);
+				maxx = std::max(maxx, (float) (trans0[0] + cs * trans0[1]));
 			} else {
 				trans[0] = std::max(trans[0], trans0[0]);
-				maxx = std::max(maxx, trans0[0]);
-				minx = std::min(minx, trans0[0] + cs * trans0[1]);
+				maxx = std::max(maxx, (float) trans0[0]);
+				minx = std::min(minx, (float) (trans0[0] + cs * trans0[1]));
 			}
 			if(trans0[5] > 0) {
 				trans[3] = std::min(trans[3], trans0[3]);
-				miny = std::min(miny, trans0[3]);
-				maxy = std::max(maxy, trans0[3] + rs * trans0[5]);
+				miny = std::min(miny, (float) trans0[3]);
+				maxy = std::max(maxy, (float) (trans0[3] + rs * trans0[5]));
 			} else {
 				trans[3] = std::max(trans[3], trans0[3]);
-				maxy = std::max(maxy, trans0[3]);
-				miny = std::min(miny, trans0[3] + rs * trans0[5]);
+				maxy = std::max(maxy, (float) trans0[3]);
+				miny = std::min(miny, (float) (trans0[3] + rs * trans0[5]));
 			}
 			GDALClose(ds);
 		}
@@ -413,7 +413,7 @@ public:
 		resize(cols * rows);
 		std::fill(_data.begin(), _data.end(), 0);
 
-		std::vector<double> buf;
+		std::vector<float> buf;
 		std::vector<int> counts(cols * rows);
 		std::fill(counts.begin(), counts.end(), 0);
 
@@ -433,30 +433,30 @@ public:
 			trans0[1] *= resample;
 			trans0[5] *= resample;
 
-			int csr = (int) std::ceil((double) cs / resample);
-			int rsr = (int) std::ceil((double) rs / resample);
+			int csr = (int) std::ceil((float) cs / resample);
+			int rsr = (int) std::ceil((float) rs / resample);
 
 			buf.resize(csr * rsr);
 
 			GDALRasterBand* bnd = ds->GetRasterBand(band);
-			if(CE_None != bnd->RasterIO(GF_Read, 0, 0, cs, rs, buf.data(), csr, rsr, GDT_Float64, 0, 0, 0)) {
+			if(CE_None != bnd->RasterIO(GF_Read, 0, 0, cs, rs, buf.data(), csr, rsr, GDT_Float32, 0, 0, 0)) {
 				GDALClose(ds);
 				return false;
 			}
 
-			double nd0 = bnd->GetNoDataValue();
+			float nd0 = bnd->GetNoDataValue();
 			int co = toCol(trans0[0]);
 			int ro = toRow(trans0[3]);
 			for(int r = 0; r < rsr; ++r) {
 				for(int c = 0; c < csr; ++c) {
-					double x = toX(c + co);
-					double y = toY(r + ro);
+					float x = toX(c + co);
+					float y = toY(r + ro);
 					int cc = toCol(x);
 					int rr = toRow(y);
 					if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows)) {
-						double v = buf[r * csr + c];
+						float v = buf[r * csr + c];
 						if(v != nd0) {
-							double& vv = get(cc, rr);
+							float& vv = get(cc, rr);
 							vv += v;
 							counts[rr * cols + cc]++;
 						}
@@ -470,7 +470,7 @@ public:
 		int ct;
 		for(int r = 0; r < rows; ++r) {
 			for(int c = 0; c < cols; ++c) {
-				double& v = get(c, r);
+				float& v = get(c, r);
 				if((ct = counts[r * cols + c]) > 0) {
 					v /= ct;
 				} else {
@@ -491,7 +491,7 @@ public:
 		ds->SetProjection(projection.c_str());
 		ds->SetGeoTransform(trans);
 		ds->GetRasterBand(1)->SetNoDataValue(nd);
-		if(CE_None != ds->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, cols, rows, data().data(), cols, rows, GDT_Float64, 0, 0, 0)) {
+		if(CE_None != ds->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, cols, rows, data().data(), cols, rows, GDT_Float32, 0, 0, 0)) {
 			GDALClose(ds);
 			return false;
 		}
@@ -499,8 +499,8 @@ public:
 		return true;
 	}
 
-	bool isEdgePixel(int col, int row, int size, double prop = 0.30) {
-		double v;
+	bool isEdgePixel(int col, int row, int size, float prop = 0.30) {
+		float v;
 		if(col < 0 || row < 0 || col >= cols || row >= rows || (v = get(col, row)) == nd || std::isnan(v))
 			return false;
 		int ct = 0, t = 0;
@@ -513,18 +513,18 @@ public:
 					++ct;
 			}
 		}
-		return (double) ct / t >= prop;
+		return (float) ct / t >= prop;
 	}
 
 	// Get the median for the cell neighbourhood with radius.
 	// Return nan if something goes wrong.
-	double median(int col, int row, double radius) {
+	float median(int col, int row, float radius) {
 		if(col < 0 || row < 0 || col >= cols || row >= rows)
 			return std::nan("");
 		int o = std::max(1, (int) std::ceil(radius / std::abs(trans[1])));
-		static std::vector<double> values;
+		static std::vector<float> values;
 		values.resize(0);
-		double v;
+		float v;
 		for(int r = row - o; r < row + o + 1; ++r) {
 			for(int c = col - o; c < col + o + 1; ++c) {
 				if(!(c < 0 || r < 0 || c >= cols || r >= rows)
@@ -545,7 +545,7 @@ public:
 		}
 	}
 
-	void fill(double f) {
+	void fill(float f) {
 		std::fill(_data.begin(), _data.end(), f);
 	}
 };
@@ -554,16 +554,16 @@ public:
 
 
 
-bool smooth(std::vector<bool>& filled, std::vector<double>& src, std::vector<double>& dst, int col, int row, int cols, int rows) {
+bool smooth(std::vector<bool>& filled, std::vector<float>& src, std::vector<float>& dst, int col, int row, int cols, int rows) {
 	if(filled[row * cols + col])
 		return false;
-	double t = 0, w = 0;
+	float t = 0, w = 0;
 	int n = 0;
-	double v;
+	float v;
 	for(int r = 0; r < rows; ++r) {
 		for(int c = 0; c < cols; ++c) {
 			if(!std::isnan((v = src[r * cols + c]))) {
-				double w0 = c == col && r == row ? 1.0 : 1.0 / (std::pow(c - col, 2) + std::pow(r - row, 2));
+				float w0 = c == col && r == row ? 1.0 : 1.0 / (std::pow(c - col, 2) + std::pow(r - row, 2));
 				t += v * w0;
 				w += w0;
 				++n;
@@ -578,8 +578,8 @@ bool smooth(std::vector<bool>& filled, std::vector<double>& src, std::vector<dou
 	return false;
 }
 
-void processDW(std::list<int>* rowq, bool idw, double exponent, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::PointXYZ>* tree,
-		Ctx* data, Ctx* diff, std::mutex* dmtx, double radius, int ncount) {
+void processDW(std::list<int>* rowq, bool idw, float exponent, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::PointXYZ>* tree,
+		Ctx* data, Ctx* diff, std::mutex* dmtx, float radius, int ncount) {
 
 	int row;
 	while(!rowq->empty()) {
@@ -598,31 +598,31 @@ void processDW(std::list<int>* rowq, bool idw, double exponent, std::mutex* qmtx
 		std::vector<int> indices;
 		std::vector<float> dist;
 		for(int col = 0; col < data->cols; ++col) {
-			double& v = data->get(row * data->cols + col);
+			float& v = data->get(row * data->cols + col);
 			if(v != data->nd && !std::isnan(v)) {
-				double x = data->toX(col);
-				double y = data->toY(row);
+				float x = data->toX(col);
+				float y = data->toY(row);
 				pcl::PointXYZ q(x, y, 0);
 				if((count = tree->radiusSearch(q, radius, indices, dist, 0)) > (size_t) ncount) {
-					double s = 0;
-					double w = 0;
+					float s = 0;
+					float w = 0;
 					for(size_t i = 0; i < indices.size(); ++i) {
 						size_t idx = indices[i];
 						pcl::PointXYZ pt = tree->getInputCloud()->at(idx);
-						double d0 = dist[i];
+						float d0 = dist[i];
 						if(idw) {
 							if(d0 == 0) {
 								s = pt.z;
 								w = 1;
 								break;
 							} else {
-								double w0 = 1.0 / (exponent == 2 ? d0 : std::pow(std::sqrt(d0), exponent));
+								float w0 = 1.0 / (exponent == 2 ? d0 : std::pow(std::sqrt(d0), exponent));
 								s += pt.z * w0;
 								w += w0;
 							}
 						} else {
-							double d = std::sqrt(dist[i]);
-							double w0 = 1.0 - std::min(d / radius, 1.0);
+							float d = std::sqrt(dist[i]);
+							float w0 = 1.0 - std::min(d / radius, 1.0f);
 							s += pt.z * w0;
 							w += 1; // TODO: CHooseablew0;
 						}
@@ -654,17 +654,17 @@ void processBI(std::list<int>* rowq, std::mutex* qmtx, Ctx* medgrid,
 			}
 		}
 		std::vector<int> indices;
-		std::vector<double> dist;
+		std::vector<float> dist;
 		for(int col = 0; col < data->cols; ++col) {
-			double& v = data->get(row * data->cols + col);
+			float& v = data->get(row * data->cols + col);
 			if(v != data->nd && !std::isnan(v)) {
-				double x = data->toX(col);
-				double y = data->toY(row);
+				float x = data->toX(col);
+				float y = data->toY(row);
 				int mc = medgrid->toCol(x);
 				int mr = medgrid->toRow(y);
-				double x1 = medgrid->toX(mc);
-				double y1 = medgrid->toY(mr);
-				double x2, y2;
+				float x1 = medgrid->toX(mc);
+				float y1 = medgrid->toY(mr);
+				float x2, y2;
 				int mc0, mr0;
 				if(x > x1) {
 					mc0 = medgrid->nextCol(mc);
@@ -682,14 +682,14 @@ void processBI(std::list<int>* rowq, std::mutex* qmtx, Ctx* medgrid,
 				x1 = medgrid->toX(mc), x2 = medgrid->toX(mc0);
 				y1 = medgrid->toY(mr), y2 = medgrid->toY(mr0);
 
-				double z1 = medgrid->get(x1, y1);
-				double z2 = medgrid->get(x2, y1);
-				double z3 = medgrid->get(x1, y2);
-				double z4 = medgrid->get(x2, y2);
+				float z1 = medgrid->get(x1, y1);
+				float z2 = medgrid->get(x2, y1);
+				float z3 = medgrid->get(x1, y2);
+				float z4 = medgrid->get(x2, y2);
 
-				double z11 = z1 + (z2 - z1) * ((x - x1) / (x2 - x1));
-				double z22 = z3 + (z4 - z3) * ((x - x1) / (x2 - x1));
-				double z = z11 + (z22 - z11) * ((y - y1) / (y2 - y1));
+				float z11 = z1 + (z2 - z1) * ((x - x1) / (x2 - x1));
+				float z22 = z3 + (z4 - z3) * ((x - x1) / (x2 - x1));
+				float z = z11 + (z22 - z11) * ((y - y1) / (y2 - y1));
 				std::lock_guard<std::mutex> lk(*dmtx);
 				if(x == 475835 && y == 6500105)
 					std::cout << z << "\n";
@@ -703,6 +703,7 @@ void processBI(std::list<int>* rowq, std::mutex* qmtx, Ctx* medgrid,
 
 void processSpline(geo::util::BivariateSpline* spline, std::list<int>* rowq,
 		std::mutex* qmtx, Ctx* data, std::mutex* dmtx) {
+	/*
 	int row;
 	while(!rowq->empty()) {
 		{
@@ -717,11 +718,11 @@ void processSpline(geo::util::BivariateSpline* spline, std::list<int>* rowq,
 			}
 		}
 		for(int col = 0; col < data->cols; ++col) {
-			double& v = data->get(row * data->cols + col);
+			float& v = data->get(row * data->cols + col);
 			if(v != data->nd && !std::isnan(v)) {
-				double x = data->toX(col);
-				double y = data->toY(row);
-				double z[2];
+				float x = data->toX(col);
+				float y = data->toY(row);
+				float z[2];
 				if(!spline->evaluate(&x, 1, &y, 1, z, 2)) {
 					std::lock_guard<std::mutex> lk(*dmtx);
 					v += z[0];
@@ -729,9 +730,10 @@ void processSpline(geo::util::BivariateSpline* spline, std::list<int>* rowq,
 			}
 		}
 	}
+	*/
 }
 
-double median(std::vector<double>& vals) {
+float median(std::vector<float>& vals) {
 	if(vals.size() >= 2) {
 		std::sort(vals.begin(), vals.end());
 		size_t c = vals.size();
@@ -744,20 +746,20 @@ double median(std::vector<double>& vals) {
 	return std::nan("");
 }
 
-double mean(std::vector<double>& vals) {
+float mean(std::vector<float>& vals) {
 	if(!vals.empty()) {
-		double x = 0;
-		for(double v : vals)
+		float x = 0;
+		for(float v : vals)
 			x += v;
 		return x / vals.size();
 	}
 	return std::nan("");
 }
 
-size_t medstats(Ctx& data, int col, int row, int c, int r, double& dist, double& med) {
+size_t medstats(Ctx& data, int col, int row, int c, int r, float& dist, float& med) {
 	int rad = 3;
-	double v;
-	std::vector<double> vals;
+	float v;
+	std::vector<float> vals;
 	for(int rr = r - rad; rr < r + rad + 1; ++rr) {
 		for(int cc = c - rad; cc < c + rad + 1; ++cc) {
 			if(cc < 0 || rr < 0 || cc >= data.cols || rr >= data.rows)
@@ -774,7 +776,7 @@ size_t medstats(Ctx& data, int col, int row, int c, int r, double& dist, double&
 
 /*
 void processMedian(std::list<int>* rowq, std::mutex* qmtx, Ctx* data, Ctx* med, std::mutex* dmtx, int size) {
-	std::vector<double> rowBuf(data->cols);
+	std::vector<float> rowBuf(data->cols);
 	int row;
 	while(!rowq->empty()) {
 		{
@@ -789,10 +791,10 @@ void processMedian(std::list<int>* rowq, std::mutex* qmtx, Ctx* data, Ctx* med, 
 			}
 		}
 
-		std::vector<double> values;
+		std::vector<float> values;
 		values.reserve(std::pow(size * 2 + 1, 2));
 		size_t idx = 0;
-		double v;
+		float v;
 		for(int col = 0; col < data->cols; ++col) {
 			int(int r = row - size; r < row + size + 1; ++r) {
 				for(int c = col - size; c < col + size + 1; ++c) {
@@ -812,8 +814,8 @@ void processMedian(std::list<int>* rowq, std::mutex* qmtx, Ctx* data, Ctx* med, 
 }
 */
 
-void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std::mutex* dmtx, int size, double* cos) {
-	double rad2 = std::pow(size / 2.0, 2.0) / 1000;	// Because the cosine lookup has 1000 elements.
+void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std::mutex* dmtx, int size, float* cos) {
+	float rad2 = std::pow(size / 2.0, 2.0) / 1000;	// Because the cosine lookup has 1000 elements.
 	int row;
 	while(!rowq->empty()) {
 		{
@@ -828,10 +830,10 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 			}
 		}
 
-		double v0;
+		float v0;
 		for(int col = 0; col < src->cols; ++col) {
-			double s = 0;
-			double w = 0;
+			float s = 0;
+			float w = 0;
 			bool halt = false;
 			for(int r = -size / 2; !halt && r < size / 2 + 1; ++r) {
 				for(int c = -size / 2; c < size / 2 + 1; ++c) {
@@ -840,10 +842,10 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 					if(cc < 0 || rr < 0 || cc >= src->cols || rr >= src->rows)
 						continue;
 					if(!std::isnan((v0 = src->get(rr * src->cols + cc)))) {
-						int d = (int) std::min(1000.0, (double) (c * c + r * r) / rad2);
+						int d = (int) std::min(1000.0f, (float) (c * c + r * r) / rad2);
 						//std::cout << d << " " << c << " " << r << " " << (c * c + r * r) << " " << rad2 << "\n";
 						if(d < 1000){
-							double w0 = cos[d];
+							float w0 = cos[d];
 							s += v0 * w0;
 							w += 1;
 						}
@@ -859,7 +861,7 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Ctx* src, Ctx* dst, std:
 }
 
 
-void processGauss(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::PointXYZ>* tree, Ctx* data, Ctx* diff, std::mutex* dmtx, double sigma) {
+void processGauss(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::PointXYZ>* tree, Ctx* data, Ctx* diff, std::mutex* dmtx, float sigma) {
 	int row;
 	while(!rowq->empty()) {
 		{
@@ -874,22 +876,22 @@ void processGauss(std::list<int>* rowq, std::mutex* qmtx, pcl::KdTreeFLANN<pcl::
 			}
 		}
 
-		double rad = sigma * std::abs(data->trans[1]) * 3;
+		float rad = sigma * std::abs(data->trans[1]) * 3;
 		int count;
 		std::vector<float> dist;
 		std::vector<int> idx;
 		for(int col = 0; col < data->cols; ++col) {
-			double& v = data->get(col, row);
+			float& v = data->get(col, row);
 			if(v == data->nd || std::isnan(v))
 				continue;
-			double x = data->toX(col);
-			double y = data->toY(row);
+			float x = data->toX(col);
+			float y = data->toY(row);
 			pcl::PointXYZ q(x, y , 0);
 			if((count = tree->radiusSearch(q, rad, idx, dist, (unsigned int) 0))) {
-				double df = 0;
+				float df = 0;
 				for(size_t i = 0; i < idx.size(); ++i) {
 					const pcl::PointXYZ& pt = tree->getInputCloud()->at(idx[i]);
-					double w0 = std::exp(-0.5 * (double) dist[i] / (sigma * sigma));
+					float w0 = std::exp(-0.5 * (float) dist[i] / (sigma * sigma));
 					df += pt.z * w0;
 				}
 				std::lock_guard<std::mutex> lk(*dmtx);
@@ -923,9 +925,9 @@ int main(int argc, char** argv) {
 	std::string outfile;
 	std::string maskfile;
 	int maskband = 0;
-	double radius = 100;
-	double mradius = 100;
-	double exponent = 2;
+	float radius = 100;
+	float mradius = 100;
+	float exponent = 2;
 	bool edges = false;
 
 	for(int i = 1; i < argc; ++i) {
@@ -972,7 +974,7 @@ int main(int argc, char** argv) {
 
 	pcl::KdTreeFLANN<pcl::PointXYZ> tree;
 	pcl::PointCloud<pcl::PointXYZ>::Ptr pts(new pcl::PointCloud<pcl::PointXYZ>);
-	geo::util::BivariateSpline bspline;
+//	geo::util::BivariateSpline bspline;
 	std::ofstream ptsf("pts.csv");
 
 	{
@@ -988,18 +990,18 @@ int main(int argc, char** argv) {
 		if(hasMask)
 			mask.load(maskfile, maskband);
 
-		int cols = (int) std::ceil((double) data1.cols / size);
-		int rows = (int) std::ceil((double) data1.rows / size);
+		int cols = (int) std::ceil((float) data1.cols / size);
+		int rows = (int) std::ceil((float) data1.rows / size);
 
-		std::vector<double> values1;
-		std::vector<double> values2;
+		std::vector<float> values1;
+		std::vector<float> values2;
 
-		std::vector<double> bvx;
-		std::vector<double> bvy;
-		std::vector<double> bvz;
-		std::vector<double> bvw;
+		std::vector<float> bvx;
+		std::vector<float> bvy;
+		std::vector<float> bvz;
+		std::vector<float> bvw;
 
-		std::list<std::tuple<double, double, double>> medpts;
+		std::list<std::tuple<float, float, float>> medpts;
 
 		medgrid = data1;
 		medgrid.resample(size);
@@ -1012,7 +1014,7 @@ int main(int argc, char** argv) {
 			pts->points.resize(pts->width * pts->height);
 		}
 
-		double meandif = 0;
+		float meandif = 0;
 
 		{
 			int meanct = 0;
@@ -1020,11 +1022,11 @@ int main(int argc, char** argv) {
 			for(int r1 = 0; r1 < data1.rows; r1 += size) {
 				for(int c1 = 0; c1 < data1.cols; c1 += size) {
 
-					double v1 = data1.median(c1, r1, mradius);
+					float v1 = data1.median(c1, r1, mradius);
 					if(v1 != data1.nd && !std::isnan(v1)) {
 
-						double x = data1.toX(c1);
-						double y = data1.toY(r1);
+						float x = data1.toX(c1);
+						float y = data1.toY(r1);
 						int c2 = data2.toCol(x);
 						int r2 = data2.toRow(y);
 						int mc = hasMask ? mask.toCol(x) : 0;
@@ -1039,7 +1041,7 @@ int main(int argc, char** argv) {
 							if(edges && !(data1.isEdgePixel(c1, r1, 5, 0) || data2.isEdgePixel(c2, r2, 5, 0)))
 								continue;
 
-							double v2 = data2.median(c2, r2, mradius);
+							float v2 = data2.median(c2, r2, mradius);
 							if(v2 != data2.nd && !std::isnan(v2)) {
 								meandif += v2 - v1;
 								++meanct;
@@ -1054,11 +1056,11 @@ int main(int argc, char** argv) {
 		for(int r1 = 0; r1 < data1.rows; r1 += size) {
 			for(int c1 = 0; c1 < data1.cols; c1 += size) {
 
-				double v1 = data1.median(c1, r1, mradius);
+				float v1 = data1.median(c1, r1, mradius);
 				if(v1 != data1.nd && !std::isnan(v1)) {
 
-					double x = data1.toX(c1);
-					double y = data1.toY(r1);
+					float x = data1.toX(c1);
+					float y = data1.toY(r1);
 					int c2 = data2.toCol(x);
 					int r2 = data2.toRow(y);
 					int mc = hasMask ? mask.toCol(x) : 0;
@@ -1073,7 +1075,7 @@ int main(int argc, char** argv) {
 						if(edges && !(data1.isEdgePixel(c1, r1, 5, 0) || data2.isEdgePixel(c2, r2, 5, 0)))
 							continue;
 
-						double v2 = data2.median(c2, r2, mradius);
+						float v2 = data2.median(c2, r2, mradius);
 						if(v2 != data2.nd && !std::isnan(v2)) {
 							values1.push_back(v1);
 							values2.push_back(v2);
@@ -1082,17 +1084,17 @@ int main(int argc, char** argv) {
 					}
 				}
 
-				double x = data1.toX(c1);
-				double y = data1.toY(r1);
+				float x = data1.toX(c1);
+				float y = data1.toY(r1);
 				std::string meanmed = "mean";
 				if(!values1.empty()) {
-					double m1 = meanmed == "mean" ? mean(values1) : median(values1);
-					double m2 = meanmed == "mean" ? mean(values2) : median(values2);
+					float m1 = meanmed == "mean" ? mean(values1) : median(values1);
+					float m2 = meanmed == "mean" ? mean(values2) : median(values2);
 					if(method == "spline") {
-						bvx.push_back(x);
+/*						bvx.push_back(x);
 						bvy.push_back(y);
 						bvz.push_back(m2 - m1);
-						bvw.push_back(1);
+						bvw.push_back(1);*/
 					} else if(method == "idw" || method == "dw" || method == "gauss") {
 						pts->points.emplace_back(x, y, m2 - m1);
 					} else if(method == "bi") {
@@ -1103,36 +1105,40 @@ int main(int argc, char** argv) {
 					values1.clear();
 					values2.clear();
 				} else if(method == "spline") {
+					/*
 					bvx.push_back(x);
 					bvy.push_back(y);
 					bvz.push_back(0);
 					bvw.push_back(1);
+					*/
 				}
 			}
 		}
 
 		if(method == "spline") {
-			double smooth = 100;
+			/*
+			float smooth = 100;
 			bspline.init(smooth, bvx, bvy, bvz, bvw,
-					(double) data1.minx(), (double) data1.miny(),
-					(double) data1.maxx(), (double) data1.maxy());
+					(float) data1.minx(), (float) data1.miny(),
+					(float) data1.maxx(), (float) data1.maxy());
+					*/
 		} else if(method == "idw" || method == "dw" || method == "gauss") {
 			tree.setInputCloud(pts);
 		} else if(method == "bi") {
-			double s = 0;
+			float s = 0;
 			int c = 0;
 			for(const auto& m : medpts) {
 				s += std::get<2>(m);
 				++c;
 			}
-			double mean = s / c;
+			float mean = s / c;
 			s = 0;
 			for(const auto& m : medpts) {
 				s += std::pow(std::get<2>(m) - mean, 2.0);
 			}
 			s = std::sqrt(s) / 2;
 			for(const auto& m : medpts) {
-				double z = std::get<2>(m);
+				float z = std::get<2>(m);
 				if(z <= s && z >= -s)
 					medgrid.get(std::get<0>(m), std::get<1>(m)) = z;
 			}
@@ -1159,9 +1165,9 @@ int main(int argc, char** argv) {
 
 		} else if(method == "cosine") {
 			/*
-			double cos[1001];
+			float cos[1001];
 			for(int i = 0; i <= 1000; ++i)
-				cos[i] = std::cos((double) i / 1000 * M_PI) / 2.0 + 0.5;
+				cos[i] = std::cos((float) i / 1000 * M_PI) / 2.0 + 0.5;
 			for(int i = 0; i < tcount; ++i)
 				threads.emplace_back(processCos, &rowq, &qmtx, &tree, &data1, &dmtx, size, cos);
 				*/
@@ -1183,8 +1189,8 @@ int main(int argc, char** argv) {
 		} else if(method == "spline") {
 
 
-			for(int i = 0; i < tcount; ++i)
-				threads.emplace_back(processSpline, &bspline, &rowq, &qmtx, &data1, &dmtx);
+//			for(int i = 0; i < tcount; ++i)
+//				threads.emplace_back(processSpline, &bspline, &rowq, &qmtx, &data1, &dmtx);
 
 		} else if(method == "bi") {
 
