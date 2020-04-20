@@ -63,28 +63,32 @@ def to_r(y, trans):
 def merge(outfile, infiles, has_counts = True):
     
     #infiles.sort(key = lambda a: os.path.basename(a))
-    
+
+    # Get the overall bounds and transform for inputs.
     bounds, resx, resy, cols, rows, drv, bands, proj = get_bounds(infiles)
     trans = [bounds[0] if resx > 0 else bounds[2], resx, 0., bounds[1] if resy > 0 else bounds[3], 0., resy]
     
+    # Create the new raster.
     ds = gdal.GetDriverByName("GTiff").Create(outfile, cols, rows, bands if has_counts else bands + 1, gdal.GDT_Float32)
     ds.SetGeoTransform(trans)
     ds.SetProjection(proj)
         
+    # 2D arrays for the value sums and counts.
     sums = np.zeros(cols * rows, dtype = np.float32).reshape((rows, cols))
     counts = np.zeros(cols * rows, dtype = np.float32).reshape((rows, cols))
+    
+    # Output band
+    ob = 0
 
-    for b in range(bands):
-        print('Band', b, 'of', bands)
-        
-        nd = -9999.
-        band = ds.GetRasterBand(b + 1)
-        band.SetNoDataValue(nd)
-                
+    for b in range(1 if has_counts else 0, bands):
+        print('Band', b + 1, 'of', bands)
+
         sums.fill(0.)
-        
+        counts.fill(0)
+
         for f in infiles:
             
+            # Get the properties of the current band for the current file.
             bounds1, resx1, resy1, cols1, rows1, drv1, bands1, proj1 = get_bounds([f])
             ds1 = gdal.Open(f)
             trans1 = ds1.GetGeoTransform()
@@ -92,6 +96,8 @@ def merge(outfile, infiles, has_counts = True):
             nd1 = band1.GetNoDataValue()
             
             for r1 in range(rows1):
+
+                # Transform the local coordinate to global.
                 x1 = to_x(0, trans1)
                 y1 = to_y(r1, trans1)
                 c = to_c(x1, trans)
@@ -100,31 +106,32 @@ def merge(outfile, infiles, has_counts = True):
                 # The length of the out grid buffer.
                 colst = min(cols - c, cols1)
                 vbuf = band1.ReadAsArray(0, r1, colst, 1)
+                idx = vbuf[0,...] != nd1
 
-                idx = vbuf[0,...] != nd
-                counts[r,c:c + colst][idx] += (vbuf[0,idx] if has_counts else 1)
-
-                if not has_counts or b > 0:
-                    # Get the count layer.
-                    cbuf = None
-                    if has_counts:
-                        ds1.GetRasterBand(1).ReadAsArray(0, r1, colst, 1)
-                    # Multiply the non-nd values by the count and add to sums.
-                    idx = vbuf[0,...] != nd
-                    sums[r,c:c + colst][idx] += vbuf[0,idx] * (cbuf[0,idx] if has_counts else 1)
-            
-        if b == 0:
-            band.WriteArray(counts, 0, 0)
-
-        if not has_counts:
-            band = ds.GetRasterBand(b + 2)
+                # Create a counts buffer or a list of 1.
+                if has_counts:
+                    cbuf = ds1.GetRasterBand(1).ReadAsArray(0, r1, colst, 1)
     
-        if (not has_counts and b == 0) or b > 0:
-            # Calculate weighted mean and set nodata.
-            sums[counts > 0] /= counts[counts > 0]
-            sums[counts == 0] = nd
-            band.WriteArray(sums, 0, 0)
+                # Increment the counts array by the count layer value, or by 1.
+                counts[r,c:c + colst][idx] += (cbuf[0,idx] if has_counts else 1)
+                # Multiply the non-nd values by the count and add to sums.
+                sums[r,c:c + colst][idx] += vbuf[0,idx] * (cbuf[0,idx] if has_counts else 1)
 
+        nd = -9999.
+        band = ds.GetRasterBand(ob + 1)
+        band.SetNoDataValue(nd)
+        
+        # Write the counts on the first band.
+        if ob == 0:
+            band.WriteArray(counts, 0, 0)
+            ob += 1
+            band = ds.GetRasterBand(ob + 1)
+    
+        # Calculate weighted mean and set nodata and write.
+        sums[counts > 0] /= counts[counts > 0]
+        sums[counts == 0] = nd
+        band.WriteArray(sums, 0, 0)
+        ob += 1
 
 if __name__ == '__main__':
 
@@ -141,7 +148,8 @@ if __name__ == '__main__':
                 infiles = sys.argv[i:]
                 break
         merge(outfile, infiles, has_counts)
-    except Exception as e:
-        print(e)
+    except:
+        import traceback
+        print(traceback.format_exc())
         print('Usage: pc2grid_merge.py <outfile> <infiles*>')
 

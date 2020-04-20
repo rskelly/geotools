@@ -42,6 +42,22 @@ accum = True
 # Skip the command invocation
 skip = False
 
+# Check that input files exist or will be created.
+if True:
+    print('Checking inputs...')
+    available = set()
+    for obj in inputs_list:
+        if not obj.get('run', False):
+            continue
+        mergefile = obj['outfile']
+        inputs = obj['infiles']
+        for f,b in inputs:
+            if not os.path.exists(f) and not f in available:
+                print('file', f, 'does not exist and will not be created')
+                sys.exit(1)
+            available.add(f)
+        available.add(mergefile)
+
 # Iterate over the blocks.
 for obj in inputs_list:
 	
