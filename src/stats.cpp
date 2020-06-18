@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "stats.hpp"
 
