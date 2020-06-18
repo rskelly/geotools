@@ -12,10 +12,12 @@
 #include <string>
 #include <vector>
 
+#include "geo.hpp"
 #include "pointcloud.hpp"
 #include "util.hpp"
 #include "grid.hpp"
 
+using namespace geo;
 using namespace geo::pc;
 using namespace geo::util;
 using namespace geo::grid;
@@ -96,7 +98,7 @@ int main(int argc, char** argv) {
 		} else if(v == "-h") {
 			useHeader = false;
 		} else if(v == "-v") {
-			g_loglevel(G_LOG_TRACE);
+			geo::loglevel(G_LOG_TRACE);
 		} else if(v == "-rx") {
 			resX = atof(argv[++i]);
 		} else if(v == "-ry") {
@@ -121,8 +123,9 @@ int main(int argc, char** argv) {
 			split(std::back_inserter(parts), argv[++i]);
 			if(parts.size() < 4)
 				g_runerr("Not enough parts in the bounds string.");
-			for(size_t i = 0; i < 4; ++i)
+			for(size_t i = 0; i < 4; ++i) {
 				bounds[i] = atof(parts[i].c_str());
+			}
 		} else {
 			args.push_back(argv[i]);
 		}
@@ -138,7 +141,7 @@ int main(int argc, char** argv) {
 
 	if(!templ.empty()) {
 		std::cout << "Getting raster parameters from template: " << templ << "\n";
-		Grid<float> tgrid(templ);
+		Band<float> tgrid(templ, 0, false, true);
 		const GridProps& props = tgrid.props();
 		resX = props.resX();
 		resY = props.resY();
