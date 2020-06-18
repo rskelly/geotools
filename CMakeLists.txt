@@ -7,7 +7,7 @@ enable_language(CXX)
 set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_EXTENSIONS OFF)
-set (CMAKE_CXX_FLAGS "-Wall -Wextra") # -D_GLIBCXX_PARALLEL")
+set (CMAKE_CXX_FLAGS "-Wall -Wextra")
 set (CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set (CMAKE_CXX_FLAGS_RELEASE "-O3")
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -18,13 +18,6 @@ set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set (CMAKE_INSTALL_RPATH "/usr/local/lib")
 set (CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-
-if(APPLE)
-	# This does not use GCC.
-	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++ -Wno-unknown-pragmas -Wall -D_GLIBCXX_PARALLEL")
-else()
-	set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fopenmp -Wno-unknown-pragmas -Wall -D_GLIBCXX_PARALLEL")
-endif()
 
 set (CMAKE_AUTOUIC ON)
 set (CMAKE_AUTOMOC ON)
@@ -40,18 +33,31 @@ find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Eigen3 REQUIRED)
 find_package (PythonLibs 2.7)
 find_package (PDAL REQUIRED)
+find_package (Threads REQUIRED)
 
 find_library (GEOS_LIBRARY geos_c)
+find_library (LIBLAS_LIBRARY las)
+
+set (WITH_PC TRUE)
+set (WITH_ANN TRUE)
 
 add_subdirectory (libgeo)
 
 # Configure directories###################################################################################
 
-include_directories(BEFORE SYSTEM ./libgeo/include ./libgeo/ann/include ./include /usr/local/include /usr/include 
-	${GDAL_INCLUDE_DIR} ${EIGEN3_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS}
-	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}) 
+include_directories(BEFORE SYSTEM
+	./include 
+	./libgeo/include 
+	./libgeo/ann/include 
+	${GDAL_INCLUDE_DIR} 
+	${EIGEN3_INCLUDE_DIR} 
+	${PYTHON_INCLUDE_DIRS}
+	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}
+) 
 
-link_directories(. /usr/local/lib /usr/lib)
+link_directories(BEFORE_SYSTEM 
+	${GDAL_LIBDIR}
+)
 
 # Build support libraries ################################################################################
 
@@ -76,10 +82,10 @@ target_link_libraries(geotools_writer geotools_stats ${GDAL_LIBRARY})
 
 add_executable (convolve src/convolve_app.cpp src/convolve.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
-target_link_libraries (convolve Qt5::Widgets geoutil geotools_reader geotools_writer)
+target_link_libraries (convolve geoutil geotools_reader geotools_writer Threads::Threads Qt5::Widgets)
 
-add_executable (reflectance src/reflectance.cpp src/ui/reflectance_ui.cpp)
-target_link_libraries (reflectance Qt5::Widgets geoutil geogrid geotools_reader ${GEOS_LIBRARY})
+#add_executable (reflectance src/reflectance.cpp src/ui/reflectance_ui.cpp)
+#target_link_libraries (reflectance Qt5::Widgets geoutil geogrid geotools_reader ${GEOS_LIBRARY})
 
 add_executable (edgereplace src/edgereplace.cpp)
 
@@ -91,23 +97,23 @@ target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY})
 add_executable (pcnorm src/pcnorm.cpp)
 target_link_libraries (pcnorm ${LIBLAS_LIBRARY})
 
-add_executable (pcmatch src/pcmatch.cpp)
-target_link_libraries (pcmatch geoutil ${PDAL_LIBRARIES})
+#add_executable (pcmatch src/pcmatch.cpp)
+#target_link_libraries (pcmatch geoutil ${PDAL_LIBRARIES})
 
-add_executable (pcmatch3 src/pcmatch3.cpp)
-target_link_libraries (pcmatch3 geoutil ${PDAL_LIBRARIES})
+#add_executable (pcmatch3 src/pcmatch3.cpp)
+#target_link_libraries (pcmatch3 geoutil ${PDAL_LIBRARIES})
 
 add_executable (sbet2csv src/sbet2csv.cpp)
 target_link_libraries (sbet2csv geoutil ${PROJ_LIBRARY} ${GEOS_LIBRARY})
 
-add_executable (splinesmooth src/splinesmooth.cpp)
-target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+#add_executable (splinesmooth src/splinesmooth.cpp)
+#target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
-add_executable (idw src/idw.cpp)
-target_link_libraries (idw geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+#add_executable (idw src/idw.cpp)
+#target_link_libraries (idw geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
-add_executable (rastermatch src/rastermatch.cpp)
-target_link_libraries (rastermatch geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+#add_executable (rastermatch src/rastermatch.cpp)
+#target_link_libraries (rastermatch geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
 add_executable (rastermerge src/rastermerge.cpp)
 target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
@@ -118,4 +124,4 @@ target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBR
 
 # Install ################################################################################################
 
-install(TARGETS pc2grid rastermerge pcnorm pcmatch3 convolve reflectance splinesmooth geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS pc2grid rastermerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
