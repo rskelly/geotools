@@ -11,7 +11,7 @@
 
 Production instructions for regression coefficients are [here](https://github.com/rskelly/geotools/wiki/process).
 
-# Installation
+## Installation
 
 First, install Git. If you do not have it, it can be installed on Linux using the package manager, or on OSX by downloading from [here](https://git-scm.com/download/mac).
 
@@ -26,7 +26,7 @@ This will create a folder called geotools in the Documents folder with the sourc
     
 Then follow the instructions below.
 
-## Linux
+### Linux
 1) `mkdir build`
 3) `cd build`
 4) `cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..`
@@ -35,7 +35,7 @@ Then follow the instructions below.
 
 Note: The program requires GDAL and GEOS so these must be installed first, preferably using the package manager.
 
-## OSX
+### OSX
 
 *Note, these instructions are not current, and not likely to be updated soon.*
 
@@ -47,6 +47,6 @@ Note: If the script fails with a message about permissions, it may need to have 
 
 Note: The program requires GDAL, GEOS and some other libraries to run so these must be installed first. The install script attempts this using Homebrew. It is a common point of failure.
 
-## Windows
+### Windows
 1) Nope.
 
