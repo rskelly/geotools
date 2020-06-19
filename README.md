@@ -1,4 +1,6 @@
-This is the Wiki page for the HLRG tools, including:
+# geotools
+
+`geotools` is a set of tools for working with LiDAR point clouds and hyperspectral data, developed during my time with the (now-defunct) Hyperspectral-LiDAR Research Group and the Water and Climate Impacts Research at the University of Victoria. The links below go to the Wiki pages for each tool.
 
 * [contrem](https://github.com/rskelly/geotools/wiki/contrem) -- The convex hull continuum removal tool.
 * [convolve](https://github.com/rskelly/geotools/wiki/convolve) -- The spectral convolution tool.
