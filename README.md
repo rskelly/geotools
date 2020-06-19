@@ -1,11 +1,13 @@
 This is the Wiki page for the HLRG tools, including:
 
-* [contrem](https://github.com/rskelly/contrem/wiki/contrem) -- The convex hull continuum removal tool.
-* [convolve](https://github.com/rskelly/contrem/wiki/convolve) -- The spectral convolution tool.
-* [reflectance](https://github.com/rskelly/contrem/wiki/reflectance) -- Tool for calculating reflectance from radiance images.
-* [refl_regress](https://github.com/rskelly/contrem/wiki/refl_regress) -- Tool for calculating reflectance regression coefficients. 
+* [contrem](https://github.com/rskelly/geotools/wiki/contrem) -- The convex hull continuum removal tool.
+* [convolve](https://github.com/rskelly/geotools/wiki/convolve) -- The spectral convolution tool.
+* [reflectance](https://github.com/rskelly/geotools/wiki/reflectance) -- Tool for calculating reflectance from radiance images.
+* [refl_regress](https://github.com/rskelly/geotools/wiki/refl_regress) -- Tool for calculating reflectance regression coefficients. 
+* [pc2grid](https://github.com/rskelly/geotools/wiki/pc2grid) -- Calculates statistics etc. on point clouds of any size.
+* [pcnorm](https://github.com/rskelly/geotools/wiki/pcnorm) -- Normalizes point clouds (subtracts the ground elevation from each point).
 
-Production instructions for regression coefficients are [here](https://github.com/rskelly/contrem/wiki/process).
+Production instructions for regression coefficients are [here](https://github.com/rskelly/geotools/wiki/process).
 
 # Installation
 
@@ -32,6 +34,9 @@ Then follow the instructions below.
 Note: The program requires GDAL and GEOS so these must be installed first, preferably using the package manager.
 
 ## OSX
+
+*Note, these instructions are not current, and not likely to be updated soon.*
+
 1) `./INSTALL_OSX.sh`
 
 Note: If the script fails with a message about permissions, it may need to have the execute permissions set to run. Change them using the following command in Terminal:
