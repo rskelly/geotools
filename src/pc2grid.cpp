@@ -24,6 +24,10 @@ using namespace geo::grid;
 
 void usage() {
 	std::cerr << "Usage: pc2grid [options] <output raster> <input las [*]>\n"
+			<< "If the output raster is to be merged (default), the given filename \n"
+			<< " is used. Otherwise, each output band is saved to a file named "
+			<< "<basename>_<method>.<extension>.\n"
+			<< "\n"
 			<< " -r <filename>    Use a template raster for resolution, extent and projection.\n"
 			<< "                  Overrides rx/ry, e, n and s.\n"
 			<< " -rx <resolution> The output x resolution in map units.\n"
@@ -48,10 +52,9 @@ void usage() {
 			<< "                  number of points will be randomly thinned. Any cell with less will be\n"
 			<< "                  reduced to zero. This occurs after filtering.\n"
 			<< " -d <nodata>      A nodata value. The default is -9999.0\n"
-			<< " -o <max radius>  Fill voids. Does this by doubling the search radius iteratively.\n"
-			<< "                  the point count in this cells remains at zero. Quits when radius is exceeded.\n"
 			<< " -b <bounds>      A comma-delimited list of coordinates, minx, miny, maxx, maxy giving the size of the\n"
-			<< "                  raster in projected coordinates.\n";
+			<< "                  raster in projected coordinates.\n"
+			<< " -g               Do not merge individual bands to a single file using the given output filename.\n";
 
 	PCPointFilter::printHelp(std::cerr);
 
@@ -80,11 +83,10 @@ int main(int argc, char** argv) {
 	PCPointFilter filter;
 	int thin = 0;
 	double nodata = -9999;
-	bool voids = false;
-	double maxRadius = 0;
 	double bounds[4] = {std::nan("")};
 	std::string templ;
 	std::string projection;
+	bool merge = true;
 
 	for(int i = 1; i < argc; ++i) {
 		if(filter.parseArgs(i, argv))
@@ -115,9 +117,6 @@ int main(int argc, char** argv) {
 			thin = atoi(argv[++i]);
 		} else if(v == "-d") {
 			nodata = atof(argv[++i]);
-		} else if(v == "-o") {
-			voids = true;
-			maxRadius = atof(argv[++i]);
 		} else if(v == "-b") {
 			std::vector<std::string> parts;
 			split(std::back_inserter(parts), argv[++i]);
@@ -126,6 +125,8 @@ int main(int argc, char** argv) {
 			for(size_t i = 0; i < 4; ++i) {
 				bounds[i] = atof(parts[i].c_str());
 			}
+		} else if(v == "-g") {
+			merge = false;
 		} else {
 			args.push_back(argv[i]);
 		}
@@ -160,7 +161,8 @@ int main(int argc, char** argv) {
 		r.setThin(thin);
 		r.setNoData(nodata);
 		r.setBounds(bounds);
-		r.rasterize(args[0], types, resX, resY, easting, northing, radius, projection, useHeader, voids, maxRadius);
+		r.setMerge(merge);
+		r.rasterize(args[0], types, resX, resY, easting, northing, radius, projection, useHeader);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
 		usage();
