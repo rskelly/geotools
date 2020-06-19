@@ -121,6 +121,8 @@ target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBR
 #add_executable (polygonize src/polygonize.cpp)
 #target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
 
+add_executable (voidfill src/voidfill.cpp)
+target_link_libraries (voidfill geoutil geogrid ${GDAL_LIBRARY})
 
 # Install ################################################################################################
 
