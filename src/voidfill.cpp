@@ -1,16 +1,20 @@
 /*
- * polygonize.cpp
+ * voidfill.cpp
  *
  *  Created on: Apr 13, 2017
  *      Author: rob
  */
+
+#include <thread>
+#include <vector>
+#include <string>
 
 #include "grid.hpp"
 
 using namespace geo::grid;
 
 void usage() {
-	std::cerr << "Usage: voidfill [options] <input raster> <output raster>\n"
+	std::cout << "Usage: voidfill [options] <input raster> <output raster>\n"
 			<< " -b  <band>       The band. Default 1.\n"
 			<< " -m  <area>       Maximum area to fill. Square map units.\n"
 			<< " -e               Fill voids on edges (otherwise don't).\n"
@@ -18,7 +22,19 @@ void usage() {
 			<< " -n  <n>          The radius of the alpha disc.\n";
 }
 
-int fillVoids(Band<int>& mask, Band<float>& inrast, Band<float>& outrast, int col0, int row0, int col1, int row1, int mode) {
+/**
+ * \brief Fills the voids in a raster using the given mask.
+ *
+ * \param mask The mask. Pixels with value 1 are filled; 0 not.
+ * \param inrast The input raster.
+ * \param outrast The output raster.
+ * \param col0 The first column of the subset of the raster to be filled.
+ * \param row0 The first row of the subset of the raster to be filled.
+ * \param col1 The last column (inclusive) of the subset of the raster to be filled.
+ * \param row1 The last row (inclusive) of the subset of the raster to be filled.
+ */
+void fillVoids(Band<uint8_t>& mask, Band<float>& inrast, Band<float>& outrast,
+		int col0, int row0, int col1, int row1, int mode) {
 
 	const GridProps& props = inrast.props();
 	float nd = props.nodata();
@@ -38,7 +54,7 @@ int fillVoids(Band<int>& mask, Band<float>& inrast, Band<float>& outrast, int co
 		for(int c = col0; c <= col1; ++c) {
 			if(mask.get(c, r) != 2)
 				continue;
-			// Check the pixels around the masked pixel for values.
+			// Check the pixels around the null pixel for values.
 			for(int rr = r - 1; rr < r + 2; ++rr) {
 				for(int cc = c - 1; cc < c + 2; ++cc) {
 					if(props.hasCell(cc, rr) && (v = inrast.get(cc, rr)) != nd) {
@@ -96,47 +112,54 @@ int fillVoids(Band<int>& mask, Band<float>& inrast, Band<float>& outrast, int co
 			}
 		}
 	}
-
-	return 0;
 }
 
 /**
- * Set all edge-contacting null pixel regions to 2 in the mask.
+ * \brief Set all edge-contacting null pixel regions to 2 in the mask.
+ *
+ * Iterates over the edge pixels of the raster. Any pixels that are null
+ * are flood-filled to transfer the shape of the null region to the mask.
+ *
+ * \param rast The raster containing voids.
+ * \param mask The mask.
  */
-void edgeMask(Band<float>& dem, Band<int>& mask) {
-	float nd = dem.props().nodata();
-	int cols = dem.props().cols();
-	int rows = dem.props().rows();
-	TargetFillOperator<float, int> op1(&dem, 1, &mask, 1, nd, 2); // Mark for filling (nd --> 2)
+void edgeMask(Band<float>& rast, Band<uint8_t>& mask) {
+	float nd = rast.props().nodata();
+	int cols = rast.props().cols();
+	int rows = rast.props().rows();
+	TargetFillOperator<float, uint8_t> op1(&rast, 1, &mask, 1, nd, 2); // Mark for filling (nd --> 2)
 	int minc, minr, maxc, maxr, area;
 	mask.fill(0);
 	for(int c = 0; c < cols; ++c) {
 		if(mask.get(c, 0) != 2)
-			dem.floodFill(c, 0, op1, false, &minc, &minr, &maxc, &maxr, &area);
+			rast.floodFill(c, 0, op1, false, &minc, &minr, &maxc, &maxr, &area);
 		if(mask.get(c, rows - 1) != 2)
-			dem.floodFill(c, rows - 1, op1, false, &minc, &minr, &maxc, &maxr, &area);
+			rast.floodFill(c, rows - 1, op1, false, &minc, &minr, &maxc, &maxr, &area);
 	}
 	for(int r = 0; r < rows; ++r) {
 		if(mask.get(0, r) != 2)
-			dem.floodFill(0, r, op1, false, &minc, &minr, &maxc, &maxr, &area);
+			rast.floodFill(0, r, op1, false, &minc, &minr, &maxc, &maxr, &area);
 		if(mask.get(cols - 1, r) != 2)
-			dem.floodFill(cols - 1, r, op1, false, &minc, &minr, &maxc, &maxr, &area);
+			rast.floodFill(cols - 1, r, op1, false, &minc, &minr, &maxc, &maxr, &area);
 	}
 }
 
 /**
- * Set all non-edge, null pixel regions to 1 in the mask; zero everywhere else.
+ * \brief Set all non-edge, null pixel regions to 1 in the mask; zero everywhere else.
+ *
+ * \param rast The raster conatining voids.
+ * \param mask The mask.
  */
-void ndMask(Band<float>& dem, Band<int>& mask) {
+void ndMask(Band<float>& rast, Band<uint8_t>& mask) {
 
-	edgeMask(dem, mask);
+	edgeMask(rast, mask);
 
-	float nd = dem.props().nodata();
-	int cols = dem.props().cols();
-	int rows = dem.props().rows();
+	float nd = rast.props().nodata();
+	int cols = rast.props().cols();
+	int rows = rast.props().rows();
 	for(int r = 0; r < rows; ++r) {
 		for(int c = 0; c < cols; ++c) {
-			if(mask.get(c, r) != 2 && dem.get(c, r) == nd) {
+			if(mask.get(c, r) != 2 && rast.get(c, r) == nd) {
 				mask.set(c, r, 1);
 			} else {
 				mask.set(c, r, 0);
@@ -146,18 +169,101 @@ void ndMask(Band<float>& dem, Band<int>& mask) {
 }
 
 /**
- * Set all non-edge, null pixel regions to 1 in the mask, according to the alpha shape parameter; zero everywhere else.
+ * \brief Process the geometric mask in parallel.
+ *
+ * \param mask The mask containing pixels to process.
+ * \param filled The grid of pixels to be filled.
+ * \param kernel The round kernel.
+ * \param mtx A mutex to protect the row and filled pointers.
+ * \param cols The number of columns.
+ * \param rows The number of rows.
  */
-void hullMask(Band<float>& dem, Band<int>& mask, double alpha) {
+void process(const std::vector<bool>* mask, std::vector<bool>* filled,
+		const std::vector<std::pair<int, int>>* kernel,
+		std::mutex* mtx, int* row, int cols, int rows) {
 
-	edgeMask(dem, mask);
+	// To track which pixels are filled.
+	std::vector<bool> filled_(cols * rows);
+	std::fill(filled_.begin(), filled_.end(), false);
 
-	float nd = dem.props().nodata();
-	int cols = dem.props().cols();
-	int rows = dem.props().rows();
+	// Fill the mask with 3 outside the alpha shape.
+	int statusStep = std::max(1, rows / 10);
+	int r, cc, rr;
+
+	while(true) {
+		{
+			std::lock_guard<std::mutex> lk(*mtx);
+			r = (*row)++;
+			if(r >= rows)
+				break;
+		}
+		if(r % statusStep == 0)
+			g_debug("Building hull mask. Row: " << r << " of " << rows);
+		for(int c = 0; c < cols; ++c) {
+			if((*mask)[r * cols + c]) {
+				// If all pixels in the fast mask under the disk are true,
+				// fill the disk in the mask raster.
+				bool fill = true;
+				for(const auto& it : *kernel) {
+					cc = c + it.first;
+					rr = r + it.second;
+					if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows) && !(*mask)[rr * cols + cc]) {
+						fill = false;
+						break;
+					}
+				}
+				if(fill) {
+					for(const auto& it : *kernel) {
+						cc = c + it.first;
+						rr = r + it.second;
+						if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows) && !filled_[rr * cols + cc])
+							filled_[rr * cols + cc] = true;
+					}
+				}
+			}
+		}
+	}
+	std::lock_guard<std::mutex> lk(*mtx);
+	for(int r = 0; r < rows; ++r) {
+		for(int c = 0; c < cols; ++c) {
+			if(filled_[r * cols + c])
+				(*filled)[r * cols + c] = true;
+		}
+	}
+}
+
+/**
+ * \brief Set all non-edge, null pixel regions to 1 in the mask.
+ *
+ * Boundaries are set according to the "alpha" parameter; zero everywhere else.
+ *
+ * \param rast The raster containing voids.
+ * \param mask The mask.
+ * \param alpha The "alpha" parameter (just the radius of the "disk").
+ */
+void hullMask(Band<float>& rast, Band<uint8_t>& mask, double alpha) {
+
+	// Mask the raster's void edges.
+	edgeMask(rast, mask);
+
+	float nd = rast.props().nodata();
+	int cols = rast.props().cols();
+	int rows = rast.props().rows();
+	int rad = (int) geo::sq(std::ceil(std::abs(alpha / rast.props().resX())));
+
+	// A fast mask for edge-connected null pixels.
+	std::vector<bool> msk(cols * rows);
+	std::fill(msk.begin(), msk.end(), false);
+	for(int r = 0; r < rows; ++r) {
+		for(int c = 0; c < cols; ++c)
+			msk[r * cols + c] = mask.get(c, r) == 2 && rast.get(c, r) == nd;
+	}
+
+	// Keeps track of which mask pixels should be filled. (Updated by threads.)
+	std::vector<bool> filled(cols * rows);
+	std::fill(filled.begin(), filled.end(), false);
 
 	// Build the round kernel.
-	int rad = (int) std::ceil(std::abs(alpha / dem.props().resX()));
 	std::vector<std::pair<int, int>> k;
 	for(int rr = -rad; rr < rad + 1; ++rr) {
 		for(int cc = -rad; cc < rad + 1; ++cc) {
@@ -166,47 +272,24 @@ void hullMask(Band<float>& dem, Band<int>& mask, double alpha) {
 		}
 	}
 
-	// Fill the mask with 3 outside the alpha shape.
-	const GridProps& props = mask.props();
-	int step = rows / 100;
-	int cc, rr;
-	for(int r = 0; r < rows; ++r) {
-		if(r % step == 0)
-			g_debug("Row: " << r << " of " << rows);
-		for(int c = 0; c < cols; ++c) {
-			if(mask.get(c, r) == 2) {
-				bool fill = true;
-				for(const auto& it : k) {
-					cc = c + it.first;
-					rr = r + it.second;
-					if(props.hasCell(cc, rr) && mask.get(cc, rr) == 2 && dem.get(cc, rr) != nd) {
-						fill = false;
-						break;
-					}
-				}
-				if(fill) {
-					for(const auto& it : k) {
-						cc = c + it.first;
-						rr = r + it.second;
-						if(props.hasCell(cc, rr))
-							mask.set(cc, rr, 3);
-					}
-				}
-			}
-		}
+	// Run the hull generation in parallel.
+	int t = std::thread::hardware_concurrency();
+	int row = 0;
+	std::mutex mtx;
+	std::vector<std::thread> threads;
+	for(int i = 0; i < t; ++i)
+		threads.emplace_back(process, &msk, &filled, &k, &mtx, &row, cols, rows);
+	for(int i = 0; i < t; ++i) {
+		if(threads[i].joinable())
+			threads[i].join();
 	}
 
-	// Set
+	// Set hull and nd pixels to 1, valid and edge pixels to 0.
 	for(int r = 0; r < rows; ++r) {
-		for(int c = 0; c < cols; ++c) {
-			if(mask.get(c, r) != 3 && dem.get(c, r) == nd) {
-				mask.set(c, r, 1);
-			} else {
-				mask.set(c, r, 0);
-			}
-		}
+		for(int c = 0; c < cols; ++c)
+			mask.set(c, r, filled[r * cols + c] || rast.get(c, r) != nd ? 0 : 1);
 	}
-
+	mask.flush();
 }
 
 int main(int argc, char** argv) {
@@ -218,6 +301,8 @@ int main(int argc, char** argv) {
 
 	std::string infile;
 	std::string outfile;
+	std::string maskfile;
+	bool saveMask = false;
 	int band = 1;
 	float maxarea = geo::maxvalue<float>();
 	int mode = 0;
@@ -241,49 +326,66 @@ int main(int argc, char** argv) {
 		} else if(state == 1) {
 			outfile = v;
 			++state;
+		} else if(state == 2) {
+			maskfile = v;
+			saveMask = true;
+			++state;
 		}
 	}
 
 	if(band < 1) {
-		std::cerr << "Illegal band number: " << band << "\n";
+		g_error("Illegal band number: " << band);
 		usage();
 		return 1;
 	}
 
 	if(infile.empty() || outfile.empty()) {
-		std::cerr << "Input and output filenames required.\n";
+		g_error("Input and output filenames required.");
 		usage();
 		return 1;
 	}
 
+	// Load the input raster.
 	Band<float> inrast(infile, 0, false, true);
 
+	// Configure the output raster and write the input to it.
 	Band<float> outrast(outfile, inrast.props(), true);
 	inrast.writeTo(outrast);
 
+	// Configure the mask.
 	GridProps mprops(inrast.props());
 	mprops.setWritable(true);
 	mprops.setBands(1);
 	mprops.setDataType(DataType::Byte);
-	Band<int> mask("/tmp/mask.tif", mprops, true);
+	Band<uint8_t> mask;
+	if(saveMask) {
+		mask.init(maskfile, mprops, true);
+	} else {
+		mask.init(mprops, true);
+	}
 	mask.fill(0);
 
 	int cols = mprops.cols();
 	int rows = mprops.rows();
 
-	geo::grid::TargetFillOperator<int, int> op1(&mask, 1, &mask, 1, 1, 2); // Mark for filling (1 --> 2)
-	geo::grid::TargetFillOperator<int, int> op2(&mask, 1, &mask, 1, 2, 3); // Mark for filling (2 --> 3)
+	// Configure operators for flood fill. The first fills 1 pixels with 2,
+	// the second fills 2 pixels with 3.
+	geo::grid::TargetFillOperator<uint8_t, uint8_t> op1(&mask, 1, &mask, 1, 1, 2); // Mark for filling (1 --> 2)
+	geo::grid::TargetFillOperator<uint8_t, uint8_t> op2(&mask, 1, &mask, 1, 2, 3); // Mark for filling (2 --> 3)
 	int cmin = 0, cmax = 0, rmin = 0, rmax = 0, area = 0;
 
 	if(useGeomMask){
 		// Build concave hull to produce mask.
-		std::cerr << "Building concave hull mask.\n";
+		g_debug("Building concave hull mask.");
 		hullMask(inrast, mask, n);
 	} else {
-		std::cerr << "Building edge mask.\n";
+		// Mask the edge-contacting regions.
+		g_debug("Building edge mask.");
 		ndMask(inrast, mask);
 	}
 
+	// Calculate the maximum void fill area (pixels)
+	// from the resolution (map units).
 	int maxpxarea;
 	double q = maxarea / geo::sq(mprops.resX());
 	if(q > (double) geo::maxvalue<int>()) {
@@ -293,9 +395,11 @@ int main(int argc, char** argv) {
 	}
 	if(maxpxarea < 1) maxpxarea = 1;
 
+	// Do it!
+	int statusStep = std::max(1, rows / 10);
 	for(int row = 0; row < rows; ++row) {
-		if(row % 100 == 0)
-			std::cerr << "Filling. Row " << row << " of " << rows << "\n";
+		if(row % statusStep == 0)
+			g_debug("Filling voids. Row: " << row << " of " << rows);
 		for(int col = 0; col < cols; ++col) {
 
 			// Only hit pixels marked with 1.
@@ -303,16 +407,15 @@ int main(int argc, char** argv) {
 				continue;
 
 			// Fill the target region with 2.
-			Band<int>::floodFill(col, row, op1, false, &cmin, &rmin, &cmax, &rmax, &area);
+			Band<uint8_t>::floodFill(col, row, op1, false, &cmin, &rmin, &cmax, &rmax, &area);
 
 			if(area >= maxpxarea) {
 				// The filled area was too large. Ignore it by setting it to 3.
-				Band<int>::floodFill(col, row, op2, false, &cmin, &rmin, &cmax, &rmax, &area);
+				Band<uint8_t>::floodFill(col, row, op2, false, &cmin, &rmin, &cmax, &rmax, &area);
 			} else {
 				// Fill the voids.
 				fillVoids(mask, inrast, outrast, cmin, rmin, cmax, rmax, mode);
 			}
-
 		}
 	}
 

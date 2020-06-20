@@ -137,4 +137,4 @@ target_link_libraries (voidfill geoutil geogrid ${GDAL_LIBRARY})
 
 # Install ################################################################################################
 
-install(TARGETS pc2grid rastermerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+install(TARGETS voidfill pc2grid rastermerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
