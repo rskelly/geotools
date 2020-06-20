@@ -117,9 +117,9 @@ int main(int argc, char** argv) {
 	// Load the template raster.
 	if(!tpl.empty()) {
 		try {
-			Grid<float> tplg(tpl);
+			Band<float> tplg(tpl, 0, false, true);
 			const GridProps tprops = tplg.props();
-			const Bounds& tbounds = tprops.bounds();
+			const Bounds<double>& tbounds = tprops.bounds();
 			xres = tprops.resX();
 			yres = tprops.resY();
 			projection = tprops.projection();
@@ -251,7 +251,7 @@ int main(int argc, char** argv) {
 		props.setWritable(true);
 		props.setBands(1);
 
-		Grid<float> outgrid(args[2], props);
+		Band<float> outgrid(args[2], props);
 
 		int cols = props.cols();
 		int rows = props.rows();
@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
 				x[0] = props.toX(c);	// TODO: This only seems to work one cell at a time...
 				y[0] = props.toY(r);
 				bvs.evaluate(x, y, z);
-				outgrid.set(x[0], y[0], z[0], 0);
+				outgrid.set(x[0], y[0], z[0]);
 			}
 		}
 	}

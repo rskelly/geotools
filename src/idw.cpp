@@ -150,9 +150,9 @@ int main(int argc, char** argv) {
 	// Load the template raster.
 	if(!tpl.empty()) {
 		try {
-			Grid<float> tplg(tpl);
+			Band<float> tplg(tpl, 0, false, true);
 			const GridProps tprops = tplg.props();
-			const Bounds& tbounds = tprops.bounds();
+			const Bounds<double>& tbounds = tprops.bounds();
 			xres = tprops.resX();
 			yres = tprops.resY();
 			projection = tprops.projection();
@@ -249,13 +249,13 @@ int main(int argc, char** argv) {
 		props.setResolution(xres, yres);
 		props.setProjection(projection);
 		props.setSrid(srid);
-		props.setBounds(Bounds(minx, miny, maxx, maxy));
+		props.setBounds(Bounds<double>(minx, miny, maxx, maxy));
 		props.setNoData(-9999.0);
 		props.setDataType(DataType::Float32);
 		props.setWritable(true);
 		props.setBands(1);
 
-		Grid<float> outgrid(args[2], props);
+		Band<float> outgrid(args[2], props);
 
 		int cols = props.cols();
 		int rows = props.rows();
@@ -277,9 +277,9 @@ int main(int argc, char** argv) {
 					w += w0;
 				}
 				if(w != 0) {
-					outgrid.set(x, y, s / w, 0);
+					outgrid.set(x, y, s / w);
 				} else {
-					outgrid.set(x, y, props.nodata(), 0);
+					outgrid.set(x, y, props.nodata());
 				}
 			}
 		}

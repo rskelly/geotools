@@ -86,9 +86,6 @@ link_directories(BEFORE_SYSTEM
 
 # Build support libraries ################################################################################
 
-#add_library (geotools_util SHARED src/geo_util.cpp src/reader.cpp src/writer.cpp src/stats.cpp src/raster.cpp src/plotter.cpp)
-#target_link_libraries(geotools_util ${GDAL_LIBRARY} ${PYTHON_LIBRARIES} geoann)
-
 add_library (geotools_plot SHARED src/plotter.cpp)
 target_link_libraries(geotools_plot ${PYTHON_LIBRARIES})
 
@@ -101,20 +98,18 @@ target_link_libraries(geotools_reader geoann ${GDAL_LIBRARY})
 add_library (geotools_writer SHARED src/writer.cpp)
 target_link_libraries(geotools_writer geotools_stats ${GDAL_LIBRARY})
 
-#add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
-#target_include_directories(contrem PUBLIC contrem_autogen/include)
-#target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geoutil geoann geotools_plot geotools_reader geotools_writer)
+add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
+target_include_directories(contrem PUBLIC contrem_autogen/include)
+target_link_libraries (contrem ${GEOS_LIBRARY} Qt5::Widgets geoutil geoann geotools_plot geotools_reader geotools_writer)
 
 add_executable (convolve src/convolve_app.cpp src/convolve.cpp src/ui/convolve_ui.cpp)
 target_include_directories(convolve PUBLIC convolve_autogen/include)
 target_link_libraries (convolve geoutil geotools_reader geotools_writer Threads::Threads Qt5::Widgets)
 
-#add_executable (reflectance src/reflectance.cpp src/ui/reflectance_ui.cpp)
-#target_link_libraries (reflectance Qt5::Widgets geoutil geogrid geotools_reader ${GEOS_LIBRARY})
+add_executable (reflectance src/reflectance.cpp src/ui/reflectance_ui.cpp)
+target_link_libraries (reflectance Qt5::Widgets geoutil geogrid geotools_reader ${GEOS_LIBRARY})
 
 add_executable (edgereplace src/edgereplace.cpp)
-
-add_executable(boresight src/boresight.cpp)
 
 add_executable (pc2grid src/pc2grid.cpp)
 target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY})
@@ -122,29 +117,20 @@ target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY})
 add_executable (pcnorm src/pcnorm.cpp)
 target_link_libraries (pcnorm ${LIBLAS_LIBRARY})
 
-#add_executable (pcmatch src/pcmatch.cpp)
-#target_link_libraries (pcmatch geoutil ${PDAL_LIBRARIES})
-
-#add_executable (pcmatch3 src/pcmatch3.cpp)
-#target_link_libraries (pcmatch3 geoutil ${PDAL_LIBRARIES})
-
 add_executable (sbet2csv src/sbet2csv.cpp)
 target_link_libraries (sbet2csv geoutil ${PROJ_LIBRARY} ${GEOS_LIBRARY})
 
-#add_executable (splinesmooth src/splinesmooth.cpp)
-#target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+add_executable (splinesmooth src/splinesmooth.cpp)
+target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
-#add_executable (idw src/idw.cpp)
-#target_link_libraries (idw geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
-
-#add_executable (rastermatch src/rastermatch.cpp)
-#target_link_libraries (rastermatch geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+add_executable (idw src/idw.cpp)
+target_link_libraries (idw geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
 add_executable (rastermerge src/rastermerge.cpp)
 target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
-#add_executable (polygonize src/polygonize.cpp)
-#target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
+add_executable (polygonize src/polygonize.cpp)
+target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
 
 add_executable (voidfill src/voidfill.cpp)
 target_link_libraries (voidfill geoutil geogrid ${GDAL_LIBRARY})

@@ -11,7 +11,6 @@ void usage() {
 	std::cerr << "Usage: polygonize <input raster> <output vector> [field name (dn)]\n"
 			<< " -f <format>     The output format. Any of the available\n"
 			<< "                 OGR drivers. Default SQLite.\n"
-			<< " -s <srid>       The spatial reference ID. Default 0.\n"
 			<< " -b <band>       The band. Default 1.\n"
 			<< " -d              Remove dangles.\n"
 			<< " -h              Remove holes.\n"
@@ -30,7 +29,6 @@ int main(int argc, char** argv) {
 	}
 
 	std::string driver = "SQLite";
-	uint16_t srid = 0;
 	uint16_t band = 1;
 	uint16_t threads = 1;
 	bool holes = false;
@@ -42,8 +40,6 @@ int main(int argc, char** argv) {
 		std::string v = argv[i];
 		if(v == "-f") {
 			driver = argv[++i];
-		} else if(v == "-s") {
-			srid = atoi(argv[++i]);
 		} else if(v == "-b") {
 			band = atoi(argv[++i]);
 		} else if(v == "-h") {
@@ -77,9 +73,8 @@ int main(int argc, char** argv) {
 	std::string outfile = args[1];
 	std::string layer = args[2];
 	std::string id = "id";
-	Grid<float> test(infile);
-	test.polygonize(outfile, layer, id, driver, srid, band, holes, dangles);
-
+	Band<float> test(infile, band - 1, false, true);
+	test.polygonizeToFile(outfile, layer, id, driver, holes, dangles);
 	return 0;
 }
 

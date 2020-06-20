@@ -111,11 +111,10 @@ void Reflectance::run(ReflectanceListener& listener,
 	listener.update(this);
 
 	// Set up rasters.
-	Grid<float> raster(rawRad);
-
-	GridProps oprops(raster.props());
+	geo::grid::Raster<float> raster(rawRad, false, true);
+	geo::grid::GridProps oprops(raster.bands().front()->props());
 	oprops.setWritable(true);
-	Grid<float> output(reflOut, oprops);
+	geo::grid::Raster<float> output(reflOut, oprops, true);
 
 	int cols = oprops.cols();
 	int rows = oprops.rows();
@@ -190,8 +189,8 @@ void Reflectance::run(ReflectanceListener& listener,
 					FlameRow& frow = row < half ? frow0 : frow1;
 
 					// Read the pixels.
-					for(int b = 1; b <= bands; ++b)
-						raster.getRow(row - firstIdx, b, (buffer.data() + (b - 1) * cols));
+					for(int b = 0; b < bands; ++b)
+						raster.bands()[b]->getRow(row - firstIdx, buffer.data() + b * cols);
 
 					// Print a selection of bands from the middle of the row.
 					//out << actualGpsTime1 << "," << buffer[bufCol] << "," << frow.bands[flameCol] << ", " << _ts2str(actualGpsTime1) << "\n";
@@ -205,8 +204,8 @@ void Reflectance::run(ReflectanceListener& listener,
 					}
 
 					// Write to the new raster
-					for(int b = 1; b <= bands; ++b)
-						raster.setRow(row - firstIdx, b, (buffer.data() + (b - 1) * cols));
+					for(int b = 0; b < bands; ++b)
+						raster.bands()[b]->setRow(row - firstIdx, buffer.data() + b * cols);
 
 					++m_step;
 					listener.update(this);
