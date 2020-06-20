@@ -9,7 +9,7 @@
 * [pc2grid](https://github.com/rskelly/geotools/wiki/pc2grid) -- Calculates statistics etc. on point clouds of any size.
 * [pcnorm](https://github.com/rskelly/geotools/wiki/pcnorm) -- Normalizes point clouds (subtracts the ground elevation from each point).
 
-Production instructions for regression coefficients are [here](https://github.com/rskelly/geotools/wiki/process).
+Production instructions for regression coefficients are [here](https://github.com/rskelly/geotools/wiki/Reflectance-Coefficients).
 
 ## Installation
 
