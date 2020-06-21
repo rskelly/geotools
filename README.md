@@ -12,42 +12,28 @@
 
 Production instructions for regression coefficients are [here](https://github.com/rskelly/geotools/wiki/Reflectance-Coefficients).
 
-## Installation
+# Installation
 
-First, install Git. If you do not have it, it can be installed on Linux using the package manager, or on OSX by downloading from [here](https://git-scm.com/download/mac).
+Install the program by doing the usual:
 
-Next, open a terminal window, navigate to a directory (type 'cd' and then drag the target folder into the window, otherwise just type the full path) and check out the repository. For example:
-    
-    cd ~/Documents
-    git clone https://github.com/rskelly/geotools
-    
-This will create a folder called geotools in the Documents folder with the source code, etc., inside. Navigate into the folder by typing,
+## Linux
+1) Checkout from git
+2) mkdir build
+3) cd build
+4) cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..
+5) make
+6) sudo make install
 
-    cd geotools
-    
-Then follow the instructions below.
+The program requires GDAL and GEOS so these must be installed first.
 
-### Linux
-1) `mkdir build`
-3) `cd build`
-4) `cmake -DCMAKE_INSTALL_PREFIX=/usr/local ..`
-5) `make`
-6) `sudo make install`
+## OSX
 
-Note: The program requires GDAL and GEOS so these must be installed first, preferably using the package manager.
+* Note: The OSX install script isn't really maintained. *
 
-### OSX
+1) ./INSTALL_OSX.sh
 
-*Note, these instructions are not current, and not likely to be updated soon.*
+The program requires GDAL and GEOS so these must be installed first. The install script attempts this
+using homebrew.
 
-1) `./INSTALL_OSX.sh`
-
-Note: If the script fails with a message about permissions, it may need to have the execute permissions set to run. Change them using the following command in Terminal:
-
-    chmod +x INSTALL_OSX.sh
-
-Note: The program requires GDAL, GEOS and some other libraries to run so these must be installed first. The install script attempts this using Homebrew. It is a common point of failure.
-
-### Windows
-1) Nope.
-
+## Windows
+1) Nope. (There is a Dockerfile in /docker, so that might work. It remains untested except on Linux.)
