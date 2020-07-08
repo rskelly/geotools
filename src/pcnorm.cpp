@@ -57,7 +57,7 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 		size_t num = 0;
 		for(const std::string& infile : infiles) {
 			std::cout << ++num << " of " << infiles.size() << "\n";
-			std::ifstream input(infile);
+			std::ifstream input(infile, std::ios::binary);
 			liblas::ReaderFactory rf;
 			liblas::Reader rdr = rf.CreateWithStream(input);
 			while(rdr.ReadNextPoint()) {
@@ -174,7 +174,7 @@ void normalize(const std::vector<std::string>& infiles, liblas::Writer& wtr,
 	size_t num = 0;
 	for(const std::string& infile : infiles) {
 		std::cout << ++num << " of " << infiles.size() << "\n";
-		std::ifstream input(infile);
+		std::ifstream input(infile, std::ios::binary);
 		liblas::ReaderFactory rf;
 		liblas::Reader rdr = rf.CreateWithStream(input);
 		while(rdr.ReadNextPoint()) {
@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
 
 	std::cout << "Computing bounds\n";
 	for(const std::string& infile : infiles) {
-		std::ifstream input(infile);
+		std::ifstream input(infile, std::ios::binary);
 		liblas::ReaderFactory rf;
 		liblas::Reader rdr = rf.CreateWithStream(input);
 		const liblas::Header& rhdr = rdr.GetHeader();
