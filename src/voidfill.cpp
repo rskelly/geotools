@@ -19,7 +19,8 @@ void usage() {
 			<< " -m  <area>       Maximum area to fill. Square map units.\n"
 			<< " -e               Fill voids on edges (otherwise don't).\n"
 			<< " -d  <mode>       Mode: 0=min, 1=mean, 2=median, 3=max. Default 0.\n"
-			<< " -n  <n>          The radius of the alpha disc.\n";
+			<< " -n  <n>          The radius of the alpha disc.\n"
+			<< " -f               Force the overwriting of existing files.\n";
 }
 
 /**
@@ -309,6 +310,7 @@ int main(int argc, char** argv) {
 	bool useGeomMask = true;
 	int state = 0;
 	float n = 100;
+	bool force = false;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string v = argv[i];
@@ -320,6 +322,8 @@ int main(int argc, char** argv) {
 			mode = atoi(argv[++i]);
 		} else if(v == "-n") {
 			n = atof(argv[++i]);
+		} else if(v == "-f") {
+			force = true;
 		} else if(state == 0) {
 			infile = v;
 			++state;
@@ -341,6 +345,20 @@ int main(int argc, char** argv) {
 
 	if(infile.empty() || outfile.empty()) {
 		g_error("Input and output filenames required.");
+		usage();
+		return 1;
+	}
+
+	if(!isfile(infile)) {
+		g_error("The input file " << infile << " isn't a valid input file.");
+		usage();
+		return 1;
+	}
+
+	if(!geo::util::safeToWrite(outfile, force)) {
+		g_error("The file " << outfile << " is not safe to write to. "
+				<< "If it is a file, use the -f flag. If it is a directory, "
+				<< "choose a different path.");
 		usage();
 		return 1;
 	}

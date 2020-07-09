@@ -84,7 +84,8 @@ int main(int argc, char** argv) {
 	std::string projection;			// Raster output projection.
 	bool header = false;			// True if there is one field header in the csv file.
 	std::vector<int> columns;		// Column indices for the csv file.
-	double minx, miny, maxx, maxy;	// The dataset bounds. If there's a template, use those bounds, otherwise use the buffered point bounds.
+	double minx = geo::maxvalue<double>(), miny = geo::maxvalue<double>(),
+			maxx = geo::minvalue<double>(), maxy = geo::minvalue<double>();	// The dataset bounds. If there's a template, use those bounds, otherwise use the buffered point bounds.
 	bool hasTemplate = false;		// Set to true if a template is loaded.
 	double smooth = 0;				// The smoothing parameter for the bivariate spline.
 	bool csv = false;

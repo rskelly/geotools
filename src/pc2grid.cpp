@@ -54,7 +54,8 @@ void usage() {
 			<< " -d <nodata>      A nodata value. The default is -9999.0\n"
 			<< " -b <bounds>      A comma-delimited list of coordinates, minx, miny, maxx, maxy giving the size of the\n"
 			<< "                  raster in projected coordinates.\n"
-			<< " -g               Do not merge individual bands to a single file using the given output filename.\n";
+			<< " -g               Do not merge individual bands to a single file using the given output filename.\n"
+			<< " -f               Force the overwrite of existing output files.\n";
 
 	PCPointFilter::printHelp(std::cerr);
 
@@ -87,6 +88,7 @@ int main(int argc, char** argv) {
 	std::string templ;
 	std::string projection;
 	bool merge = true;
+	bool force = false;
 
 	for(int i = 1; i < argc; ++i) {
 		if(filter.parseArgs(i, argv))
@@ -117,6 +119,8 @@ int main(int argc, char** argv) {
 			thin = atoi(argv[++i]);
 		} else if(v == "-d") {
 			nodata = atof(argv[++i]);
+		} else if(v == "-f") {
+			force = true;
 		} else if(v == "-b") {
 			std::vector<std::string> parts;
 			split(std::back_inserter(parts), argv[++i]);
@@ -132,16 +136,24 @@ int main(int argc, char** argv) {
 		}
 	}
 
+	std::string outfile = args.front();
+	std::vector<std::string> infiles(args.begin() + 1, args.end());
+
 	filter.print();
 	
 	if(args.size() < 2) {
-		std::cerr << "Input and output filenames required.\n";
+		g_error("Input and output filenames required.");
 		usage();
 		return 1;
 	}
 
 	if(!templ.empty()) {
-		std::cout << "Getting raster parameters from template: " << templ << "\n";
+		if(!isfile(templ)) {
+			g_error("A template file is given but it does not exist.");
+			usage();
+			return 1;
+		}
+		g_debug("Getting raster parameters from template: " << templ);
 		Band<float> tgrid(templ, 0, false, true);
 		const GridProps& props = tgrid.props();
 		resX = props.resX();
@@ -153,7 +165,21 @@ int main(int argc, char** argv) {
 		projection = projectionFromSRID(srid);
 	}
 
-	std::vector<std::string> infiles(args.begin() + 1, args.end());
+	if(!checkValidInputFiles(infiles)) {
+		g_error("At least one of the input files is invalid or doesn't exist.");
+		for(const std::string& f : infiles)
+			g_error(" - " << f);
+		usage();
+		return 1;
+	}
+
+	if(!geo::util::safeToWrite(outfile, force)) {
+		g_error("The file " << outfile << " is not safe to write to. "
+				<< "If it is a file, use the -f flag. If it is a directory, "
+				<< "choose a different path.");
+		usage();
+		return 1;
+	}
 
 	try {
 		Rasterizer r(infiles);
@@ -162,7 +188,7 @@ int main(int argc, char** argv) {
 		r.setNoData(nodata);
 		r.setBounds(bounds);
 		r.setMerge(merge);
-		r.rasterize(args[0], types, resX, resY, easting, northing, radius, projection, useHeader);
+		r.rasterize(outfile, types, resX, resY, easting, northing, radius, projection, useHeader);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
 		usage();

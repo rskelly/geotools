@@ -159,7 +159,7 @@ target_link_libraries (pc2grid geoutil geogrid geopc ${LIBLAS_LIBRARY} ${GEOS_LI
 
 add_executable (pcnorm src/pcnorm.cpp)
 target_compile_features(pcnorm PUBLIC cxx_std_17)
-target_link_libraries (pcnorm ${LIBLAS_LIBRARY})
+target_link_libraries (pcnorm geoutil ${LIBLAS_LIBRARY})
 
 add_executable (voidfill src/voidfill.cpp libgeo/src/geo.cpp)
 target_compile_features(voidfill PUBLIC cxx_std_17)
