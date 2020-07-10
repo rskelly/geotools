@@ -8,43 +8,38 @@
 #include <limits>
 #include <fstream>
 
-#include <liblas/liblas.hpp>
+//#include <liblas/liblas.hpp>
 
 #include "geo.hpp"
 #include "util.hpp"
+#include "pc.hpp"
 
 using namespace geo::util;
+using namespace geo::pc;
 
-void getBounds(liblas::Reader& rdr, double* bounds) {
-
-	double x, y, z;
-
-	rdr.Reset();
-	while(rdr.ReadNextPoint()) {
-		const liblas::Point& pt = rdr.GetPoint();
-		x = pt.GetX();
-		y = pt.GetY();
-		z = pt.GetZ();
-		if(x < bounds[0]) bounds[0] = x;
-		if(x > bounds[1]) bounds[1] = x;
-		if(y < bounds[2]) bounds[2] = y;
-		if(y > bounds[3]) bounds[3] = y;
-		if(z < bounds[4]) bounds[4] = z;
-		if(z > bounds[5]) bounds[5] = z;
-	}
-}
-
-bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double res, int& cols, int& rows, std::vector<float>& grid) {
+/**
+ * \brief Performs a weighted average height of ground points and saves to the grid.
+ *
+ * Voids are filled by an iterative process that searches an expanding region around
+ * each null pixels and performs a weighted average when points are found.
+ *
+ * \param reader The point cloud reader.
+ * \param res The grid resolution in map units.
+ * \param[out] cols The number of columns in the grid.
+ * \param[out] rows The number of rows in the grid.
+ * \param[out] grid The grid.
+ * \return Return true on success.
+ */
+bool buildGrid(Reader& reader, double res, int& cols, int& rows, std::vector<float>& grid) {
 
 	// Increase bounds enough to add 2 cells all around.
-	bounds[0] -= res;
-	bounds[1] += res;
-	bounds[2] -= res;
-	bounds[3] += res;
+	geo::util::Bounds bounds(reader.bounds());
+	bounds.extend(bounds.minx() - res, bounds.miny() - res, bounds.minz() - res);
+	bounds.extend(bounds.maxx() + res, bounds.maxy() + res, bounds.maxz() + res);
 
 	// Get grid size.
-	cols = (int) std::ceil((bounds[1] - bounds[0]) / res);
-	rows = (int) std::ceil((bounds[3] - bounds[2]) / res);
+	cols = (int) std::ceil(bounds.width() / res);
+	rows = (int) std::ceil(bounds.height() / res);
 
 	std::vector<float> weights(cols * rows);
 	size_t count = 0;
@@ -60,41 +55,37 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 		double rad = std::pow(res, 2);
 
 		size_t num = 0;
-		for(const std::string& infile : infiles) {
-			std::cout << ++num << " of " << infiles.size() << "\n";
-			std::ifstream input(infile, std::ios::binary);
-			liblas::ReaderFactory rf;
-			liblas::Reader rdr = rf.CreateWithStream(input);
-			while(rdr.ReadNextPoint()) {
+		geo::pc::Point pt;
+		while(reader.next(pt)) {
+			if(pt.cls() != 2) // TODO: Configurable ground class designation.
+				continue;
 
-				const liblas::Point& pt = rdr.GetPoint();
-				if(pt.GetClassification().GetClass() != 2)
-					continue;
+			px = pt.x();
+			py = pt.y();
+			pz = pt.z();
 
-				px = pt.GetX();
-				py = pt.GetY();
-				pz = pt.GetZ();
-				col = (int) (px - bounds[0]) / res;
-				row = (int) (py - bounds[2]) / res;
+			col = (int) (px - bounds.minx()) / res;
+			row = (int) (py - bounds.miny()) / res;
 
-				for(int r = row - 1; r < row + 2; ++r) {
-					for(int c = col - 1; c < col + 2; ++c) {
-						if(c >= 0 && r >= 0 && c < cols && r < rows) {
+			// Perform the weighted mean of in a 3-px window around each point.
+			// accumulate the weights.
+			for(int r = row - 1; r < row + 2; ++r) {
+				for(int c = col - 1; c < col + 2; ++c) {
+					if(c >= 0 && r >= 0 && c < cols && r < rows) {
 
-							x = bounds[0] + (c * res) + res * 0.5;
-							y = bounds[2] + (r * res) + res * 0.5;
-							d = std::pow(x - px, 2.0) + std::pow(y - py, 2.0);
+						x = bounds.minx() + (c * res) + res * 0.5;
+						y = bounds.miny() + (r * res) + res * 0.5;
+						d = std::pow(x - px, 2.0) + std::pow(y - py, 2.0);
 
-							if(d > rad)
-								continue;
+						if(d > rad)
+							continue;
 
-							w = 1.0 - d / rad;
+						w = 1.0 - d / rad;
 
-							// Accumulate the weighted heights and weights.
-							grid[r * cols + c] += pz * w;
-							weights[r * cols + c] += w;
-							++count;
-						}
+						// Accumulate the weighted heights and weights.
+						grid[r * cols + c] += pz * w;
+						weights[r * cols + c] += w;
+						++count;
 					}
 				}
 			}
@@ -114,6 +105,7 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 
 	// Fill in zeroes.
 	std::cout << "Filling gaps\n";
+	int maxdim = std::max(cols, rows);
 	for(size_t i = 0; i < grid.size(); ++i) {
 		if(i % cols == 0)
 			std::cout << "Row " << (i / cols) << " of " << rows << "\n";
@@ -122,8 +114,9 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 			int o = 2;
 			int col = i % cols;
 			int row = i / cols;
-			double cx = bounds[0] + col * res + res * 0.5;
-			double cy = bounds[2] + row * res + res * 0.5;
+			double cx = bounds.minx() + col * res + res * 0.5;
+			double cy = bounds.miny() + row * res + res * 0.5;
+			//
 			do {
 				rad = std::pow(o * res, 2);
 				for(int r = row - o; r < row + o + 1; ++r) {
@@ -148,7 +141,8 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 						}
 					}
 				}
-				++o;
+				if(++o > maxdim)
+					g_runerr("No valid cells found for void filling in radius " << o);
 			} while(w == 0);
 
 			grid[i] = s / w;
@@ -157,6 +151,19 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 	return true;
 }
 
+/**
+ * \brief Perform barycentric interpolation at the given point.
+ *
+ * \param x The query x coordinate.
+ * \param y The query y coordinate.
+ * \param x0 The x coordinate of vertex 1.
+ * \param y0 The y coordinate of vertex 1.
+ * \param x1 The x coordinate of vertex 2.
+ * \param y1 The y coordinate of vertex 2.
+ * \param x2 The x coordinate of vertex 3.
+ * \param y2 The y coordinate of vertex 3.
+ * \return The interpolated height at x, y.
+ */
 double bary(double x, double y,
 		double x0, double y0, double z0,
 		double x1, double y1, double z1,
