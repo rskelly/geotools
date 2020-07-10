@@ -254,7 +254,7 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	if(checkValidInputFiles(infiles)) {
+	if(!checkValidInputFiles(infiles)) {
 		g_error("At least one of the input files is invalid.");
 		usage();
 		return 1;
