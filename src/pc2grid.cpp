@@ -139,6 +139,27 @@ int main(int argc, char** argv) {
 	std::string outfile = args.front();
 	std::vector<std::string> infiles(args.begin() + 1, args.end());
 
+	// If any files have a * or ? character, run the search.
+	{
+		std::vector<std::string> tmp;
+		for(const std::string& f : infiles) {
+			if(f.find("*") < std::string::npos || f.find("?") < std::string::npos) {
+				std::vector<std::string> matches = geo::util::glob(f);
+				if(matches.empty()) {
+					g_error("No files found for search string: " << f);
+					usage();
+					return 1;
+				} else {
+					tmp.insert(tmp.end(), matches.begin(), matches.end());
+				}
+			} else {
+				tmp.push_back(f);
+			}
+		}
+
+		infiles.swap(tmp);
+	}
+
 	filter.print();
 	
 	if(args.size() < 2) {
