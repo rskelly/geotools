@@ -156,7 +156,6 @@ int main(int argc, char** argv) {
 				tmp.push_back(f);
 			}
 		}
-
 		infiles.swap(tmp);
 	}
 
