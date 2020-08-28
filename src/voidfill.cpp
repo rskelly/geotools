@@ -17,9 +17,9 @@ void usage() {
 	std::cout << "Usage: voidfill [options] <input raster> <output raster>\n"
 			<< " -b  <band>       The band. Default 1.\n"
 			<< " -m  <area>       Maximum area to fill. Square map units.\n"
-			<< " -e               Fill voids on edges (otherwise don't).\n"
+			<< " -e               Fill pixels connected to edges. Default off.\n"
 			<< " -d  <mode>       Mode: 0=min, 1=mean, 2=median, 3=max. Default 0.\n"
-			<< " -n  <n>          The radius of the alpha disc.\n"
+			<< " -n  <n>          The radius of the alpha disc. Implies use of concave hull. Overrides -e.\n"
 			<< " -f               Force the overwriting of existing files.\n";
 }
 
@@ -307,9 +307,9 @@ int main(int argc, char** argv) {
 	int band = 1;
 	float maxarea = geo::maxvalue<float>();
 	int mode = 0;
-	bool useGeomMask = true;
+	bool noEdges = true;
 	int state = 0;
-	float n = 100;
+	float n = 0;
 	bool force = false;
 
 	for(int i = 1; i < argc; ++i) {
@@ -321,9 +321,11 @@ int main(int argc, char** argv) {
 		} else if(v == "-d") {
 			mode = atoi(argv[++i]);
 		} else if(v == "-n") {
-			n = atof(argv[++i]);
+			n = std::abs(atof(argv[++i]));
 		} else if(v == "-f") {
 			force = true;
+		} else if(v == "-e") {
+			noEdges = false;
 		} else if(state == 0) {
 			infile = v;
 			++state;
@@ -392,14 +394,16 @@ int main(int argc, char** argv) {
 	geo::grid::TargetFillOperator<uint8_t, uint8_t> op2(&mask, 1, &mask, 1, 2, 3); // Mark for filling (2 --> 3)
 	int cmin = 0, cmax = 0, rmin = 0, rmax = 0, area = 0;
 
-	if(useGeomMask){
+	if(n > 0){
 		// Build concave hull to produce mask.
 		g_debug("Building concave hull mask.");
 		hullMask(inrast, mask, n);
-	} else {
+	} else if(noEdges){
 		// Mask the edge-contacting regions.
 		g_debug("Building edge mask.");
 		ndMask(inrast, mask);
+	} else {
+		g_debug("Filling to edges.");
 	}
 
 	// Calculate the maximum void fill area (pixels)
