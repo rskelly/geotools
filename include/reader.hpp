@@ -349,7 +349,8 @@ public:
 
 
 
-namespace {
+namespace detail {
+
 	/**
 	 * A utility class representing a pixel.
 	 */
@@ -362,14 +363,14 @@ namespace {
 		px() : px(0, 0) {}
 	};
 
-}
+} // detail
 
 /**
  * An implementation of Reader that reads ENVI ROI files.
  */
 class ROIReader : public Reader {
 private:
-	std::unordered_map<long, px> m_pixels;
+	std::unordered_map<long, detail::px> m_pixels;
 
 public:
 	/**

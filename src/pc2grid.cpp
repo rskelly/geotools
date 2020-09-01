@@ -12,16 +12,22 @@
 #include <string>
 #include <vector>
 
+#include "geo.hpp"
 #include "pointcloud.hpp"
 #include "util.hpp"
 #include "grid.hpp"
 
+using namespace geo;
 using namespace geo::pc;
 using namespace geo::util;
 using namespace geo::grid;
 
 void usage() {
 	std::cerr << "Usage: pc2grid [options] <output raster> <input las [*]>\n"
+			<< "If the output raster is to be merged (default), the given filename \n"
+			<< " is used. Otherwise, each output band is saved to a file named "
+			<< "<basename>_<method>.<extension>.\n"
+			<< "\n"
 			<< " -r <filename>    Use a template raster for resolution, extent and projection.\n"
 			<< "                  Overrides rx/ry, e, n and s.\n"
 			<< " -rx <resolution> The output x resolution in map units.\n"
@@ -46,10 +52,10 @@ void usage() {
 			<< "                  number of points will be randomly thinned. Any cell with less will be\n"
 			<< "                  reduced to zero. This occurs after filtering.\n"
 			<< " -d <nodata>      A nodata value. The default is -9999.0\n"
-			<< " -o <max radius>  Fill voids. Does this by doubling the search radius iteratively.\n"
-			<< "                  the point count in this cells remains at zero. Quits when radius is exceeded.\n"
 			<< " -b <bounds>      A comma-delimited list of coordinates, minx, miny, maxx, maxy giving the size of the\n"
-			<< "                  raster in projected coordinates.\n";
+			<< "                  raster in projected coordinates.\n"
+			<< " -g               Do not merge individual bands to a single file using the given output filename.\n"
+			<< " -f               Force the overwrite of existing output files.\n";
 
 	PCPointFilter::printHelp(std::cerr);
 
@@ -78,11 +84,11 @@ int main(int argc, char** argv) {
 	PCPointFilter filter;
 	int thin = 0;
 	double nodata = -9999;
-	bool voids = false;
-	double maxRadius = 0;
 	double bounds[4] = {std::nan("")};
 	std::string templ;
 	std::string projection;
+	bool merge = true;
+	bool force = false;
 
 	for(int i = 1; i < argc; ++i) {
 		if(filter.parseArgs(i, argv))
@@ -96,7 +102,7 @@ int main(int argc, char** argv) {
 		} else if(v == "-h") {
 			useHeader = false;
 		} else if(v == "-v") {
-			g_loglevel(G_LOG_TRACE);
+			geo::loglevel(G_LOG_TRACE);
 		} else if(v == "-rx") {
 			resX = atof(argv[++i]);
 		} else if(v == "-ry") {
@@ -113,32 +119,62 @@ int main(int argc, char** argv) {
 			thin = atoi(argv[++i]);
 		} else if(v == "-d") {
 			nodata = atof(argv[++i]);
-		} else if(v == "-o") {
-			voids = true;
-			maxRadius = atof(argv[++i]);
+		} else if(v == "-f") {
+			force = true;
 		} else if(v == "-b") {
 			std::vector<std::string> parts;
 			split(std::back_inserter(parts), argv[++i]);
 			if(parts.size() < 4)
 				g_runerr("Not enough parts in the bounds string.");
-			for(size_t i = 0; i < 4; ++i)
+			for(size_t i = 0; i < 4; ++i) {
 				bounds[i] = atof(parts[i].c_str());
+			}
+		} else if(v == "-g") {
+			merge = false;
 		} else {
 			args.push_back(argv[i]);
 		}
 	}
 
+	std::string outfile = args.front();
+	std::vector<std::string> infiles(args.begin() + 1, args.end());
+
+	// If any files have a * or ? character, run the search.
+	{
+		std::vector<std::string> tmp;
+		for(const std::string& f : infiles) {
+			if(f.find("*") < std::string::npos || f.find("?") < std::string::npos) {
+				std::vector<std::string> matches = geo::util::glob(f);
+				if(matches.empty()) {
+					g_error("No files found for search string: " << f);
+					usage();
+					return 1;
+				} else {
+					tmp.insert(tmp.end(), matches.begin(), matches.end());
+				}
+			} else {
+				tmp.push_back(f);
+			}
+		}
+		infiles.swap(tmp);
+	}
+
 	filter.print();
 	
 	if(args.size() < 2) {
-		std::cerr << "Input and output filenames required.\n";
+		g_error("Input and output filenames required.");
 		usage();
 		return 1;
 	}
 
 	if(!templ.empty()) {
-		std::cout << "Getting raster parameters from template: " << templ << "\n";
-		Grid<float> tgrid(templ);
+		if(!isfile(templ)) {
+			g_error("A template file is given but it does not exist.");
+			usage();
+			return 1;
+		}
+		g_debug("Getting raster parameters from template: " << templ);
+		Band<float> tgrid(templ, 0, false, true);
 		const GridProps& props = tgrid.props();
 		resX = props.resX();
 		resY = props.resY();
@@ -149,7 +185,21 @@ int main(int argc, char** argv) {
 		projection = projectionFromSRID(srid);
 	}
 
-	std::vector<std::string> infiles(args.begin() + 1, args.end());
+	if(!checkValidInputFiles(infiles)) {
+		g_error("At least one of the input files is invalid or doesn't exist.");
+		for(const std::string& f : infiles)
+			g_error(" - " << f);
+		usage();
+		return 1;
+	}
+
+	if(!geo::util::safeToWrite(outfile, force)) {
+		g_error("The file " << outfile << " is not safe to write to. "
+				<< "If it is a file, use the -f flag. If it is a directory, "
+				<< "choose a different path.");
+		usage();
+		return 1;
+	}
 
 	try {
 		Rasterizer r(infiles);
@@ -157,7 +207,8 @@ int main(int argc, char** argv) {
 		r.setThin(thin);
 		r.setNoData(nodata);
 		r.setBounds(bounds);
-		r.rasterize(args[0], types, resX, resY, easting, northing, radius, projection, useHeader, voids, maxRadius);
+		r.setMerge(merge);
+		r.rasterize(outfile, types, resX, resY, easting, northing, radius, projection, useHeader);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
 		usage();

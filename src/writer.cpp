@@ -28,7 +28,7 @@ using namespace geo::util;
 
 GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int rows, int bands,
 		const std::vector<double>& wavelengths, const std::vector<std::string>& bandNames, char** meta,
-		DataType dataType, const std::string& interleave, const std::string& unit) :
+		DataType dataType, const std::string& /*interleave*/, const std::string& unit) :
 	m_ds(nullptr),
 	m_bands(0), m_cols(0), m_rows(0) {
 
@@ -79,7 +79,8 @@ GDALWriter::GDALWriter(const std::string& filename, FileType type, int cols, int
 	}
 }
 
-bool GDALWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
+bool GDALWriter::write(const std::vector<double>& buf, int col, int row,
+		int cols, int rows, int bufSizeX, int bufSizeY, const std::string& /*id*/) {
 	if(col < 0 || col >= m_cols || col + cols > m_cols
 			|| row < 0 || row >= m_rows || row + rows > m_rows)
 		return false;
@@ -105,7 +106,8 @@ void GDALWriter::fill(int v) {
 	fill((double) v);
 }
 
-bool GDALWriter::write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
+bool GDALWriter::write(const std::vector<int>& buf, int col, int row,
+		int cols, int rows, int bufSizeX, int bufSizeY, const std::string& /*id*/) {
 	if(col < 0 || col >= m_cols || col + cols > m_cols
 			|| row < 0 || row >= m_rows || row + rows > m_rows)
 		return false;
@@ -182,7 +184,7 @@ GDALWriter::~GDALWriter() {
 
 
 CSVWriter::CSVWriter(const std::string& filename, const std::vector<double>& wavelengths,
-		const std::vector<std::string>& bandNames, const std::string& unit) {
+		const std::vector<std::string>& bandNames, const std::string& /*unit*/) {
 
 	m_output.open(filename);
 	m_output << "id";
@@ -204,7 +206,8 @@ std::ofstream& CSVWriter::outstr() {
 	return m_output;
 }
 
-bool CSVWriter::write(const std::vector<double>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
+bool CSVWriter::write(const std::vector<double>& buf, int /*col*/, int /*row*/,
+		int /*cols*/, int /*rows*/, int /*bufSizeX*/, int /*bufSizeY*/, const std::string& id) {
 
 	std::string _id(id);
 	if(_id.empty())
@@ -218,16 +221,17 @@ bool CSVWriter::write(const std::vector<double>& buf, int col, int row, int cols
 	return true;
 }
 
-void CSVWriter::fill(double v) {
+void CSVWriter::fill(double) {
 
 }
 
 
-void CSVWriter::fill(int v) {
+void CSVWriter::fill(int) {
 
 }
 
-bool CSVWriter::write(const std::vector<int>& buf, int col, int row, int cols, int rows, int bufSizeX, int bufSizeY, const std::string& id) {
+bool CSVWriter::write(const std::vector<int>& buf, int /*col*/, int /*row*/,
+		int /*cols*/, int /*rows*/, int /*bufSizeX*/, int /*bufSizeY*/, const std::string& id) {
 
 	std::string _id(id);
 	if(_id.empty())
@@ -242,12 +246,9 @@ bool CSVWriter::write(const std::vector<int>& buf, int col, int row, int cols, i
 }
 
 
-bool CSVWriter::writeStats(const std::string& filename, const std::vector<std::string>& names) {
-
-
+bool CSVWriter::writeStats(const std::string& /*filename*/, const std::vector<std::string>& /*names*/) {
 	return true;
 }
 
 CSVWriter::~CSVWriter() {
-
 }

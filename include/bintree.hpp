@@ -91,10 +91,10 @@ public:
 	 * @param v A value.
 	 */
 	BinTree(K k, V v) :
-		key(k),
-		value(v),
 		left(nullptr),
-		right(nullptr) {}
+		right(nullptr),
+		key(k),
+		value(v) {}
 
 	/**
 	 * Add the given key and value to the tree. If the key already exists,

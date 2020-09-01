@@ -31,6 +31,7 @@ void usage() {
 			" -m <smooth>        The smoothing parameter. If not given or less than or equal to zero, \n"
 			"                    the number of input points is used.\n"
 			" -d <denominator>   Decimate the points. The given number is the denominator of the retained fraction.\n"
+			" -f                 Force overwriting of existing files.\n"
 			" <points>           Is a CSV file containing at least x, y and z columns with zero or one header lines.\n"
 			" <columns>          A comma-delimited list of indices of columns in the csv file\n"
 			"                    for the x, y and z columns. An optional fourth column will be\n"
@@ -51,11 +52,13 @@ int main(int argc, char** argv) {
 	std::string projection;			// Raster output projection.
 	bool header = false;			// True if there is one field header in the csv file.
 	std::vector<int> columns;		// Column indices for the csv file.
-	double minx, miny, maxx, maxy;	// The dataset bounds. If there's a template, use those bounds, otherwise use the buffered point bounds.
+	double minx = geo::maxvalue<double>(), miny = geo::maxvalue<double>(),
+			maxx = geo::minvalue<double>(), maxy = geo::minvalue<double>();	// The dataset bounds. If there's a template, use those bounds, otherwise use the buffered point bounds.
 	bool hasTemplate = false;		// Set to true if a template is loaded.
 	double smooth = 0;				// The smoothing parameter for the bivariate spline.
 	bool csv = false;
 	double decimate = 1;
+	bool force = false;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
@@ -77,6 +80,8 @@ int main(int argc, char** argv) {
 				smooth = 0;
 		} else if(arg == "-d") {
 			decimate = 1. / atof(argv[++i]);
+		} else if(arg == "-f") {
+			force = true;
 		} else {
 			args.push_back(argv[i]);
 		}
@@ -99,6 +104,20 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
+	if(!tpl.empty() && !isfile(tpl)) {
+		g_error("A template file is given but it does not exist.");
+		usage();
+		return 1;
+	}
+
+	if(!geo::util::safeToWrite(args[2], force)) {
+		g_error("The file " << args[2] << " is not safe to write to. "
+				<< "If it is a file, use the -f flag. If it is a directory, "
+				<< "choose a different path.");
+		usage();
+		return 1;
+	}
+
 	// Parse the column indices.
 	{
 		std::vector<std::string> cs;
@@ -117,9 +136,9 @@ int main(int argc, char** argv) {
 	// Load the template raster.
 	if(!tpl.empty()) {
 		try {
-			Grid<float> tplg(tpl);
+			Band<float> tplg(tpl, 0, false, true);
 			const GridProps tprops = tplg.props();
-			const Bounds& tbounds = tprops.bounds();
+			const Bounds<double>& tbounds = tprops.bounds();
 			xres = tprops.resX();
 			yres = tprops.resY();
 			projection = tprops.projection();
@@ -251,7 +270,7 @@ int main(int argc, char** argv) {
 		props.setWritable(true);
 		props.setBands(1);
 
-		Grid<float> outgrid(args[2], props);
+		Band<float> outgrid(args[2], props);
 
 		int cols = props.cols();
 		int rows = props.rows();
@@ -264,7 +283,7 @@ int main(int argc, char** argv) {
 				x[0] = props.toX(c);	// TODO: This only seems to work one cell at a time...
 				y[0] = props.toY(r);
 				bvs.evaluate(x, y, z);
-				outgrid.set(x[0], y[0], z[0], 0);
+				outgrid.set(x[0], y[0], z[0]);
 			}
 		}
 	}

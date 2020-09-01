@@ -13,6 +13,8 @@
 #include <map>
 #include <string>
 #include <limits>
+#include <thread>
+#include <atomic>
 
 #include "convolve.hpp"
 #include "writer.hpp"
@@ -541,9 +543,6 @@ void BandPropsReader::configureSpectrum(Spectrum& spec) {
 	}
 }
 
-
-#include <thread>
-#include <atomic>
 
 void doRun(std::list<std::string>* queue, std::mutex* mtx, std::atomic<int>* count, std::atomic<int>* current,
 		const std::string* bandDef, const std::string* bandDefDelim, const std::string* spectraDelim,

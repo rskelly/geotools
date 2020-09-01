@@ -670,7 +670,7 @@ ROIReader::ROIReader(const std::string& filename) : Reader() {
 		int row = atoi(fields[2].c_str());
 
 		// Allocate and retrieve the pixel; set its coordinates.
-		px& p = m_pixels[((long) col << 32) | row];
+		detail::px& p = m_pixels[((long) col << 32) | row];
 		p.c = col;
 		p.r = row;
 

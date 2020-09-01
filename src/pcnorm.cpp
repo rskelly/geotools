@@ -10,6 +10,11 @@
 
 #include <liblas/liblas.hpp>
 
+#include "geo.hpp"
+#include "util.hpp"
+
+using namespace geo::util;
+
 void getBounds(liblas::Reader& rdr, double* bounds) {
 
 	double x, y, z;
@@ -57,7 +62,7 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 		size_t num = 0;
 		for(const std::string& infile : infiles) {
 			std::cout << ++num << " of " << infiles.size() << "\n";
-			std::ifstream input(infile);
+			std::ifstream input(infile, std::ios::binary);
 			liblas::ReaderFactory rf;
 			liblas::Reader rdr = rf.CreateWithStream(input);
 			while(rdr.ReadNextPoint()) {
@@ -174,7 +179,7 @@ void normalize(const std::vector<std::string>& infiles, liblas::Writer& wtr,
 	size_t num = 0;
 	for(const std::string& infile : infiles) {
 		std::cout << ++num << " of " << infiles.size() << "\n";
-		std::ifstream input(infile);
+		std::ifstream input(infile, std::ios::binary);
 		liblas::ReaderFactory rf;
 		liblas::Reader rdr = rf.CreateWithStream(input);
 		while(rdr.ReadNextPoint()) {
@@ -216,18 +221,64 @@ void normalize(const std::vector<std::string>& infiles, liblas::Writer& wtr,
 	}
 }
 
+void usage() {
+	std::cerr << "Usage: pcnorm [options] <outfile (.las)> <resolution> <infile(s) (.las)>\n"
+			<< " -f   Force overwrite of existing files.\n";
+
+}
 int main(int argc, char** argv) {
 
 	if(argc < 4) {
-		std::cerr << "Usage: pcnorm <outfile (.las)> <resolution> <infile(s) (.las)>\n";
+		usage();
 		return 1;
 	}
 
-	std::string outfile = argv[1];
-	double resolution = atof(argv[2]);
+	std::string outfile;
 	std::vector<std::string> infiles;
-	for(int i = 3; i < argc; ++i)
-		infiles.push_back(argv[i]);
+	double resolution = 0;
+	bool force = false;
+
+	int mode = 0;
+	for(int i = 1; i < argc; ++i) {
+		std::string arg = argv[i];
+		if(arg == "-f") {
+			force = true;
+		} else if(mode == 0) {
+			++mode;
+			outfile = arg;
+		} else if(mode == 1) {
+			++mode;
+			resolution = atof(arg.c_str());
+		} else {
+			infiles.push_back(arg);
+		}
+	}
+
+	if(!checkValidInputFiles(infiles)) {
+		g_error("At least one of the input files is invalid.");
+		usage();
+		return 1;
+	}
+
+	if(resolution <= 0 || std::isnan(resolution)) {
+		g_error("The resolution " << resolution << " is invalid.");
+		usage();
+		return 1;
+	}
+
+	if(outfile.empty()) {
+		g_error("Output file not given.");
+		usage();
+		return 1;
+	}
+
+	if(!geo::util::safeToWrite(outfile, force)) {
+		g_error("The file " << outfile << " is not safe to write to. "
+				<< "If it is a file, use the -f flag. If it is a directory, "
+				<< "choose a different path.");
+		usage();
+		return 1;
+	}
 
 	double bounds[6];
 	bounds[0] = bounds[2] = bounds[4] = std::numeric_limits<double>::max();
@@ -237,7 +288,7 @@ int main(int argc, char** argv) {
 
 	std::cout << "Computing bounds\n";
 	for(const std::string& infile : infiles) {
-		std::ifstream input(infile);
+		std::ifstream input(infile, std::ios::binary);
 		liblas::ReaderFactory rf;
 		liblas::Reader rdr = rf.CreateWithStream(input);
 		const liblas::Header& rhdr = rdr.GetHeader();

@@ -84,7 +84,8 @@ int main(int argc, char** argv) {
 	std::string projection;			// Raster output projection.
 	bool header = false;			// True if there is one field header in the csv file.
 	std::vector<int> columns;		// Column indices for the csv file.
-	double minx, miny, maxx, maxy;	// The dataset bounds. If there's a template, use those bounds, otherwise use the buffered point bounds.
+	double minx = geo::maxvalue<double>(), miny = geo::maxvalue<double>(),
+			maxx = geo::minvalue<double>(), maxy = geo::minvalue<double>();	// The dataset bounds. If there's a template, use those bounds, otherwise use the buffered point bounds.
 	bool hasTemplate = false;		// Set to true if a template is loaded.
 	double smooth = 0;				// The smoothing parameter for the bivariate spline.
 	bool csv = false;
@@ -150,9 +151,9 @@ int main(int argc, char** argv) {
 	// Load the template raster.
 	if(!tpl.empty()) {
 		try {
-			Grid<float> tplg(tpl);
+			Band<float> tplg(tpl, 0, false, true);
 			const GridProps tprops = tplg.props();
-			const Bounds& tbounds = tprops.bounds();
+			const Bounds<double>& tbounds = tprops.bounds();
 			xres = tprops.resX();
 			yres = tprops.resY();
 			projection = tprops.projection();
@@ -249,13 +250,13 @@ int main(int argc, char** argv) {
 		props.setResolution(xres, yres);
 		props.setProjection(projection);
 		props.setSrid(srid);
-		props.setBounds(Bounds(minx, miny, maxx, maxy));
+		props.setBounds(Bounds<double>(minx, miny, maxx, maxy));
 		props.setNoData(-9999.0);
 		props.setDataType(DataType::Float32);
 		props.setWritable(true);
 		props.setBands(1);
 
-		Grid<float> outgrid(args[2], props);
+		Band<float> outgrid(args[2], props);
 
 		int cols = props.cols();
 		int rows = props.rows();
@@ -277,9 +278,9 @@ int main(int argc, char** argv) {
 					w += w0;
 				}
 				if(w != 0) {
-					outgrid.set(x, y, s / w, 0);
+					outgrid.set(x, y, s / w);
 				} else {
-					outgrid.set(x, y, props.nodata(), 0);
+					outgrid.set(x, y, props.nodata());
 				}
 			}
 		}
