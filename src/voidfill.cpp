@@ -187,6 +187,9 @@ void process(const std::vector<bool>* mask, std::vector<bool>* filled,
 	std::vector<bool> filled_(cols * rows);
 	std::fill(filled_.begin(), filled_.end(), false);
 
+	// To track which rows should be updated.
+	std::vector<int> rowsfilled;
+
 	// Fill the mask with 3 outside the alpha shape.
 	int statusStep = std::max(1, rows / 10);
 	int r, cc, rr;
@@ -198,17 +201,18 @@ void process(const std::vector<bool>* mask, std::vector<bool>* filled,
 			if(r >= rows)
 				break;
 		}
+		rowsfilled.push_back(r);
 		if(r % statusStep == 0)
 			g_debug("Building hull mask. Row: " << r << " of " << rows);
 		for(int c = 0; c < cols; ++c) {
-			if((*mask)[r * cols + c]) {
+			if(mask->at(r * cols + c)) {
 				// If all pixels in the fast mask under the disk are true,
 				// fill the disk in the mask raster.
 				bool fill = true;
 				for(const auto& it : *kernel) {
 					cc = c + it.first;
 					rr = r + it.second;
-					if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows) && !(*mask)[rr * cols + cc]) {
+					if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows) && !mask->at(rr * cols + cc)) {
 						fill = false;
 						break;
 					}
@@ -217,18 +221,18 @@ void process(const std::vector<bool>* mask, std::vector<bool>* filled,
 					for(const auto& it : *kernel) {
 						cc = c + it.first;
 						rr = r + it.second;
-						if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows) && !filled_[rr * cols + cc])
-							filled_[rr * cols + cc] = true;
+						if(!(cc < 0 || rr < 0 || cc >= cols || rr >= rows) && !filled_.at(rr * cols + cc))
+							filled_.at(rr * cols + cc) = true;
 					}
 				}
 			}
 		}
 	}
 	std::lock_guard<std::mutex> lk(*mtx);
-	for(int r = 0; r < rows; ++r) {
+	for(const int& r : rowsfilled) {
 		for(int c = 0; c < cols; ++c) {
-			if(filled_[r * cols + c])
-				(*filled)[r * cols + c] = true;
+			if(filled_.at(r * cols + c))
+				filled->at(r * cols + c) = true;
 		}
 	}
 }
