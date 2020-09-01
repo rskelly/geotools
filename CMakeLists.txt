@@ -165,12 +165,15 @@ add_executable (voidfill src/voidfill.cpp libgeo/src/geo.cpp)
 target_compile_features(voidfill PUBLIC cxx_std_17)
 target_link_libraries (voidfill geoutil geogrid ${GDAL_LIBRARY})
 
+add_executable (map2raw src/map2raw.cpp)
+target_link_libraries (map2raw ${GDAL_LIBRARIES})
+
 if (FULL_BUILD)
 
 	install(TARGETS voidfill pc2grid rastermerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 else ()
 
-	install(TARGETS voidfill pc2grid pcnorm  RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install(TARGETS voidfill pc2grid pcnorm map2raw RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 endif ()
