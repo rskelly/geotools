@@ -15,9 +15,8 @@
 <?define CompanyName = "dijital.ca"?>
 <?define AppName = "geotools"?>
 <?define AppExecutable = "geotools.bat"?>
-<?define OptDir = "C:\dev\gisinternals"?>
 <?define OSGeoDir = "C:\dev\OSGeo4W64"?>
-<?define GdalLib = "gdal300"?>
+<?define SysDir = "C:\Windows\System32"?>
 <?define BuildType = "Release"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
 
@@ -90,44 +89,51 @@
       <Component Win64="$(var.Win64)" Id="FitpackLib" Guid="4FA13ADA-251B-4345-94A4-6A6CBA160E84">
         <File Source="..\..\build\bin\$(var.BuildType)\fitpack_mod.dll" />
       </Component>
-      <Component Win64="$(var.Win64)" Id="ProductComponent" Guid="0AFB8DFB-CB83-4C31-AA6B-42032B5EEA96">
-        <File Source="..\..\build\bin\$(var.BuildType)\pc2grid.exe">
-          <!--
-          <Shortcut Id="StartMenuShortcut1" Directory="ApplicationProgramsFolder"
-                    Name="$(var.AppName)" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
-                    -->
+      <Component Win64="$(var.Win64)" Id="Pc2GridComponent" Guid="0AFB8DFB-CB83-4C31-AA6B-42032B5EEA96">
+        <File Source="..\..\build\bin\$(var.BuildType)\pc2grid.exe" />
+      </Component>
+      <Component Win64="$(var.Win64)" Id="PcnormComponent" Guid="DE295017-5599-42EE-84E3-8C4A5A874045">
+        <File Source="..\..\build\bin\$(var.BuildType)\pcnorm.exe" />
+      </Component>
+      <Component Win64="$(var.Win64)" Id="VoidfillComponent" Guid="97150A66-E6E0-4E5D-87D6-FB66FE621D89">
+        <File Source="..\..\build\bin\$(var.BuildType)\voidfill.exe" />
+      </Component>
+      <Component Win64="$(var.Win64)" Id="RedistComponent1" Guid="571B4A4B-B303-4B2E-8EFF-A57C39F573C3">
+        <File Source="$(var.OSGeoDir)\bin\vcredist-2013-x64.exe">
+          <Shortcut Id="RedistShortcut1" Directory="ApplicationProgramsFolder"
+                    Name="VC Redistributable 2013" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
         </File>
-        <File Source="..\..\build\bin\$(var.BuildType)\pcnorm.exe">
-          <!--
-          <Shortcut Id="StartMenuShortcut2" Directory="ApplicationProgramsFolder"
-                    Name="$(var.AppName)" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
-                    -->
-        </File>
-        <File Source="..\..\build\bin\$(var.BuildType)\voidfill.exe">
-          <!--
-          <Shortcut Id="StartMenuShortcut3" Directory="ApplicationProgramsFolder"
-                    Name="$(var.AppName)" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
-                    -->
+      </Component>
+      <Component Win64="$(var.Win64)" Id="RedistComponent2" Guid="435442B3-4A88-49E9-B37E-B410C0706217">
+        <File Source="C:\dev\VC_redist.x64.exe">
+          <Shortcut Id="RedistShortcut2" Directory="ApplicationProgramsFolder"
+                    Name="VC Redistributable 2015-2019" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
         </File>
       </Component>
 
       <Component Win64="$(var.Win64)" Id="DepHDF5" Guid="AB12228C-D4D1-47A8-90D5-61BC7400F7F6">
-        <File Source="$(var.OptDir)\bin\hdf5.dll" />
+        <File Source="$(var.OSGeoDir)\bin\hdf5.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="DepIconv" Guid="40B36F3D-4C04-4054-9CC9-E2CF159D42D7">
-        <File Source="$(var.OptDir)\bin\iconv.dll" />
+        <File Source="$(var.OSGeoDir)\bin\iconv.dll" />
+      </Component>
+      <Component Win64="$(var.Win64)" Id="DepIconv2" Guid="D2560DEC-8E44-4A1D-B0BF-0B5F0D6C246D">
+        <File Source="$(var.OSGeoDir)\bin\iconv-2.dll" />
+      </Component>
+      <Component Win64="$(var.Win64)" Id="DepZstd" Guid="C3506659-EC02-4CF2-93C7-29055138639E">
+        <File Source="$(var.OSGeoDir)\bin\zstd.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="DepHDF5HL" Guid="7737DFBA-565A-4EC4-9795-A6379C37B750">
-        <File Source="$(var.OptDir)\bin\hdf5_hl.dll" />
+        <File Source="$(var.OSGeoDir)\bin\hdf5_hl.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep4" Guid="0E6CE6B5-7B1D-498A-8F94-118AD1B3B95F">
-        <File Source="$(var.OptDir)\bin\expat.dll" />
+        <File Source="$(var.OSGeoDir)\bin\expat.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep5" Guid="A954573A-4205-4BD8-9FF0-F3816BD8008C">
-        <File Source="$(var.OptDir)\bin\freexl.dll" />
+        <File Source="$(var.OSGeoDir)\bin\freexl.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep6" Guid="17BA70B7-4A5B-4272-A81A-1629ECD9C510">
-        <File Source="$(var.OptDir)\bin\$(var.GdalLib).dll" />
+        <File Source="$(var.OSGeoDir)\bin\gdal300.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="DepGdal111" Guid="762158C5-515A-4CC8-8601-46844D1F5D89">
         <File Source="$(var.OSGeoDir)\bin\gdal111.dll" />
@@ -151,22 +157,22 @@
         <File Source="$(var.OSGeoDir)\bin\ogdi.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep7" Guid="DF004BFA-84F1-474D-897B-12B69EB1AD4D">
-        <File Source="$(var.OptDir)\bin\geos.dll" />
+        <File Source="$(var.OSGeoDir)\bin\geos.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep8" Guid="6BAB57A6-552E-4023-9166-A456D0BCBF1A">
-        <File Source="$(var.OptDir)\bin\geos_c.dll" />
+        <File Source="$(var.OSGeoDir)\bin\geos_c.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep10" Guid="ECDF7FED-8AE5-41F1-A7BC-08F3FF45081D">
-        <File Source="$(var.OptDir)\bin\libcurl.dll" />
+        <File Source="$(var.OSGeoDir)\bin\libcurl.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep12" Guid="527C2F03-6AB5-4376-BA4C-FE8EC3898FA5">
-        <File Source="$(var.OptDir)\bin\libmysql.dll" />
+        <File Source="$(var.OSGeoDir)\bin\libmysql.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep13" Guid="232DCE5A-E4EA-4B5E-A625-9CECF718B9CA">
-        <File Source="$(var.OptDir)\bin\libpq.dll" />
+        <File Source="$(var.OSGeoDir)\bin\libpq.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep14" Guid="7C3D6590-74C8-488A-A340-19EAA8BB4432">
-        <File Source="$(var.OptDir)\bin\libxml2.dll" />
+        <File Source="$(var.OSGeoDir)\bin\libxml2.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="DepLibLas" Guid="DD43F8A7-0673-423D-8C0E-8CEDD4B988A8">
         <File Source="$(var.OSGeoDir)\bin\liblas.dll" />
@@ -184,39 +190,43 @@
         <File Source="$(var.OSGeoDir)\bin\laszip3.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep15" Guid="5EC46216-751B-43B7-A863-F5612E0CCDCA">
-        <File Source="$(var.OptDir)\bin\openjp2.dll" />
+        <File Source="$(var.OSGeoDir)\bin\openjp2.dll" />
       </Component>
-      <Component Win64="$(var.Win64)" Id="Dep16" Guid="FDD5CBCD-C9EF-423D-827F-A9892954D6DF">
-        <File Source="$(var.OptDir)\bin\proj_6_1.dll" />
-      </Component>
-      <Component Win64="$(var.Win64)" Id="Dep160" Guid="9079586E-C200-4CAA-AE31-DCFF3E15213B">
-        <File Source="$(var.OptDir)\bin\proj.dll" />
+      <Component Win64="$(var.Win64)" Id="DepProj63" Guid="FDD5CBCD-C9EF-423D-827F-A9892954D6DF">
+        <File Source="$(var.OSGeoDir)\bin\proj_6_3.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep17" Guid="5644074F-BA29-4E42-B9FC-4B4E0E81BB72">
-        <File Source="$(var.OptDir)\bin\spatialite.dll" />
+        <File Source="$(var.OSGeoDir)\bin\spatialite.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep18" Guid="17EF806E-7DF0-4BA9-8B67-665944E1DC4B">
-        <File Source="$(var.OptDir)\bin\sqlite3.dll" />
+        <File Source="$(var.OSGeoDir)\bin\sqlite3.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep31" Guid="17EF806E-7DF0-4BA9-8B67-665944E1DC4C">
-        <File Source="$(var.OptDir)\bin\libeay32.dll" />
+        <File Source="$(var.OSGeoDir)\bin\libeay32.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep32" Guid="17EF806E-7DF0-4BA9-8B67-665944E1DC4D">
-        <File Source="$(var.OptDir)\bin\ssleay32.dll" />
+        <File Source="$(var.OSGeoDir)\bin\ssleay32.dll" />
       </Component>
-      <!-- Interferes with system zlib?
-      <Component Win64="$(var.Win64)" Id="DepZlib" Guid="8522723B-03CE-46C9-A27E-08ACF5061405">
-        <File Source="$(var.OptDir)\bin\zlib1.dll" />
+      <Component Win64="$(var.Win64)" Id="DepSsl" Guid="070E0B8A-C49A-44C4-B5AF-8BF67FB20A1C">
+        <File Source="$(var.OSGeoDir)\bin\libssl-1_1-x64.dll" />
       </Component>
-      -->
+      <Component Win64="$(var.Win64)" Id="DepCrypto" Guid="63ACC42B-0A82-4245-A578-A5EB02114AF6">
+        <File Source="$(var.OSGeoDir)\bin\libcrypto-1_1-x64.dll" />
+      </Component>
+      <Component Win64="$(var.Win64)" Id="DepLwGeom" Guid="3859921B-0615-430A-AE98-5ECA2732574B">
+        <File Source="$(var.OSGeoDir)\bin\lwgeom.dll" />
+      </Component>
+      <Component Win64="$(var.Win64)" Id="DepZlib" Guid="14533BC8-1543-4616-9AD4-9E178192974D">
+        <File Source="$(var.OSGeoDir)\bin\zlib1.dll" />
+      </Component>
       <Component Win64="$(var.Win64)" Id="Dep35" Guid="17EF806E-7DF0-4BA9-8B67-665944E1DC50">
-        <File Source="$(var.OptDir)\bin\szip.dll" />
+        <File Source="$(var.OSGeoDir)\bin\szip.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="Dep36" Guid="17EF806E-7DF0-4BA9-8B67-665944E1DC51">
-        <File Source="$(var.OptDir)\bin\netcdf.dll" />
+        <File Source="$(var.OSGeoDir)\bin\netcdf.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="DepXerces32" Guid="22CA6EC3-7B59-4E4B-BC21-A06172790CAD">
-        <File Source="$(var.OptDir)\bin\xerces-c_3_2.dll" />
+        <File Source="$(var.OSGeoDir)\bin\xerces-c_3_2.dll" />
       </Component>
       <Component Win64="$(var.Win64)" Id="DepXerces31" Guid="8965E86D-3CDC-4C3B-858E-3A62E20AF791">
         <File Source="$(var.OSGeoDir)\bin\xerces-c_3_1.dll" />
@@ -224,14 +234,13 @@
       <Component Win64="$(var.Win64)" Id="DepPng16" Guid="0BA9FAA2-546D-4D71-B200-3F1C6F6FB155">
         <File Source="$(var.OSGeoDir)\bin\libpng16.dll" />
       </Component>
-      <Component Win64="$(var.Win64)" Id="Dep21" Guid="32FCAD4F-DA15-4BDA-BF9E-90012CB7A8E8">
-        <File Source="$(var.OptDir)\bin\vcruntime140.dll" />
+
+      <!-- Used by liblas -->
+      <Component Win64="$(var.Win64)" Id="DepMsvcr100" Guid="0E1D5885-623D-49F3-AA4C-99FA7AC95CF6">
+        <File Source="$(var.OSGeoDir)\bin\msvcr100.dll" />
       </Component>
-      <Component Win64="$(var.Win64)" Id="Dep21_1" Guid="6DE36302-8E53-42C3-866A-46944E02409B">
-        <File Source="$(var.OptDir)\bin\vcruntime140_1.dll" />
-      </Component>
-      <Component Win64="$(var.Win64)" Id="Dep29" Guid="32FCAD4F-DA15-4BDA-BF9E-90012CB7A8E9">
-        <File Source="$(var.OptDir)\bin\msvcp140.dll" />
+      <Component Win64="$(var.Win64)" Id="DepMsvcp100" Guid="D8526E17-5BA8-4E6F-90FD-98FD12E9EB4E">
+        <File Source="$(var.OSGeoDir)\bin\msvcp100.dll" />
       </Component>
     </ComponentGroup>
   </Fragment>
