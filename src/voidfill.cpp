@@ -128,7 +128,7 @@ void edgeMask(Band<float>& rast, Band<uint8_t>& mask) {
 	float nd = rast.props().nodata();
 	int cols = rast.props().cols();
 	int rows = rast.props().rows();
-	TargetFillOperator<float, uint8_t> op1(&rast, 1, &mask, 1, nd, 2); // Mark for filling (nd --> 2)
+	TargetFillOperator<float, uint8_t> op1(&rast, &mask, nd, 2); // Mark for filling (nd --> 2)
 	int minc, minr, maxc, maxr, area;
 	mask.fill(0);
 	for(int c = 0; c < cols; ++c) {
@@ -394,8 +394,8 @@ int main(int argc, char** argv) {
 
 	// Configure operators for flood fill. The first fills 1 pixels with 2,
 	// the second fills 2 pixels with 3.
-	geo::grid::TargetFillOperator<uint8_t, uint8_t> op1(&mask, 1, &mask, 1, 1, 2); // Mark for filling (1 --> 2)
-	geo::grid::TargetFillOperator<uint8_t, uint8_t> op2(&mask, 1, &mask, 1, 2, 3); // Mark for filling (2 --> 3)
+	geo::grid::TargetFillOperator<uint8_t, uint8_t> op1(&mask, &mask, 1, 2); // Mark for filling (1 --> 2)
+	geo::grid::TargetFillOperator<uint8_t, uint8_t> op2(&mask, &mask, 2, 3); // Mark for filling (2 --> 3)
 	int cmin = 0, cmax = 0, rmin = 0, rmax = 0, area = 0;
 
 	if(n > 0){
