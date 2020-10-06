@@ -165,7 +165,12 @@ target_compile_features(voidfill PUBLIC cxx_std_17)
 target_link_libraries (voidfill geoutil geogrid ${GDAL_LIBRARY})
 
 add_executable (map2raw src/map2raw.cpp)
+target_compile_features(map2raw PUBLIC cxx_std_17)
 target_link_libraries (map2raw ${GDAL_LIBRARIES})
+
+add_executable (srtmlakes src/srtmlakes.cpp)
+target_compile_features(srtmlakes PUBLIC cxx_std_17)
+target_link_libraries (srtmlakes geoutil geogrid)
 
 if (FULL_BUILD)
 
