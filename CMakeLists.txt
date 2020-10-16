@@ -74,6 +74,7 @@ set (THREADS_PREFER_PTHREAD_FLAG ON)
 find_package (GDAL 2 REQUIRED)
 find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Threads REQUIRED)
+find_package (PDAL REQUIRED)
 
 find_library (GEOS_LIBRARY geos_c)
 
@@ -92,6 +93,7 @@ include_directories(
 	${EIGEN3_INCLUDE_DIR} 
 	${PYTHON_INCLUDE_DIRS}
 	${LIBLAS_INCLUDE_DIR}
+	${PDAL_INCLUDE_DIRS}
 	${Boost_INCLUDE_DIRS}
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}
 ) 
@@ -101,6 +103,7 @@ link_directories(
 	lib/Release
 	${GDAL_LIBRARYDIR}
 	${LIBLAS_LIBDIR}
+	${PDAL_LIBRARY_DIRS}
 	${GMP_LIBDIR}
 	${Boost_LIBRARY_DIRS}
 )
@@ -154,7 +157,7 @@ endif ()
 
 add_executable (pc2grid src/pc2grid.cpp libgeo/src/geo.cpp)
 target_compile_features(pc2grid PUBLIC cxx_std_17)
-target_link_libraries (pc2grid geoutil geogrid geopc ${LIBLAS_LIBRARY} ${GEOS_LIBRARY})
+target_link_libraries (pc2grid geoutil geogrid geopc ${LIBLAS_LIBRARY} ${GEOS_LIBRARY} ${PDAL_LIBRARIES})
 
 add_executable (pcnorm src/pcnorm.cpp)
 target_compile_features(pcnorm PUBLIC cxx_std_17)
