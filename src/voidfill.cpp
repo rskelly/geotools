@@ -343,7 +343,7 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	if(band < 1) {
+	if(band - 1 < 0) {
 		g_error("Illegal band number: " << band);
 		usage();
 		return 1;
@@ -370,7 +370,7 @@ int main(int argc, char** argv) {
 	}
 
 	// Load the input raster.
-	Band<float> inrast(infile, 0, false, true);
+	Band<float> inrast(infile, band - 1 , false, true);
 
 	// Configure the output raster and write the input to it.
 	Band<float> outrast(outfile, inrast.props(), true);
