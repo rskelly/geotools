@@ -55,7 +55,8 @@ void usage() {
 			<< " -b <bounds>      A comma-delimited list of coordinates, minx, miny, maxx, maxy giving the size of the\n"
 			<< "                  raster in projected coordinates.\n"
 			<< " -g               Do not merge individual bands to a single file using the given output filename.\n"
-			<< " -f               Force the overwrite of existing output files.\n";
+			<< " -f               Force the overwrite of existing output files.\n"
+			<< " -l               The LRU cache node size. Smaller is faster. Larger uses less memory. Default 1000.\n";
 
 	PCPointFilter::printHelp(std::cerr);
 
@@ -89,6 +90,7 @@ int main(int argc, char** argv) {
 	std::string projection;
 	bool merge = true;
 	bool force = false;
+	int lruSize = 1000;
 
 	for(int i = 1; i < argc; ++i) {
 		if(filter.parseArgs(i, argv))
@@ -121,6 +123,8 @@ int main(int argc, char** argv) {
 			nodata = atof(argv[++i]);
 		} else if(v == "-f") {
 			force = true;
+		} else if(v == "-l") {
+			lruSize = atoi(argv[++i]);
 		} else if(v == "-b") {
 			std::vector<std::string> parts;
 			split(std::back_inserter(parts), argv[++i]);
@@ -208,6 +212,7 @@ int main(int argc, char** argv) {
 		r.setNoData(nodata);
 		r.setBounds(bounds);
 		r.setMerge(merge);
+		r.setLRUSize(lruSize);
 		r.rasterize(outfile, types, resX, resY, easting, northing, radius, projection, useHeader);
 	} catch(const std::exception& ex) {
 		std::cerr << ex.what() << "\n";
