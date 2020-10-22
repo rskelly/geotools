@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.1)
 
-set (FULL_BUILD TRUE)
-set (WITH_PC TRUE)
+option (FULL_BUILD "Build all libraries and programs." ON)
+option (WITH_PC "Build the point cloud computers for pc2grid." ON)
+option (WITH_ANN "Build the ANN KD-Tree implementation." OFF)
+option (WITH_GUI "Build the GUIs." ON)
 
 project (geotools)
 
@@ -21,8 +23,8 @@ set (CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 if(${WIN32})
 	message (STATUS "Building for Windows")
-	set (CMAKE_CXX_FLAGS "/Zc:alignedNew /Gz /EHsc /Zc:__cplusplus /std:c++17")	
-	set (CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /GS- /guard:cf-")	
+	set (CMAKE_CXX_FLAGS "/Zc:alignedNew /Gz /EHsc /Zc:__cplusplus /std:c++17" CACHE STRING "compile flags" FORCE)	
+	set (CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /GS- /guard:cf-" CACHE STRING "compile flags" FORCE)	
 	add_definitions (-DBOOST_ALL_NO_LIB)
 	set (BOOST_ROOT "C:\\dev\\boost_1_67_0")
 	set (DEV_DIR "C:\\dev")
@@ -43,19 +45,15 @@ if(${WIN32})
 	set (LIBLAS_LIBRARY liblas)
 	set (LIBLAS_INCLUDE_DIRS "${GIS_DIR}\\include")
 	set (LIBLAS_LIBDIR "${GIS_DIR}\\lib")
-	set (CGAL_INCLUDE_DIRS "C:\\dev\\CGAL-5.0.2\\include")
-	set (GMP_LIBDIR "C:\\dev\\CGAL-5.0.2\\auxiliary\\gmp\\lib")
-	set (GMP_LIBRARY libgmp-10)
 	find_package (Boost 1.67)
-	set (FULL_BUILD FALSE)
 else()
-	if(${WITH_GUI})
+	if (WITH_GUI)
 		set (CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}:/usr/lib/x86_64-linux-gnu/cmake/Qt5")
-	endif()
+	endif (WITH_GUI)
 	set (CMAKE_CXX_COMPILER_LAUNCHER ccache)
-	set (CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unknown-pragmas -fopenmp -D_GLIBCXX_PARALLEL")
-	set (CMAKE_CXX_FLAGS_DEBUG "-g -O0")
-	set (CMAKE_CXX_FLAGS_RELEASE "-O3")
+	set (CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unknown-pragmas -fopenmp -frounding-math -D_GLIBCXX_PARALLEL" CACHE STRING "compile flags" FORCE)
+	set (CMAKE_CXX_FLAGS_DEBUG "-g -O0" CACHE STRING "compile flags" FORCE)
+	set (CMAKE_CXX_FLAGS_RELEASE "-O3" CACHE STRING "compile flags" FORCE)
 	set (FS_LIB stdc++fs) # For filesystem features in c++17.
 	find_package (Eigen3 REQUIRED)
 	find_package (PDAL REQUIRED)
@@ -78,8 +76,6 @@ find_package (PDAL REQUIRED)
 
 find_library (GEOS_LIBRARY geos_c)
 
-set (WITH_PC TRUE)
-set (WITH_ANN TRUE)
 
 add_subdirectory (libgeo)
 
@@ -110,7 +106,7 @@ link_directories(
 
 # Build support libraries ################################################################################
 
-if(FULL_BUILD)
+if (FULL_BUILD)
 	message (STATUS "Full Build...")
 	
 	add_library (geotools_plot SHARED src/plotter.cpp)
@@ -153,7 +149,7 @@ if(FULL_BUILD)
 	add_executable (polygonize src/polygonize.cpp)
 	target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
 
-endif ()
+endif (FULL_BUILD)
 
 add_executable (pc2grid src/pc2grid.cpp libgeo/src/geo.cpp)
 target_compile_features(pc2grid PUBLIC cxx_std_17)
