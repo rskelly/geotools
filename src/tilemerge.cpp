@@ -65,8 +65,9 @@ int main(int argc, char** argv) {
 	props.setWritable(true);
 
 	// To keep track of counts.
-	std::vector<int> counts(props.cols() * props.rows());
-	std::fill(counts.begin(), counts.end(), 0);
+	Band<int> counts(props, true);
+	Band<float> sums(props, true);
+	counts.fill(0);
 
 	g_debug("Making temporary files...");
 	std::vector<Band<float>*> bands;
@@ -78,58 +79,61 @@ int main(int argc, char** argv) {
 		bands[i]->fill(0);
 	}
 
-	g_debug("Adding values...");
-	for(const std::string& file : infiles) {
 
-		// Get the count band.
+	g_debug("Adding counts.");
+	for(const std::string& file : infiles) {
 		Band<float> cband(file, 0, false, false);
 		const GridProps& p = cband.props();
-		int cols = p.cols();
-		int rows = p.rows();
-		for(int r = 0; r < rows; ++r) {
-			for(int c = 0; c < cols; ++c) {
-				int cc = props.toCol(p.toX(c));
-				int rr = props.toRow(p.toY(r));
-				// Sum the counts.
-				if(cband.get(c, r) != props.nodata())
-					counts[rr * props.cols() + cc] += cband.get(c, r);
-			}
-		}
-		
-		for(int i = 1; i < bandCount; ++i) {
-			Band<float> band(file, i, false, false);
-			for(int r = 0; r < rows; ++r) {
-				for(int c = 0; c < cols; ++c) {
+		for(int r = 0; r < p.rows(); ++r) {
+			for(int c = 0; c < p.cols(); ++c) {
+				float v = cband.get(c, r);
+				if(v > 0 && v != p.nodata()) {
 					int cc = props.toCol(p.toX(c));
 					int rr = props.toRow(p.toY(r));
-					// Add the weighted value to the main band value.
-					if(band.get(c, r) != props.nodata())
-						bands[i]->set(cc, rr, bands[i]->get(cc, rr) + counts[rr * props.cols() + cc] * band.get(c, r));
+					counts.set(cc, rr, counts.get(cc, rr) + (int) v);
 				}
 			}
 		}
 	}
 
-	g_debug("Normalizing...");
-	int cols = props.cols();
-	int rows = props.rows();
+	g_debug("Calculating.");
 	for(int i = 1; i < bandCount; ++i) {
-		Band<float>* band = bands[i];
-		for(int r = 0; r < rows; ++r) {
-			for(int c = 0; c < cols; ++c) {
-				// Normalize against the count.
-				if(counts[r * cols + c]) {
-					band->set(c, r, band->get(c, r) / counts[r * cols + c]);
+		sums.fill(0);
+		for(const std::string& file : infiles) {
+			Band<float> cband(file, 0, false, false);
+			Band<float> vband(file, i, false, false);
+			const GridProps& p = vband.props();
+			for(int r = 0; r < p.rows(); ++r) {
+				for(int c = 0; c < p.cols(); ++c) {
+					float v = vband.get(c, r);
+					int ct = cband.get(c, r);
+					if(ct && v != p.nodata()) {
+						int cc = props.toCol(p.toX(c));
+						int rr = props.toRow(p.toY(r));
+						sums.set(cc, rr, sums.get(cc, rr) + v * ct);
+					}
+				}
+			}
+		}
+		for(int r = 0; r < props.rows(); ++r) {
+			for(int c = 0; c < props.cols(); ++c) {
+				int ct = counts.get(c, r);
+				if(ct) {
+					bands[i]->set(c, r, sums.get(c, r) / ct);
 				} else {
-					band->set(c, r, props.nodata());
+					bands[i]->set(c, r, props.nodata());
 				}
 			}
 		}
 	}
-	for(int r = 0; r < rows; ++r) {
-		for(int c = 0; c < cols; ++c) {
-			// Set the zero counts to nodata.
-			bands[0]->set(c, r, counts[r * cols + c] ? counts[r * cols + c] : props.nodata());
+	for(int r = 0; r < props.rows(); ++r) {
+		for(int c = 0; c < props.cols(); ++c) {
+			int ct = counts.get(c, r);
+			if(ct) {
+				bands[0]->set(c, r, ct);
+			} else {
+				bands[0]->set(c, r, props.nodata());
+			}
 		}
 	}
 
