@@ -73,7 +73,8 @@ find_package (GDAL 2 REQUIRED)
 find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Threads REQUIRED)
 find_package (PDAL REQUIRED)
-
+find_package (PythonLibs 3.8 REQUIRED)
+message(${PYTHON_INCLUDE_DIRS})
 find_library (GEOS_LIBRARY geos_c)
 
 
