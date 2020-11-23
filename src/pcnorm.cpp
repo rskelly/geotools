@@ -8,31 +8,11 @@
 #include <limits>
 #include <fstream>
 
-#include <liblas/liblas.hpp>
-
 #include "geo.hpp"
 #include "util.hpp"
+#include "pointcloud.hpp"
 
 using namespace geo::util;
-
-void getBounds(liblas::Reader& rdr, double* bounds) {
-
-	double x, y, z;
-
-	rdr.Reset();
-	while(rdr.ReadNextPoint()) {
-		const liblas::Point& pt = rdr.GetPoint();
-		x = pt.GetX();
-		y = pt.GetY();
-		z = pt.GetZ();
-		if(x < bounds[0]) bounds[0] = x;
-		if(x > bounds[1]) bounds[1] = x;
-		if(y < bounds[2]) bounds[2] = y;
-		if(y > bounds[3]) bounds[3] = y;
-		if(z < bounds[4]) bounds[4] = z;
-		if(z > bounds[5]) bounds[5] = z;
-	}
-}
 
 bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double res, int& cols, int& rows, std::vector<float>& grid) {
 
@@ -62,18 +42,15 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 		size_t num = 0;
 		for(const std::string& infile : infiles) {
 			std::cout << ++num << " of " << infiles.size() << "\n";
-			std::ifstream input(infile, std::ios::binary);
-			liblas::ReaderFactory rf;
-			liblas::Reader rdr = rf.CreateWithStream(input);
-			while(rdr.ReadNextPoint()) {
-
-				const liblas::Point& pt = rdr.GetPoint();
-				if(pt.GetClassification().GetClass() != 2)
+			geo::pc::PCFile rdr(infile);
+			geo::pc::Point pt;
+			while(rdr.next(pt)) {
+				if(pt.classId() != 2)
 					continue;
 
-				px = pt.GetX();
-				py = pt.GetY();
-				pz = pt.GetZ();
+				px = pt.x();
+				py = pt.y();
+				pz = pt.z();
 				col = (int) (px - bounds[0]) / res;
 				row = (int) (py - bounds[2]) / res;
 
@@ -167,7 +144,7 @@ double bary(double x, double y,
 	return (w0 * z0) + (w1 * z1) + (w2 * z2);
 }
 
-void normalize(const std::vector<std::string>& infiles, liblas::Writer& wtr,
+void normalize(const std::vector<std::string>& infiles, geo::pc::PCWriter& wtr,
 		double* bounds, double res, int cols, int /*rows*/, std::vector<float>& grid) {
 
 	bounds[4] = std::numeric_limits<double>::max();
@@ -179,14 +156,12 @@ void normalize(const std::vector<std::string>& infiles, liblas::Writer& wtr,
 	size_t num = 0;
 	for(const std::string& infile : infiles) {
 		std::cout << ++num << " of " << infiles.size() << "\n";
-		std::ifstream input(infile, std::ios::binary);
-		liblas::ReaderFactory rf;
-		liblas::Reader rdr = rf.CreateWithStream(input);
-		while(rdr.ReadNextPoint()) {
-			const liblas::Point& pt = rdr.GetPoint();
-			px = pt.GetX();
-			py = pt.GetY();
-			pz = pt.GetZ();
+		geo::pc::PCFile rdr(infile);
+		geo::pc::Point pt;
+		while(rdr.next(pt)) {
+			px = pt.x();
+			py = pt.y();
+			pz = pt.z();
 			// Point's home cell.
 			col = (int) (px - bounds[0]) / res;
 			row = (int) (py - bounds[2]) / res;
@@ -211,9 +186,8 @@ void normalize(const std::vector<std::string>& infiles, liblas::Writer& wtr,
 			// Get the barycentric z
 			nz = bary(px, py, cx0, cy0, cz0, cx1, cy1, cz1, cx2, cy2, cz2);
 			// Make point and write it.
-			liblas::Point pt0(pt);
-			pt0.SetZ((z = pz - nz));
-			wtr.WritePoint(pt0);
+			pt.z((z = pz - nz));
+			wtr.addPoint(pt);
 			// Adjust bounds.
 			if(z < bounds[4]) bounds[4] = z;
 			if(z > bounds[5]) bounds[5] = z;
@@ -284,17 +258,10 @@ int main(int argc, char** argv) {
 	bounds[0] = bounds[2] = bounds[4] = std::numeric_limits<double>::max();
 	bounds[1] = bounds[3] = bounds[5] = std::numeric_limits<double>::lowest();
 
-	std::unique_ptr<liblas::Header> whdr;
-
 	std::cout << "Computing bounds\n";
 	for(const std::string& infile : infiles) {
-		std::ifstream input(infile, std::ios::binary);
-		liblas::ReaderFactory rf;
-		liblas::Reader rdr = rf.CreateWithStream(input);
-		const liblas::Header& rhdr = rdr.GetHeader();
-		getBounds(rdr, bounds);
-		if(infile == infiles.front())
-			whdr.reset(new liblas::Header(rhdr));
+		geo::pc::PCFile rdr(infile);
+		rdr.bounds(bounds);
 	}
 
 	double gbounds[6];
@@ -308,17 +275,10 @@ int main(int argc, char** argv) {
 	if(!buildGrid(infiles, gbounds, resolution, cols, rows, grid))
 		return 1;
 
-	std::ofstream output;
-	liblas::WriterFactory wf;
-	liblas::Create(output, outfile);
-	liblas::Writer wtr(output, *whdr);
+	geo::pc::PCWriter wtr(outfile, infiles.front());
 
 	std::cout << "Normalizing\n";
 	normalize(infiles, wtr, gbounds, resolution, cols, rows, grid);
 
-	whdr->SetMin(bounds[0], bounds[2], gbounds[4]);
-	whdr->SetMax(bounds[1], bounds[3], gbounds[5]);
-
-	wtr.SetHeader(*whdr);
 	return 0;
 }

@@ -33,18 +33,14 @@ if(${WIN32})
 	set (GEOS_LIBRARYDIR "${GIS_DIR}\\lib;${GIS_DIR}\\bin") #set (GEOS_LIBRARYDIR "${DEV_DIR}\\geos\\lib;${DEV_DIR}\\geos\\bin")
 	set (GEOS_INCLUDEDIR "${GIS_DIR}\\include") #set (GEOS_INCLUDEDIR "${DEV_DIR}\\geos\\include")
 	set (EIGEN3_INCLUDE_DIR "${GIS_DIR}\\include\\eigen3")
-	set (LIBLAS_INCLUDE_DIR "${GIS_DIR}\\include")
 	set (GDAL_INCLUDE_DIR "${GIS_DIR}\\include")
-	set (GDAL_LIBRARYDIR "${GIS_DIR}\\lib;${GIS_DIR}\\bin")
+	set (GDAL_LIBRARIESDIR "${GIS_DIR}\\lib;${GIS_DIR}\\bin")
 	set (GIS_INCLUDE_DIR "${GIS_DIR}\\include")
 	set (GIS_LIBRARYDIR "${GIS_DIR}\\lib;${GIS_DIR}\\bin")
 	set (CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};${GIS_DIR}\\bin;${GIS_DIR}\\lib;${DEV_DIR}\\Qt\\5.14.2\\msvc2017_64\\lib\\cmake")
 	set (SQLITE_LIBRARY sqlite3_i)
 	set (SPATIALITE_LIBRARY spatialite_i)
-	set (GDAL_LIBRARY gdal_i)
-	set (LIBLAS_LIBRARY liblas)
-	set (LIBLAS_INCLUDE_DIRS "${GIS_DIR}\\include")
-	set (LIBLAS_LIBDIR "${GIS_DIR}\\lib")
+	set (GDAL_LIBRARIES gdal_i)
 	find_package (Boost 1.67)
 else()
 	if (WITH_GUI)
@@ -58,7 +54,6 @@ else()
 	find_package (Eigen3 REQUIRED)
 	find_package (PDAL REQUIRED)
 	find_package (PythonLibs 3)
-	find_library (LIBLAS_LIBRARY las)
 endif()
 
 
@@ -74,7 +69,7 @@ find_package (Qt5 COMPONENTS Core Widgets Gui REQUIRED)
 find_package (Threads REQUIRED)
 find_package (PDAL REQUIRED)
 find_package (PythonLibs 3.8 REQUIRED)
-message(${PYTHON_INCLUDE_DIRS})
+
 find_library (GEOS_LIBRARY geos_c)
 
 
@@ -89,7 +84,6 @@ include_directories(
 	${GDAL_INCLUDE_DIR} 
 	${EIGEN3_INCLUDE_DIR} 
 	${PYTHON_INCLUDE_DIRS}
-	${LIBLAS_INCLUDE_DIR}
 	${PDAL_INCLUDE_DIRS}
 	${Boost_INCLUDE_DIRS}
 	${Qt5_DIR}/include ${Qt5Core_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS} ${Qt5Gui_INCLUDE_DIRS}
@@ -98,8 +92,7 @@ include_directories(
 link_directories(
 	bin/Release
 	lib/Release
-	${GDAL_LIBRARYDIR}
-	${LIBLAS_LIBDIR}
+	${GDAL_LIBRARIESDIR}
 	${PDAL_LIBRARY_DIRS}
 	${GMP_LIBDIR}
 	${Boost_LIBRARY_DIRS}
@@ -117,10 +110,10 @@ if (FULL_BUILD)
 	target_link_libraries(geotools_stats)
 
 	add_library (geotools_reader SHARED src/reader.cpp)
-	target_link_libraries(geotools_reader geoann ${GDAL_LIBRARY})
+	target_link_libraries(geotools_reader geoann ${GDAL_LIBRARIES})
 
 	add_library (geotools_writer SHARED src/writer.cpp)
-	target_link_libraries(geotools_writer geotools_stats ${GDAL_LIBRARY})
+	target_link_libraries(geotools_writer geotools_stats ${GDAL_LIBRARIES})
 
 	add_executable (contrem src/contrem_app.cpp src/contrem.cpp src/ui/contrem_ui.cpp)
 	target_include_directories(contrem PUBLIC contrem_autogen/include)
@@ -154,19 +147,19 @@ endif (FULL_BUILD)
 
 add_executable (pc2grid src/pc2grid.cpp libgeo/src/geo.cpp)
 target_compile_features(pc2grid PUBLIC cxx_std_17)
-target_link_libraries (pc2grid geoutil geogrid geopc ${LIBLAS_LIBRARY} ${GEOS_LIBRARY} ${PDAL_LIBRARIES})
+target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY} ${PDAL_LIBRARIES})
 
-add_executable (pcnorm src/pcnorm.cpp)
+add_executable (pcnorm src/pcnorm.cpp libgeo/src/geo.cpp)
 target_compile_features(pcnorm PUBLIC cxx_std_17)
-target_link_libraries (pcnorm geoutil ${LIBLAS_LIBRARY})
+target_link_libraries (pcnorm geoutil geopc ${GDAL_LIBRARIES})
 
 add_executable (voidfill src/voidfill.cpp libgeo/src/geo.cpp)
 target_compile_features(voidfill PUBLIC cxx_std_17)
-target_link_libraries (voidfill geoutil geogrid ${GDAL_LIBRARY})
+target_link_libraries (voidfill geoutil geogrid ${GDAL_LIBRARIES})
 
 add_executable (tilemerge src/tilemerge.cpp libgeo/src/geo.cpp)
 target_compile_features(tilemerge PUBLIC cxx_std_17)
-target_link_libraries (tilemerge geoutil geogrid ${GDAL_LIBRARY})
+target_link_libraries (tilemerge geoutil geogrid ${GDAL_LIBRARIES})
 
 add_executable (map2raw src/map2raw.cpp)
 target_compile_features(map2raw PUBLIC cxx_std_17)
