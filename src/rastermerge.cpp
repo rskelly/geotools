@@ -107,8 +107,7 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 			}
 		}
 		double v0;
-		const GridProps& sprops = src->props();
-		for(int col = 0; col < sprops.cols(); ++col) {
+		for(int col = 0; col < src->props().cols(); ++col) {
 			float s = 0;
 			float w = 0;
 			bool halt = false;
@@ -116,23 +115,19 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 				for(int c = -size / 2; c < size / 2 + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					if(sprops.hasCell(cc, rr) && !std::isnan((v0 = src->get(cc, rr)))) {
+					if(cc < 0 || rr < 0 || cc >= src->props().cols() || rr >= src->props().rows())
+						continue;
+					if(!std::isnan((v0 = src->get(cc, rr)))) {
 						float d = (float) (c * c + r * r);
-						if(d == 0) {
-							s = v0;
-							w = 1;
-							break;
-						} else {
-							float w0 = 1.0 / d;
-							s += v0 * w0;
-							w += w0;
-						}
+						float w0 = 1.0f / d;
+						s += v0 * w0;
+						w += w0;
 					}
 				}
 			}
 			if(w > 0) {
 				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->set(col, row, dst->get(col, row) + s / w);
+				dst->set(col, row, s / w);
 			}
 		}
 	}
