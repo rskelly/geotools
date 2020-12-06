@@ -44,25 +44,28 @@ bool loadRasters(const std::string& outfile, const std::vector<std::string>& fil
 
 	// Initialize the output raster.
 	data.init(outfile, props, true);
+	data.fill(props.nodata());
 
 	// Copy the constituent bands into the output raster.
 	for(std::unique_ptr<Band<float>>& band : rasters) {
 		const GridProps& p = band->props();
-		if(resample > 1) {
-			// If resampling is set, copy pixels one by one.
-			for(int row = 0; row < p.rows(); row += resample) {
-				for(int col = 0; col < p.cols(); col += resample) {
+		// If resampling is set, copy pixels one by one.
+		for(int row = 0; row < p.rows(); row += resample) {
+			for(int col = 0; col < p.cols(); col += resample) {
+				float v = band->get(col, row);
+				if(v != p.nodata()) { // Leave the output raster's nodata intact if this pixel has nodata.
 					int c = props.toCol(p.toX(col));
 					int r = props.toRow(p.toY(row));
 					data.set(c, r, band->get(col, row));
 				}
 			}
-		} else {
+		}
+		/*} else {
 			// Copy the whole raster.
 			int c = props.toCol(p.toX(0));
 			int r = props.toRow(p.toY(0));
 			band->writeTo(data, p.cols(), p.rows(), 0, 0, c, r);
-		}
+		}*/
 	}
 	return true;
 }
@@ -94,20 +97,21 @@ bool smooth(std::vector<bool>& filled, Band<float>& src, Band<float>& dst, int c
 
 void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
 	int row;
+	const GridProps& sprops = src->props();
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
 			if(!rowq->empty()) {
 				row = rowq->front();
 				rowq->pop_front();
-				std::cout << "Row " << row << " of " << src->props().rows() << "\n";
+				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				continue;
 			}
 		}
 		double v0;
-		for(int col = 0; col < src->props().cols(); ++col) {
+		for(int col = 0; col < sprops.cols(); ++col) {
 			float s = 0;
 			float w = 0;
 			bool halt = false;
@@ -115,9 +119,7 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 				for(int c = -size / 2; c < size / 2 + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					if(cc < 0 || rr < 0 || cc >= src->props().cols() || rr >= src->props().rows())
-						continue;
-					if(!std::isnan((v0 = src->get(cc, rr)))) {
+					if(sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
 						float d = (float) (c * c + r * r);
 						if(d == 0) {
 							s = v0;
@@ -142,40 +144,42 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 
 void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
 	int row;
+	int half = size / 2; // Split the size in half for the radius of the kernel.
+	const GridProps& sprops = src->props();
+	const GridProps& dprops = dst->props();
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
 			if(!rowq->empty()) {
 				row = rowq->front();
 				rowq->pop_front();
-				std::cout << "Row " << row << " of " << src->props().rows() << "\n";
+				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
-				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				std::this_thread::yield();
 				continue;
 			}
 		}
-		double v0;
+		float v0, v1;
 		for(int col = 0; col < src->props().cols(); ++col) {
+			if((v1 = dst->get(col, row)) == dprops.nodata())
+				continue;
 			float s = 0;
 			float w = 0;
-			bool halt = false;
-			for(int r = -size / 2; !halt && r < size / 2 + 1; ++r) {
-				for(int c = -size / 2; c < size / 2 + 1; ++c) {
+			for(int r = -half; r < half + 1; ++r) {
+				for(int c = -half; c < half + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					if(cc < 0 || rr < 0 || cc >= src->props().cols() || rr >= src->props().rows())
-						continue;
-					if(!std::isnan((v0 = src->get(cc, rr)))) {
-						float d = (float) (c * c + r * r);
-						float w0 = std::max(0.0, std::min(1.0, d / std::pow((float) size / 2.0, 2.0)));
-						s += v0 * w0;
-						w += w0;
+					float d = std::sqrt((float) (c * c + r * r)) / half;
+					if(d <= 1.0f && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
+						d = 1.0f - d;
+						s += v0 * d;
+						w += 1.0f;
 					}
 				}
 			}
 			if(w > 0) {
 				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->set(col, row, s / w);
+				dst->set(col, row, v1 + s / w);
 			}
 		}
 	}
@@ -184,13 +188,14 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<fl
 void processCos(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size, float* cos) {
 	float rad2 = std::pow(size / 2.0, 2.0) / 1000;	// Because the cosine lookup has 1000 elements.
 	int row;
+	const GridProps& sprops = src->props();
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
 			if(!rowq->empty()) {
 				row = rowq->front();
 				rowq->pop_front();
-				std::cout << "Row " << row << " of " << src->props().rows() << "\n";
+				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				continue;
@@ -198,7 +203,7 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<f
 		}
 
 		float v0;
-		for(int col = 0; col < src->props().cols(); ++col) {
+		for(int col = 0; col < sprops.cols(); ++col) {
 			float s = 0;
 			float w = 0;
 			bool halt = false;
@@ -206,9 +211,9 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<f
 				for(int c = -size / 2; c < size / 2 + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					if(cc < 0 || rr < 0 || cc >= src->props().cols() || rr >= src->props().rows())
+					if(cc < 0 || rr < 0 || cc >= sprops.cols() || rr >= sprops.rows())
 						continue;
-					if(!std::isnan((v0 = src->get(cc, rr)))) {
+					if((v0 = src->get(cc, rr)) != sprops.nodata()) {
 						int d = (int) std::min(1000.0f, (float) (c * c + r * r) / rad2);
 						//std::cout << d << " " << c << " " << r << " " << (c * c + r * r) << " " << rad2 << "\n";
 						if(d < 1000){
@@ -230,13 +235,14 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<f
 
 void processGauss(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size, float sigma) {
 	int row;
+	const GridProps& sprops = src->props();
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
 			if(!rowq->empty()) {
 				row = rowq->front();
 				rowq->pop_front();
-				std::cout << "Row " << row << " of " << src->props().rows() << "\n";
+				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
 				std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				continue;
@@ -245,7 +251,7 @@ void processGauss(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band
 
 		float gain = 0.5;
 		float v0;
-		for(int col = 0; col < src->props().cols(); ++col) {
+		for(int col = 0; col < sprops.cols(); ++col) {
 			float s = 0;
 			float w = 0;
 			bool halt = false;
@@ -253,9 +259,9 @@ void processGauss(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band
 				for(int c = -size / 2; c < size / 2 + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					if(cc < 0 || rr < 0 || cc >= src->props().cols() || rr >= src->props().rows())
+					if(cc < 0 || rr < 0 || cc >= sprops.cols() || rr >= sprops.rows())
 						continue;
-					if(!std::isnan((v0 = src->get(cc, rr)))) {
+					if((v0 = src->get(cc, rr)) != sprops.nodata()) {
 						float w0 = std::exp(-0.5 * (c * c + r * r) / (sigma * sigma));
 						//std::cout << d << " " << c << " " << r << " " << (c * c + r * r) << " " << rad2 << "\n";
 						s += v0 * w0;
@@ -345,10 +351,14 @@ int main(int argc, char** argv) {
 		Band<float> anchor;
 		GridProps aprops;
 		GridProps mprops;
-
+		
 		target.init(targetFile, targetBand - 1, true, true);
-		rdiff.init(target.props(), true);
 		tprops = target.props();
+
+		GridProps dprops(target.props());
+		dprops.setNoData(-9999);
+		rdiff.init("/tmp/rdiff.tif", dprops, true);
+		rdiff.fill(dprops.nodata());
 
 		loadRasters("/tmp/anchor.tif", files, bands, files.size() - 1, 1, anchor);
 		aprops = anchor.props();
@@ -360,31 +370,42 @@ int main(int argc, char** argv) {
 			mprops = mask.props();
 		}
 
-		float v1, v2;
+		// Calculate the search radius in columns.
+		int size = (radius * 2) / std::abs(rdiff.props().resX());
+		if(size % 2 == 0)
+			size++;
+	
 		for(int row1 = 0; row1 < tprops.rows(); ++row1) {
+			if(row1 % 100)
+				g_debug("Row " << row1 << " of " << tprops.rows());
+			float v1, v2;
 			for(int col1 = 0; col1 < tprops.cols(); ++col1) {
-				if((v1 = target.get(col1, row1)) != tprops.nodata()) {
-					double x = tprops.toX(col1);
-					double y = tprops.toY(row1);
-					int col2 = aprops.toCol(x);
-					int row2 = aprops.toRow(y);
-					int mc = mprops.toCol(x);
-					int mr = mprops.toRow(y);
-					if(aprops.hasCell(col2, row2)
-							&& (!hasMask || (mprops.hasCell(mc, mr) && mask.get(mc, mr) == 1))
-							&& ((v2 = anchor.get(col2, row2)) != aprops.nodata())) {
-								rdiff.set(col1, row1, v2 - v1);
-					}
-				}
+				if(!tprops.hasCell(col1, row1) 
+						|| (v1 = target.get(col1, row1)) == tprops.nodata())
+					continue;
+
+				double x = tprops.toX(col1);
+				double y = tprops.toY(row1);
+				int col2 = aprops.toCol(x);
+				int row2 = aprops.toRow(y);
+				int mc = mprops.toCol(x);
+				int mr = mprops.toRow(y);
+						
+				if(!aprops.hasCell(col2, row2)
+//						&& (!hasMask || (mprops.hasCell(mc, mr) && mask.get(mc, mr) == 1))
+						|| (v2 = anchor.get(col2, row2)) == aprops.nodata())
+					continue;
+						
+				rdiff.set(col1, row1, v2 - v1);
 			}
 		}
 	}
 
-	Band<float> output(outfile, tprops, true);
-	target.writeTo(output);
-
 	{
 
+		Band<float> output(outfile, tprops, true);
+		target.writeTo(output);	
+		
 		std::list<int> rowq;
 		for(int row = 0; row < rdiff.props().rows(); ++row)
 			rowq.push_back(row);
@@ -423,18 +444,6 @@ int main(int argc, char** argv) {
 				threads[i].join();
 		}
 	}
-
-	/*
-	double v;
-	for(int row = 0; row < tprops.rows(); ++row) {
-		for(int col = 0; col < tprops.cols(); ++col) {
-			if((v = target.get(col, row) != tprops.nodata())) {
-				float f = rdiff.get(col, r);
-				output.set(col, row, v + f);
-			}
-		}
-	}
-	*/
 
 	return 0;
 }
