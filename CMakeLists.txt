@@ -156,9 +156,9 @@ add_executable (pc2grid src/pc2grid.cpp libgeo/src/geo.cpp)
 target_compile_features(pc2grid PUBLIC cxx_std_17)
 target_link_libraries (pc2grid geoutil geogrid geopc ${LIBLAS_LIBRARY} ${GEOS_LIBRARY} ${PDAL_LIBRARIES})
 
-add_executable (pcnorm src/pcnorm.cpp)
-target_compile_features(pcnorm PUBLIC cxx_std_17)
-target_link_libraries (pcnorm geoutil ${LIBLAS_LIBRARY})
+#add_executable (pcnorm src/pcnorm.cpp)
+#target_compile_features(pcnorm PUBLIC cxx_std_17)
+#target_link_libraries (pcnorm geoutil ${LIBLAS_LIBRARY})
 
 add_executable (voidfill src/voidfill.cpp libgeo/src/geo.cpp)
 target_compile_features(voidfill PUBLIC cxx_std_17)
@@ -178,10 +178,14 @@ target_link_libraries (srtmlakes geoutil geogrid)
 
 if (FULL_BUILD)
 
-	install(TARGETS voidfill pc2grid rastermerge tilemerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install(TARGETS voidfill pc2grid rastermerge tilemerge 
+		#pcnorm 
+		convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 else ()
 
-	install(TARGETS voidfill pc2grid pcnorm map2raw tilemerge RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install(TARGETS voidfill pc2grid 
+		#pcnorm 
+		map2raw tilemerge RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 endif ()
