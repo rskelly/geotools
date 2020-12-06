@@ -155,12 +155,14 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<fl
 				rowq->pop_front();
 				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
-				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				std::this_thread::yield();
 				continue;
 			}
 		}
-		float v0;
+		float v0, v1;
 		for(int col = 0; col < src->props().cols(); ++col) {
+			if((v1 = dst->get(col, row)) == dprops.nodata())
+				continue;
 			float s = 0;
 			float w = 0;
 			for(int r = -half; r < half + 1; ++r) {
@@ -171,13 +173,13 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<fl
 					if(d <= 1.0f && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
 						d = 1.0f - d;
 						s += v0 * d;
-						w += d;
+						w += 1.0f;
 					}
 				}
 			}
 			if(w > 0) {
 				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->set(col, row, dst->get(col, row) + s / w);
+				dst->set(col, row, v1 + s / w);
 			}
 		}
 	}
@@ -368,31 +370,42 @@ int main(int argc, char** argv) {
 			mprops = mask.props();
 		}
 
-		float v1, v2;
+		// Calculate the search radius in columns.
+		int size = (radius * 2) / std::abs(rdiff.props().resX());
+		if(size % 2 == 0)
+			size++;
+	
 		for(int row1 = 0; row1 < tprops.rows(); ++row1) {
+			if(row1 % 100)
+				g_debug("Row " << row1 << " of " << tprops.rows());
+			float v1, v2;
 			for(int col1 = 0; col1 < tprops.cols(); ++col1) {
-				if((v1 = target.get(col1, row1)) != tprops.nodata()) {
-					double x = tprops.toX(col1);
-					double y = tprops.toY(row1);
-					int col2 = aprops.toCol(x);
-					int row2 = aprops.toRow(y);
-					int mc = mprops.toCol(x);
-					int mr = mprops.toRow(y);
-					if(aprops.hasCell(col2, row2)
-							&& (!hasMask || (mprops.hasCell(mc, mr) && mask.get(mc, mr) == 1))
-							&& ((v2 = anchor.get(col2, row2)) != aprops.nodata())) {
-								rdiff.set(col1, row1, v2 - v1);
-					}
-				}
+				if(!tprops.hasCell(col1, row1) 
+						|| (v1 = target.get(col1, row1)) == tprops.nodata())
+					continue;
+
+				double x = tprops.toX(col1);
+				double y = tprops.toY(row1);
+				int col2 = aprops.toCol(x);
+				int row2 = aprops.toRow(y);
+				int mc = mprops.toCol(x);
+				int mr = mprops.toRow(y);
+						
+				if(!aprops.hasCell(col2, row2)
+//						&& (!hasMask || (mprops.hasCell(mc, mr) && mask.get(mc, mr) == 1))
+						|| (v2 = anchor.get(col2, row2)) == aprops.nodata())
+					continue;
+						
+				rdiff.set(col1, row1, v2 - v1);
 			}
 		}
 	}
 
-	Band<float> output(outfile, tprops, true);
-	target.writeTo(output);
-
 	{
 
+		Band<float> output(outfile, tprops, true);
+		target.writeTo(output);	
+		
 		std::list<int> rowq;
 		for(int row = 0; row < rdiff.props().rows(); ++row)
 			rowq.push_back(row);
@@ -431,18 +444,6 @@ int main(int argc, char** argv) {
 				threads[i].join();
 		}
 	}
-
-	/*
-	double v;
-	for(int row = 0; row < tprops.rows(); ++row) {
-		for(int col = 0; col < tprops.cols(); ++col) {
-			if((v = target.get(col, row) != tprops.nodata())) {
-				float f = rdiff.get(col, r);
-				output.set(col, row, v + f);
-			}
-		}
-	}
-	*/
 
 	return 0;
 }
