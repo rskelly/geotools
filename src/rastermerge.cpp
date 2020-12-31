@@ -95,9 +95,11 @@ bool smooth(std::vector<bool>& filled, Band<float>& src, Band<float>& dst, int c
 	return false;
 }
 
-void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
+void processIDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
 	int row;
+	int half = size / 2; // Split the size in half for the radius of the kernel.
 	const GridProps& sprops = src->props();
+	const GridProps& dprops = dst->props();
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
@@ -106,21 +108,24 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 				rowq->pop_front();
 				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
-				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				std::this_thread::yield();
 				continue;
 			}
 		}
-		double v0;
-		for(int col = 0; col < sprops.cols(); ++col) {
+		float v0, v1;
+		for(int col = 0; col < src->props().cols(); ++col) {
+			if((v1 = dst->get(col, row)) == dprops.nodata())
+				continue;
 			float s = 0;
 			float w = 0;
+			float maxrad = half * half;
 			bool halt = false;
-			for(int r = -size / 2; !halt && r < size / 2 + 1; ++r) {
-				for(int c = -size / 2; c < size / 2 + 1; ++c) {
+			for(int r = -half; !halt && r < half + 1; ++r) {
+				for(int c = -half; c < half + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					if(sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
-						float d = (float) (c * c + r * r);
+					float d = (float) (c * c + r * r);
+					if(d <= maxrad && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
 						if(d == 0) {
 							s = v0;
 							w = 1;
@@ -136,7 +141,7 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 			}
 			if(w > 0) {
 				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->set(col, row, s / w);
+				dst->set(col, row, v1 + s / w);
 			}
 		}
 	}
@@ -169,11 +174,10 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<fl
 				for(int c = -half; c < half + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					float d = std::sqrt((float) (c * c + r * r)) / half;
+					float d = 1.0f - std::sqrt((float) (c * c + r * r)) / half;
 					if(d <= 1.0f && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
-						d = 1.0f - d;
 						s += v0 * d;
-						w += 1.0f;
+						w += d;
 					}
 				}
 			}
@@ -371,17 +375,17 @@ int main(int argc, char** argv) {
 		}
 
 		// Calculate the search radius in columns.
-		int size = (radius * 2) / std::abs(rdiff.props().resX());
-		if(size % 2 == 0)
-			size++;
+		//int size = (radius * 2) / std::abs(rdiff.props().resX());
+		//if(size % 2 == 0)
+		//	size++;
 	
 		for(int row1 = 0; row1 < tprops.rows(); ++row1) {
 			if(row1 % 100)
 				g_debug("Row " << row1 << " of " << tprops.rows());
 			float v1, v2;
 			for(int col1 = 0; col1 < tprops.cols(); ++col1) {
-				if(!tprops.hasCell(col1, row1) 
-						|| (v1 = target.get(col1, row1)) == tprops.nodata())
+
+				if((v1 = target.get(col1, row1)) == tprops.nodata() || std::isnan(v1))
 					continue;
 
 				double x = tprops.toX(col1);
@@ -393,7 +397,7 @@ int main(int argc, char** argv) {
 						
 				if(!aprops.hasCell(col2, row2)
 //						&& (!hasMask || (mprops.hasCell(mc, mr) && mask.get(mc, mr) == 1))
-						|| (v2 = anchor.get(col2, row2)) == aprops.nodata())
+						|| (v2 = anchor.get(col2, row2)) == aprops.nodata() || std::isnan(v2))
 					continue;
 						
 				rdiff.set(col1, row1, v2 - v1);
