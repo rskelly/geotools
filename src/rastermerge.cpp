@@ -20,14 +20,15 @@
 using namespace geo::grid;
 using namespace geo::util;
 
-bool loadRasters(const std::string& outfile, const std::vector<std::string>& files, std::vector<int> bands, int count, int resample, Band<float>& data) {
+bool loadRasters(const std::string& outfile, const std::vector<std::string>& files,
+		std::vector<int> bands, int count, int resample, Band<float>& data, bool mapped) {
 
 	GridProps props;
 	Bounds<double> bounds;
 	std::vector<std::unique_ptr<Band<float>>> rasters;
 	// Create the list of bands to load.
 	for(size_t i = 0; i < (size_t) count; ++i) {
-		rasters.emplace_back(new Band<float>(files[i], bands[i] - 1, false, true));
+		rasters.emplace_back(new Band<float>(files[i], bands[i] - 1, false, mapped));
 		if(i == 0)
 			props = rasters.front()->props();
 		bounds.extend(props.bounds());
@@ -95,9 +96,11 @@ bool smooth(std::vector<bool>& filled, Band<float>& src, Band<float>& dst, int c
 	return false;
 }
 
-void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
+void processIDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
 	int row;
+	int half = size / 2; // Split the size in half for the radius of the kernel.
 	const GridProps& sprops = src->props();
+	const GridProps& dprops = dst->props();
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
@@ -106,21 +109,24 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 				rowq->pop_front();
 				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
-				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				std::this_thread::yield();
 				continue;
 			}
 		}
-		double v0;
-		for(int col = 0; col < sprops.cols(); ++col) {
+		float v0, v1;
+		for(int col = 0; col < src->props().cols(); ++col) {
+			if((v1 = dst->get(col, row)) == dprops.nodata())
+				continue;
 			float s = 0;
 			float w = 0;
+			float maxrad = half * half;
 			bool halt = false;
-			for(int r = -size / 2; !halt && r < size / 2 + 1; ++r) {
-				for(int c = -size / 2; c < size / 2 + 1; ++c) {
+			for(int r = -half; !halt && r < half + 1; ++r) {
+				for(int c = -half; c < half + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					if(sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
-						float d = (float) (c * c + r * r);
+					float d = (float) (c * c + r * r);
+					if(d <= maxrad && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
 						if(d == 0) {
 							s = v0;
 							w = 1;
@@ -136,7 +142,7 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 			}
 			if(w > 0) {
 				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->set(col, row, s / w);
+				dst->set(col, row, v1 + s / w);
 			}
 		}
 	}
@@ -169,10 +175,8 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<fl
 				for(int c = -half; c < half + 1; ++c) {
 					int cc = col + c;
 					int rr = row + r;
-					float d = std::sqrt((float) (c * c + r * r)) / half;
-					if(d <= 1.0f) {
-						v0 = sprops.hasCell(cc, rr) ? src->get(cc, rr) : 0;
-						d = 1.0f - d;
+					float d = 1.0f - std::sqrt((float) (c * c + r * r)) / half;
+					if(d <= 1.0f && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
 						s += v0 * d;
 						w += d;
 					}
@@ -300,7 +304,8 @@ int main(int argc, char** argv) {
 				<< " -t <threads>       The number of threads.\n"
 				<< " -m <method>        The method: idw, dw, gauss, cosine. Default IDW.\n"
 				<< " -k <mask> <band>   A mask file. Pixel value 1 is kept.\n"
-				<< " -r <resample>      Resample the anchor rasters. 1 is native resolution; 2 is half; 4 is quarter, etc.\n";
+				<< " -r <resample>      Resample the anchor rasters. 1 is native resolution; 2 is half; 4 is quarter, etc.\n"
+				<< " -y                 If given, use in-core memory instead of mapped.\n";
 		return 1;
 	}
 
@@ -313,11 +318,14 @@ int main(int argc, char** argv) {
 	std::string outfile;
 	std::string maskfile;
 	int maskband = 0;
+	bool mapped = true;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg(argv[i]);
 		if(arg == "-s") {
 			radius = atof(argv[++i]);
+		} else if(arg == "-y") {
+			mapped = false;
 		} else if(arg == "-r") {
 			resample = atoi(argv[++i]);
 		} else if(arg == "-k") {
@@ -353,36 +361,36 @@ int main(int argc, char** argv) {
 		GridProps aprops;
 		GridProps mprops;
 		
-		target.init(targetFile, targetBand - 1, true, true);
+		target.init(targetFile, targetBand - 1, true, mapped);
 		tprops = target.props();
 
 		GridProps dprops(target.props());
 		dprops.setNoData(-9999);
-		rdiff.init("/tmp/rdiff.tif", dprops, true);
+		rdiff.init("/tmp/rdiff.tif", dprops, mapped);
 		rdiff.fill(0);
 
-		loadRasters("/tmp/anchor.tif", files, bands, files.size() - 1, 1, anchor);
+		loadRasters("/tmp/anchor.tif", files, bands, files.size() - 1, 1, anchor, mapped);
 		aprops = anchor.props();
 
 		bool hasMask = !maskfile.empty();
 		Band<int> mask;
 		if(hasMask) {
-			mask.init(maskfile, maskband - 1, false, true);
+			mask.init(maskfile, maskband - 1, false, mapped);
 			mprops = mask.props();
 		}
 
 		// Calculate the search radius in columns.
-		int size = (radius * 2) / std::abs(rdiff.props().resX());
-		if(size % 2 == 0)
-			size++;
+		//int size = (radius * 2) / std::abs(rdiff.props().resX());
+		//if(size % 2 == 0)
+		//	size++;
 	
 		for(int row1 = 0; row1 < tprops.rows(); ++row1) {
 			if(row1 % 100)
 				g_debug("Row " << row1 << " of " << tprops.rows());
 			float v1, v2;
 			for(int col1 = 0; col1 < tprops.cols(); ++col1) {
-				if(!tprops.hasCell(col1, row1) 
-						|| (v1 = target.get(col1, row1)) == tprops.nodata())
+
+				if((v1 = target.get(col1, row1)) == tprops.nodata() || std::isnan(v1))
 					continue;
 
 				double x = tprops.toX(col1);
@@ -394,7 +402,7 @@ int main(int argc, char** argv) {
 						
 				if(!aprops.hasCell(col2, row2)
 //						&& (!hasMask || (mprops.hasCell(mc, mr) && mask.get(mc, mr) == 1))
-						|| (v2 = anchor.get(col2, row2)) == aprops.nodata())
+						|| (v2 = anchor.get(col2, row2)) == aprops.nodata() || std::isnan(v2))
 					continue;
 						
 				rdiff.set(col1, row1, v2 - v1);
@@ -404,7 +412,7 @@ int main(int argc, char** argv) {
 
 	{
 
-		Band<float> output(outfile, tprops, true);
+		Band<float> output(outfile, tprops, mapped);
 		target.writeTo(output);	
 		
 		std::list<int> rowq;
