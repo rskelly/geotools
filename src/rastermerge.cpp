@@ -144,7 +144,7 @@ void processIDW(std:: list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<
 
 void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
 	int row;
-	int half = size / 2; // Split the size in half for the radius of the kernel.
+	int half = size / 2 + 1; // Split the size in half for the radius of the kernel.
 	const GridProps& sprops = src->props();
 	const GridProps& dprops = dst->props();
 	while(!rowq->empty()) {
@@ -161,8 +161,8 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<fl
 		}
 		float v0, v1;
 		for(int col = 0; col < src->props().cols(); ++col) {
-			if((v1 = dst->get(col, row)) == dprops.nodata())
-				continue;
+			//if((v1 = dst->get(col, row)) == dprops.nodata())
+			//	continue;
 			float s = 0;
 			float w = 0;
 			for(int r = -half; r < half + 1; ++r) {
@@ -170,14 +170,15 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<fl
 					int cc = col + c;
 					int rr = row + r;
 					float d = std::sqrt((float) (c * c + r * r)) / half;
-					if(d <= 1.0f && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
+					if(d <= 1.0f) {
+						v0 = sprops.hasCell(cc, rr) ? src->get(cc, rr) : 0;
 						d = 1.0f - d;
 						s += v0 * d;
-						w += 1.0f;
+						w += d;
 					}
 				}
 			}
-			if(w > 0) {
+			if(w > 0 && (v1 = dst->get(col, row)) != dprops.nodata()) {
 				std::lock_guard<std::mutex> lk(*dmtx);
 				dst->set(col, row, v1 + s / w);
 			}
@@ -358,7 +359,7 @@ int main(int argc, char** argv) {
 		GridProps dprops(target.props());
 		dprops.setNoData(-9999);
 		rdiff.init("/tmp/rdiff.tif", dprops, true);
-		rdiff.fill(dprops.nodata());
+		rdiff.fill(0);
 
 		loadRasters("/tmp/anchor.tif", files, bands, files.size() - 1, 1, anchor);
 		aprops = anchor.props();
