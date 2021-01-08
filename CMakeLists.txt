@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 
 option (FULL_BUILD "Build all libraries and programs." ON)
 option (WITH_PC "Build the point cloud computers for pc2grid." ON)
-option (WITH_ANN "Build the ANN KD-Tree implementation." OFF)
+option (WITH_ANN "Build the ANN KD-Tree implementation." ${FULL_BUILD})
 option (WITH_GUI "Build the GUIs." ON)
 
 project (geotools)
