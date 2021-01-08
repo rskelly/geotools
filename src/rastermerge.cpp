@@ -101,6 +101,10 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<f
 	int half = size / 2; // Split the size in half for the radius of the kernel.
 	const GridProps& sprops = src->props();
 	const GridProps& dprops = dst->props();
+	
+	// Row data buffer.
+	std::vector<float> rowbuf(dprops.cols());
+
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
@@ -114,6 +118,8 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<f
 			}
 		}
 		float v0, v1;
+		std::fill(rowbuf.begin(), rowbuf.end(), dprops.nodata());
+
 		for(int col = 0; col < src->props().cols(); ++col) {
 			if((v1 = dst->get(col, row)) == dprops.nodata())
 				continue;
@@ -140,11 +146,12 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<f
 					}
 				}
 			}
-			if(w > 0) {
-				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->set(col, row, v1 + s / w);
-			}
+			if(w > 0)
+				rowbuf[col] = v1 + s / w;
 		}
+		
+		std::lock_guard<std::mutex> lk(*dmtx);
+		dst->setRow(row, rowbuf.data());
 	}
 }
 
@@ -346,6 +353,8 @@ int main(int argc, char** argv) {
 			}
 		}
 	}
+
+	g_debug("Using mapped memory: " << mapped);
 
 	std::string targetFile = files.back();
 	int targetBand = bands.back();
