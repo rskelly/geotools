@@ -96,20 +96,25 @@ bool smooth(std::vector<bool>& filled, Band<float>& src, Band<float>& dst, int c
 	return false;
 }
 
-void processIDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
-	int row;
+void processIDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
+	int row, block;
 	int half = size / 2; // Split the size in half for the radius of the kernel.
 	const GridProps& sprops = src->props();
 	const GridProps& dprops = dst->props();
 	
 	// Row data buffer.
-	std::vector<float> rowbuf(dprops.cols());
+	std::vector<float> rowbuf;
+
+	int dcols = dst->props().cols();
+	int drows = dst->props().rows();
 
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
 			if(!rowq->empty()) {
-				row = rowq->front();
+				std::pair<int, int>& item = rowq->front();
+				row = item.first;
+				block = item.second;
 				rowq->pop_front();
 				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
@@ -117,54 +122,73 @@ void processIDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<f
 				continue;
 			}
 		}
-		float v0, v1;
+
+		if(row + block >= drows)
+			block = drows - row;
+
+		// Row data buffer.
+		rowbuf.resize(dcols * block);
 		std::fill(rowbuf.begin(), rowbuf.end(), dprops.nodata());
 
-		for(int col = 0; col < src->props().cols(); ++col) {
-			if((v1 = dst->get(col, row)) == dprops.nodata())
-				continue;
-			float s = 0;
-			float w = 0;
-			float maxrad = half * half;
-			bool halt = false;
-			for(int r = -half; !halt && r < half + 1; ++r) {
-				for(int c = -half; c < half + 1; ++c) {
-					int cc = col + c;
-					int rr = row + r;
-					float d = (float) (c * c + r * r);
-					if(d <= maxrad && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
-						if(d == 0) {
-							s = v0;
-							w = 1;
-							halt = true;
-							break;
-						} else {
-							float w0 = 1.0f / d;
-							s += v0 * w0;
-							w += w0;
+		float v0, v1;
+		for(int b = 0; b < block; ++b) {
+			for(int col = 0; col < dcols; ++col) {
+				if((v1 = dst->get(col, row + b)) == dprops.nodata())
+					continue;
+				float s = 0;
+				float w = 0;
+				float maxrad = half * half;
+				bool halt = false;
+				int scol = sprops.toCol(dprops.toX(col));
+				int srow = sprops.toRow(dprops.toY(row));
+				for(int r = -half; !halt && r < half + 1; ++r) {
+					for(int c = -half; c < half + 1; ++c) {
+						int cc = scol + c;
+						int rr = srow + r;
+						float d = (float) (c * c + r * r);
+						if(d <= maxrad && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
+							if(d == 0) {
+								s = v0;
+								w = 1;
+								halt = true;
+								break;
+							} else {
+								float w0 = 1.0f / d;
+								s += v0 * w0;
+								w += w0;
+							}
 						}
 					}
 				}
+				if(w > 0)
+					rowbuf[b * dcols + col] = v1 + s / w;
 			}
-			if(w > 0)
-				rowbuf[col] = v1 + s / w;
 		}
-		
 		std::lock_guard<std::mutex> lk(*dmtx);
-		dst->setRow(row, rowbuf.data());
+		for(int b = 0; b < block; ++b)
+			dst->setRow(row + b, rowbuf.data() + b * dcols);
 	}
 }
 
-void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
-	int row;
+void processDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
+	int row, block;
 	int half = size / 2 + 1; // Split the size in half for the radius of the kernel.
 	const GridProps& sprops = src->props();
 	const GridProps& dprops = dst->props();
+
+	// Row data buffer.
+	std::vector<float> rowbuf;
+
+	int dcols = dst->props().cols();
+	int drows = dst->props().rows();
+
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
 			if(!rowq->empty()) {
-				row = rowq->front();
+				std::pair<int, int>& item = rowq->front();
+				row = item.first;
+				block = item.second;
 				rowq->pop_front();
 				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
@@ -172,40 +196,54 @@ void processDW(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<fl
 				continue;
 			}
 		}
+
+		if(row + block >= drows)
+			block = drows - row;
+
+		rowbuf.resize(dcols * block);
+		std::fill(rowbuf.begin(), rowbuf.end(), dprops.nodata());
+
 		float v0, v1;
-		for(int col = 0; col < src->props().cols(); ++col) {
-			//if((v1 = dst->get(col, row)) == dprops.nodata())
-			//	continue;
-			float s = 0;
-			float w = 0;
-			for(int r = -half; r < half + 1; ++r) {
-				for(int c = -half; c < half + 1; ++c) {
-					int cc = col + c;
-					int rr = row + r;
-					float d = 1.0f - std::sqrt((float) (c * c + r * r)) / half;
-					if(d <= 1.0f && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
-						s += v0 * d;
-						w += d;
+		for(int b = 0; b < block; ++b) {
+			for(int col = 0; col < dcols; ++col) {
+				if((v1 = dst->get(col, row + b)) == dprops.nodata())
+					continue;
+				float s = 0;
+				float w = 0;
+				int scol = sprops.toCol(dprops.toX(col));
+				int srow = sprops.toRow(dprops.toY(row));
+				for(int r = -half; r < half + 1; ++r) {
+					for(int c = -half; c < half + 1; ++c) {
+						int cc = scol + c;
+						int rr = srow + r;
+						float d = 1.0f - std::sqrt((float) (c * c + r * r)) / half;
+						if(d <= 1.0f && sprops.hasCell(cc, rr) && (v0 = src->get(cc, rr)) != sprops.nodata()) {
+							s += v0 * d;
+							w += d;
+						}
 					}
 				}
-			}
-			if(w > 0 && (v1 = dst->get(col, row)) != dprops.nodata()) {
-				std::lock_guard<std::mutex> lk(*dmtx);
-				dst->set(col, row, v1 + s / w);
+				if(w > 0 && (v1 = dst->get(col, row)) != dprops.nodata())
+					rowbuf[b * drows + col] = v1 + s / w;
 			}
 		}
+		std::lock_guard<std::mutex> lk(*dmtx);
+		for(int b = 0; b < block; ++b)
+			dst->setRow(row + b, rowbuf.data() + b * dcols);
 	}
 }
 
-void processCos(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size, float* cos) {
+void processCos(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size, float* cos) {
 	float rad2 = std::pow(size / 2.0, 2.0) / 1000;	// Because the cosine lookup has 1000 elements.
-	int row;
+	int row, block;
 	const GridProps& sprops = src->props();
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
 			if(!rowq->empty()) {
-				row = rowq->front();
+				std::pair<int, int>& item = rowq->front();
+				row = item.first;
+				block = item.second;
 				rowq->pop_front();
 				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
@@ -245,14 +283,16 @@ void processCos(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<f
 }
 
 
-void processGauss(std::list<int>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size, float sigma) {
-	int row;
+void processGauss(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size, float sigma) {
+	int row, block;
 	const GridProps& sprops = src->props();
 	while(!rowq->empty()) {
 		{
 			std::lock_guard<std::mutex> lk(*qmtx);
 			if(!rowq->empty()) {
-				row = rowq->front();
+				std::pair<int, int>& item = rowq->front();
+				row = item.first;
+				block = item.second;
 				rowq->pop_front();
 				std::cout << "Row " << row << " of " << sprops.rows() << "\n";
 			} else {
@@ -307,12 +347,12 @@ int main(int argc, char** argv) {
 
 	if(argc < 6) {
 		std::cerr << "Usage: rastermerge [options] <<anchor file 1> <anchor band 1> [<anchor file 2> <anchor band 2> [...]]> <target file 2> <target band 2> <output file>\n"
-				<< " -s <size>          The size of the window in pixels.\n"
+				<< " -s <size>          The size of the window in map units.\n"
 				<< " -t <threads>       The number of threads.\n"
 				<< " -m <method>        The method: idw, dw, gauss, cosine. Default IDW.\n"
 				<< " -k <mask> <band>   A mask file. Pixel value 1 is kept.\n"
-				<< " -r <resample>      Resample the anchor rasters. 1 is native resolution; 2 is half; 4 is quarter, etc.\n"
-				<< " -y                 If given, use in-core memory instead of mapped.\n";
+				<< " -y                 If given, use in-core memory instead of mapped.\n"
+				<< " -b <block size>    The height of processed rows. Blocks are processed in parallel. Default 1\n";
 		return 1;
 	}
 
@@ -321,7 +361,7 @@ int main(int argc, char** argv) {
 	float radius = 100;
 	int tcount = 4;
 	std::string method = "idw";
-	int resample = 1;
+	int block = 1;
 	std::string outfile;
 	std::string maskfile;
 	int maskband = 0;
@@ -333,8 +373,8 @@ int main(int argc, char** argv) {
 			radius = atof(argv[++i]);
 		} else if(arg == "-y") {
 			mapped = false;
-		} else if(arg == "-r") {
-			resample = atoi(argv[++i]);
+		} else if(arg == "-b") {
+			block = atoi(argv[++i]);
 		} else if(arg == "-k") {
 			maskfile = argv[++i];
 			maskband = atoi(argv[++i]);
@@ -424,16 +464,17 @@ int main(int argc, char** argv) {
 		Band<float> output(outfile, tprops, mapped);
 		target.writeTo(output);	
 		
-		std::list<int> rowq;
-		for(int row = 0; row < rdiff.props().rows(); ++row)
-			rowq.push_back(row);
+		// Queue contains start index of row and number of rows.
+		std::list<std::pair<int, int>> rowq;
+		for(int row = 0; row < rdiff.props().rows(); row += block)
+			rowq.emplace_back(row, block);
 
 		std::mutex qmtx;
 		std::mutex dmtx;
 		std::vector<std::thread> threads;
 
 		// Calculate the search radius in columns.
-		int size = (radius * 2) / std::abs(rdiff.props().resX());
+		int size = std::ceil((radius * 2) / std::abs(rdiff.props().resX()));
 		if(size % 2 == 0)
 			size++;
 
