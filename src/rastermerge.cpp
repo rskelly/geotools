@@ -98,7 +98,6 @@ bool smooth(std::vector<bool>& filled, Band<float>& src, Band<float>& dst, int c
 
 void processIDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx, Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
 	int row, block;
-	int half = size / 2; // Split the size in half for the radius of the kernel.
 	const GridProps& sprops = src->props();
 	const GridProps& dprops = dst->props();
 	
@@ -130,6 +129,7 @@ void processIDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx, Band<flo
 		rowbuf.resize(dcols * block);
 		std::fill(rowbuf.begin(), rowbuf.end(), dprops.nodata());
 
+		float maxrad = size * size;
 		float v0, v1;
 		for(int b = 0; b < block; ++b) {
 			for(int col = 0; col < dcols; ++col) {
@@ -137,12 +137,11 @@ void processIDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx, Band<flo
 					continue;
 				float s = 0;
 				float w = 0;
-				float maxrad = half * half;
 				bool halt = false;
 				int scol = sprops.toCol(dprops.toX(col));
 				int srow = sprops.toRow(dprops.toY(row));
-				for(int r = -half; !halt && r < half + 1; ++r) {
-					for(int c = -half; c < half + 1; ++c) {
+				for(int r = -size; !halt && r < size+ 1; ++r) {
+					for(int c = -size; c < size + 1; ++c) {
 						int cc = scol + c;
 						int rr = srow + r;
 						float d = (float) (c * c + r * r);
@@ -347,10 +346,11 @@ int main(int argc, char** argv) {
 
 	if(argc < 6) {
 		std::cerr << "Usage: rastermerge [options] <<anchor file 1> <anchor band 1> [<anchor file 2> <anchor band 2> [...]]> <target file 2> <target band 2> <output file>\n"
-				<< " -s <size>          The size of the window in map units.\n"
+				<< " -s <size>          The radius of the window in map units.\n"
 				<< " -t <threads>       The number of threads.\n"
 				<< " -m <method>        The method: idw, dw, gauss, cosine. Default IDW.\n"
 				<< " -k <mask> <band>   A mask file. Pixel value 1 is kept.\n"
+				<< " -r <mult>          A resample multiplier. 1 is no change, 2 doubles the side of a pixel, etc.\n"
 				<< " -y                 If given, use in-core memory instead of mapped.\n"
 				<< " -b <block size>    The height of processed rows. Blocks are processed in parallel. Default 1\n";
 		return 1;
@@ -366,6 +366,7 @@ int main(int argc, char** argv) {
 	std::string maskfile;
 	int maskband = 0;
 	bool mapped = true;
+	int resample = 1;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg(argv[i]);
@@ -375,6 +376,8 @@ int main(int argc, char** argv) {
 			mapped = false;
 		} else if(arg == "-b") {
 			block = atoi(argv[++i]);
+		} else if(arg == "-r") {
+			resample = atoi(argv[++i]);
 		} else if(arg == "-k") {
 			maskfile = argv[++i];
 			maskband = atoi(argv[++i]);
@@ -415,7 +418,11 @@ int main(int argc, char** argv) {
 
 		GridProps dprops(target.props());
 		dprops.setNoData(-9999);
-		rdiff.init("/tmp/rdiff.tif", dprops, mapped);
+
+		GridProps rprops(dprops);
+		if(resample > 1)
+			rprops.setSize(rprops.cols() / resample + 1, rprops.rows() / resample + 1);
+		rdiff.init("/tmp/rdiff.tif", rprops, mapped);
 		rdiff.fill(0);
 
 		loadRasters("/tmp/anchor.tif", files, bands, files.size() - 1, 1, anchor, mapped);
@@ -428,11 +435,6 @@ int main(int argc, char** argv) {
 			mprops = mask.props();
 		}
 
-		// Calculate the search radius in columns.
-		//int size = (radius * 2) / std::abs(rdiff.props().resX());
-		//if(size % 2 == 0)
-		//	size++;
-	
 		for(int row1 = 0; row1 < tprops.rows(); ++row1) {
 			if(row1 % 100)
 				g_debug("Row " << row1 << " of " << tprops.rows());
@@ -454,7 +456,13 @@ int main(int argc, char** argv) {
 						|| (v2 = anchor.get(col2, row2)) == aprops.nodata() || std::isnan(v2))
 					continue;
 						
-				rdiff.set(col1, row1, v2 - v1);
+				rdiff.set(col1 / resample, row1 / resample, rdiff.get(col1 / resample, row1 / resample) + v2 - v1);
+			}
+		}
+
+		for(int row = 0; row < rprops.rows(); ++row) {
+			for(int col = 0; col < rprops.cols(); ++col) {
+				rdiff.set(col, row, rdiff.get(col, row) / (resample * resample));
 			}
 		}
 	}
@@ -475,6 +483,8 @@ int main(int argc, char** argv) {
 
 		// Calculate the search radius in columns.
 		int size = std::ceil((radius * 2) / std::abs(rdiff.props().resX()));
+		if(resample > 1)
+			size = size / resample + 1;
 		if(size % 2 == 0)
 			size++;
 
