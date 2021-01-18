@@ -179,7 +179,7 @@ void ndMask(Band<float>& rast, Band<uint8_t>& mask) {
  * \param cols The number of columns.
  * \param rows The number of rows.
  */
-void process(const std::vector<bool>* mask, std::vector<bool>* filled,
+void process(const std::vector<bool>* mask, std::vector<bool>* filled, std::mutex* fmtx,
 		const std::vector<std::pair<int, int>>* kernel,
 		std::mutex* mtx, int* row, int cols, int rows) {
 
@@ -228,7 +228,7 @@ void process(const std::vector<bool>* mask, std::vector<bool>* filled,
 			}
 		}
 	}
-	std::lock_guard<std::mutex> lk(*mtx);
+	std::lock_guard<std::mutex> lk(*fmtx);
 	for(const int& r : rowsfilled) {
 		for(int c = 0; c < cols; ++c) {
 			if(filled_.at(r * cols + c))
@@ -278,12 +278,12 @@ void hullMask(Band<float>& rast, Band<uint8_t>& mask, double alpha) {
 	}
 
 	// Run the hull generation in parallel.
-	int t = std::thread::hardware_concurrency();
+	int t = 4; //std::thread::hardware_concurrency();
 	int row = 0;
-	std::mutex mtx;
+	std::mutex mtx, fmtx;
 	std::vector<std::thread> threads;
 	for(int i = 0; i < t; ++i)
-		threads.emplace_back(process, &msk, &filled, &k, &mtx, &row, cols, rows);
+		threads.emplace_back(process, &msk, &filled, &fmtx, &k, &mtx, &row, cols, rows);
 	for(int i = 0; i < t; ++i) {
 		if(threads[i].joinable())
 			threads[i].join();
@@ -309,7 +309,7 @@ int main(int argc, char** argv) {
 	std::string maskfile;
 	bool saveMask = false;
 	int band = 1;
-	float maxarea = geo::maxvalue<float>();
+	float maxarea = 0;
 	int mode = 0;
 	bool noEdges = true;
 	int state = 0;
@@ -371,6 +371,7 @@ int main(int argc, char** argv) {
 
 	// Load the input raster.
 	Band<float> inrast(infile, band - 1 , false, true);
+	inrast.fixNaNs();
 
 	// Configure the output raster and write the input to it.
 	Band<float> outrast(outfile, inrast.props(), true);
@@ -412,14 +413,8 @@ int main(int argc, char** argv) {
 
 	// Calculate the maximum void fill area (pixels)
 	// from the resolution (map units).
-	int maxpxarea;
-	double q = maxarea / geo::sq(mprops.resX());
-	if(q > (double) geo::maxvalue<int>()) {
-		maxpxarea = geo::maxvalue<int>();
-	} else {
-		maxpxarea = (int) q;
-	}
-	if(maxpxarea < 1) maxpxarea = 1;
+	size_t maxpxarea = maxarea <= 0 ? geo::maxvalue<size_t>() : (size_t) (maxarea / geo::sq(mprops.resX()) + 1);
+	g_debug("Max fill area (px): " << maxpxarea);
 
 	// Do it!
 	int statusStep = std::max(1, rows / 10);
@@ -435,7 +430,7 @@ int main(int argc, char** argv) {
 			// Fill the target region with 2.
 			Band<uint8_t>::floodFill(col, row, op1, false, &cmin, &rmin, &cmax, &rmax, &area);
 
-			if(area >= maxpxarea) {
+			if((size_t) area >= maxpxarea) {
 				// The filled area was too large. Ignore it by setting it to 3.
 				Band<uint8_t>::floodFill(col, row, op2, false, &cmin, &rmin, &cmax, &rmax, &area);
 			} else {

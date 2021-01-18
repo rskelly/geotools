@@ -29,6 +29,7 @@ bool loadRasters(const std::string& outfile, const std::vector<std::string>& fil
 	// Create the list of bands to load.
 	for(size_t i = 0; i < (size_t) count; ++i) {
 		rasters.emplace_back(new Band<float>(files[i], bands[i] - 1, false, mapped));
+		rasters.front()->fixNaNs();
 		if(i == 0)
 			props = rasters.front()->props();
 		bounds.extend(props.bounds());
@@ -289,6 +290,7 @@ int main(int argc, char** argv) {
 	g_debug("Loading target raster.");
 	{
 		Band<float> target(targetFile, targetBand - 1, false, mapped);
+		target.fixNaNs();
 		oprops = target.props();
 		oprops.setWritable(true);
 		oprops.setBands(1);
