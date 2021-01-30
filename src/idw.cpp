@@ -60,6 +60,7 @@ void usage() {
 			"                    the bounds of the output raster.\n"
 			" -t <raster>        A template raster. Supercedes the resolution, projection,"
 			"                    srid and buffer parameters.\n"
+			" -x <type>          Method. idw, dw.\n"
 			" -h                 If there's a header in the csv point file, use this switch.\n\n"
 			" -m <smooth>        The smoothing parameter. If not given or less than or equal to zero, \n"
 			"                    the number of input points is used.\n"
@@ -90,6 +91,7 @@ int main(int argc, char** argv) {
 	double smooth = 0;				// The smoothing parameter for the bivariate spline.
 	bool csv = false;
 	double decimate = 1;
+	std::string method = "idw";
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
@@ -109,6 +111,8 @@ int main(int argc, char** argv) {
 			smooth = atof(argv[++i]);
 			if(smooth < 0)
 				smooth = 0;
+		} else if(arg == "-x") {
+			method = argv[++i];
 		} else if(arg == "-d") {
 			decimate = 1. / atof(argv[++i]);
 		} else {
@@ -226,6 +230,15 @@ int main(int argc, char** argv) {
 
 	}
 
+	int meth = 0;
+	if(method == "idw") {
+		meth = 1;
+	} else if(method == "dw") {
+		meth = 2;
+	} else {
+		g_runerr("Unknown method " << method);
+	}
+
 	if(csv) {
 
 		std::ofstream csv(args[2]);
@@ -269,18 +282,33 @@ int main(int argc, char** argv) {
 			for(int c = 0; c < cols; ++c) {
 				double x = props.toX(c);
 				double y = props.toY(r);
-				double s = 0;
-				double w = 0;
-				for(size_t j = 0; j < pts.size(); ++j) {
-					double d0 = std::sqrt(std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0));
-					double w0 = norm * std::exp(-0.5 * std::pow(d0 / sigma, 2.0));
-					s += pts[j].z() * w0;
-					w += w0;
-				}
-				if(w != 0) {
-					outgrid.set(x, y, s / w);
-				} else {
-					outgrid.set(x, y, props.nodata());
+				if(meth == 1) {
+					double s = 0;
+					double w = 0;
+					for(size_t j = 0; j < pts.size(); ++j) {
+						double d0 = std::sqrt(std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0));
+						double w0 = norm * std::exp(-0.5 * std::pow(d0 / sigma, 2.0));
+						s += pts[j].z() * w0;
+						w += w0;
+					}
+					if(w != 0) {
+						outgrid.set(x, y, s / w);
+					} else {
+						outgrid.set(x, y, props.nodata());
+					}
+				} else if(meth == 2) {
+					double s = 0;
+					double w = 0;
+					for(size_t j = 0; j < pts.size(); ++j) {
+						double d0 = 1.0 / std::sqrt(std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0));
+						s += pts[j].z() * d0;
+						w += d0;
+					}
+					if(w != 0) {
+						outgrid.set(x, y, s / w);
+					} else {
+						outgrid.set(x, y, props.nodata());
+					}
 				}
 			}
 		}
