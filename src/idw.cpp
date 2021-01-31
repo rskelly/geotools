@@ -60,7 +60,8 @@ void usage() {
 			"                    the bounds of the output raster.\n"
 			" -t <raster>        A template raster. Supercedes the resolution, projection,"
 			"                    srid and buffer parameters.\n"
-			" -x <type>          Method. idw, dw.\n"
+			" -x <type>          Method. idw, dw, gauss.\n"
+			" -r <radius>        The std deviation to use with gauss. Others in future.\n"
 			" -h                 If there's a header in the csv point file, use this switch.\n\n"
 			" -m <smooth>        The smoothing parameter. If not given or less than or equal to zero, \n"
 			"                    the number of input points is used.\n"
@@ -92,6 +93,7 @@ int main(int argc, char** argv) {
 	bool csv = false;
 	double decimate = 1;
 	std::string method = "idw";
+	double radius = 0;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
@@ -113,6 +115,8 @@ int main(int argc, char** argv) {
 				smooth = 0;
 		} else if(arg == "-x") {
 			method = argv[++i];
+		} else if(arg == "-r") {
+			radius = atof(argv[++i]);
 		} else if(arg == "-d") {
 			decimate = 1. / atof(argv[++i]);
 		} else {
@@ -235,6 +239,8 @@ int main(int argc, char** argv) {
 		meth = 1;
 	} else if(method == "dw") {
 		meth = 2;
+	} else if(method == "gauss") {
+		meth = 3;
 	} else {
 		g_runerr("Unknown method " << method);
 	}
@@ -268,14 +274,12 @@ int main(int argc, char** argv) {
 		props.setDataType(DataType::Float32);
 		props.setWritable(true);
 		props.setBands(1);
+		props.setDriver("");
 
 		Band<float> outgrid(args[2], props);
 
 		int cols = props.cols();
 		int rows = props.rows();
-
-		double sigma = 500.0;
-		double norm = 1.0 / (sigma * std::sqrt(2 * M_PI));
 
 		for(int r = 0; r < rows; ++r) {
 			std::cout << "Row " << r << " of " << rows << "\n";
@@ -283,28 +287,58 @@ int main(int argc, char** argv) {
 				double x = props.toX(c);
 				double y = props.toY(r);
 				if(meth == 1) {
+					// IDW
+					double s = 0;
+					double w = 0;
+					for(size_t j = 0; j < pts.size(); ++j) {
+						double d0 = 0;
+						if(radius > 0) {
+							d0 = 1.0 / std::pow(std::sqrt(
+								(std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0))
+							), radius);
+						} else{
+							d0 = 1.0 / (std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0));
+						}
+						s += pts[j].z() * d0;
+						w += d0;
+					}
+					if(w) {
+						outgrid.set(x, y, s / w);
+					} else {
+						outgrid.set(x, y, props.nodata());
+					}
+				} else if(meth == 2) {
+					// DW
 					double s = 0;
 					double w = 0;
 					for(size_t j = 0; j < pts.size(); ++j) {
 						double d0 = std::sqrt(std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0));
-						double w0 = norm * std::exp(-0.5 * std::pow(d0 / sigma, 2.0));
-						s += pts[j].z() * w0;
-						w += w0;
+						if(radius > 0) {
+							d0 = 1.0 - std::max(0.0, std::min(1.0, d0 / radius));
+						} else {
+							d0 = 1.0 / d0;
+						}
+						s += pts[j].z() * d0;
+						w += d0;
 					}
 					if(w != 0) {
 						outgrid.set(x, y, s / w);
 					} else {
 						outgrid.set(x, y, props.nodata());
 					}
-				} else if(meth == 2) {
+				} else if(meth == 3) {
+					// GAUSS
 					double s = 0;
 					double w = 0;
+					double q = 1.0 / (radius * std::sqrt(2.0 * M_PI));
+					double r = radius * radius;
 					for(size_t j = 0; j < pts.size(); ++j) {
-						double d0 = 1.0 / std::sqrt(std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0));
-						s += pts[j].z() * d0;
-						w += d0;
+						double d0 = std::pow(pts[j].x() - x, 2.0) + std::pow(pts[j].y() - y, 2.0);
+						double v = q * std::exp(-0.5 * (d0 / r));
+						s += pts[j].z() * v;
+						w += v;
 					}
-					if(w != 0) {
+					if(w) {
 						outgrid.set(x, y, s / w);
 					} else {
 						outgrid.set(x, y, props.nodata());
