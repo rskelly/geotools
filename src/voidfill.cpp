@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 
+#include "util.hpp"
 #include "grid.hpp"
 
 using namespace geo::grid;
@@ -20,7 +21,9 @@ void usage() {
 			<< " -e               Fill pixels connected to edges. Default off.\n"
 			<< " -d  <mode>       Mode: 0=min, 1=mean, 2=median, 3=max. Default 0.\n"
 			<< " -n  <n>          The radius of the alpha disc. Implies use of concave hull. Overrides -e.\n"
-			<< " -f               Force the overwriting of existing files.\n";
+			<< " -f               Force the overwriting of existing files.\n"
+			<< " -p <x,y[,x,y]>   Define (a) point(s) to start filling from in projected units.\n"
+			<< "                  Nothing else will be filled.\n";
 }
 
 /**
@@ -254,7 +257,7 @@ void hullMask(Band<float>& rast, Band<uint8_t>& mask, double alpha) {
 	float nd = rast.props().nodata();
 	int cols = rast.props().cols();
 	int rows = rast.props().rows();
-	int rad = (int) geo::sq(std::ceil(std::abs(alpha / rast.props().resX())));
+	int rad = (int) std::ceil(std::abs(alpha / rast.props().resX()));
 
 	// A fast mask for edge-connected null pixels.
 	std::vector<bool> msk(cols * rows);
@@ -272,13 +275,13 @@ void hullMask(Band<float>& rast, Band<uint8_t>& mask, double alpha) {
 	std::vector<std::pair<int, int>> k;
 	for(int rr = -rad; rr < rad + 1; ++rr) {
 		for(int cc = -rad; cc < rad + 1; ++cc) {
-			if(geo::sq(rr) + geo::sq(cc) <= rad)
+			if(geo::sq(rr) + geo::sq(cc) <= rad * rad)
 				k.emplace_back(cc, rr);
 		}
 	}
 
 	// Run the hull generation in parallel.
-	int t = 4; //std::thread::hardware_concurrency();
+	int t = 8; //std::thread::hardware_concurrency();
 	int row = 0;
 	std::mutex mtx, fmtx;
 	std::vector<std::thread> threads;
@@ -315,7 +318,8 @@ int main(int argc, char** argv) {
 	int state = 0;
 	float n = 0;
 	bool force = false;
-
+	std::vector<std::pair<float, float>> points;
+	
 	for(int i = 1; i < argc; ++i) {
 		std::string v = argv[i];
 		if(v == "-b") {
@@ -330,6 +334,13 @@ int main(int argc, char** argv) {
 			force = true;
 		} else if(v == "-e") {
 			noEdges = false;
+		} else if(v == "-p") {
+			std::vector<std::string> parts;
+			geo::util::split(std::back_inserter(parts), argv[++i], ",");
+			for(size_t i = 0; i < parts.size(); i += 2) {
+				if(parts.size() > i + 1) 
+					points.emplace_back(atof(parts[i].c_str()), atof(parts[i + 1].c_str()));
+			}
 		} else if(state == 0) {
 			infile = v;
 			++state;
@@ -399,6 +410,38 @@ int main(int argc, char** argv) {
 	geo::grid::TargetFillOperator<uint8_t, uint8_t> op2(&mask, &mask, 2, 3); // Mark for filling (2 --> 3)
 	int cmin = 0, cmax = 0, rmin = 0, rmax = 0, area = 0;
 
+	// Calculate the maximum void fill area (pixels)
+	// from the resolution (map units).
+	size_t maxpxarea = maxarea <= 0 ? geo::maxvalue<size_t>() : (size_t) (maxarea / geo::sq(mprops.resX()) + 1);
+	g_debug("Max fill area (px): " << maxpxarea);
+		
+	if(!points.empty()) {
+
+		ndMask(inrast, mask);
+
+		for(const std::pair<float, float>& pt : points) {
+			float x = pt.first;
+			float y = pt.second;
+			g_debug("Filling from point " << x << ", " << y);
+		
+			int col = inrast.props().toCol(x);
+			int row = inrast.props().toRow(y);
+
+			// Fill the target region with 2.
+			Band<uint8_t>::floodFill(col, row, op1, false, &cmin, &rmin, &cmax, &rmax, &area);
+
+			if((size_t) area >= maxpxarea) {
+				// The filled area was too large. Ignore it by setting it to 3.
+				Band<uint8_t>::floodFill(col, row, op2, false, &cmin, &rmin, &cmax, &rmax, &area);
+			} else {
+				// Fill the voids.
+				fillVoids(mask, inrast, outrast, cmin, rmin, cmax, rmax, mode);
+			}
+		}
+
+		return 0;
+	}
+
 	if(n > 0){
 		// Build concave hull to produce mask.
 		g_debug("Building concave hull mask.");
@@ -410,11 +453,6 @@ int main(int argc, char** argv) {
 	} else {
 		g_debug("Filling to edges.");
 	}
-
-	// Calculate the maximum void fill area (pixels)
-	// from the resolution (map units).
-	size_t maxpxarea = maxarea <= 0 ? geo::maxvalue<size_t>() : (size_t) (maxarea / geo::sq(mprops.resX()) + 1);
-	g_debug("Max fill area (px): " << maxpxarea);
 
 	// Do it!
 	int statusStep = std::max(1, rows / 10);
