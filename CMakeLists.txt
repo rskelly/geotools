@@ -142,6 +142,16 @@ if (FULL_BUILD)
 
 endif (FULL_BUILD)
 
+file(GLOB ALGLIB_SRC src/alglib/*.cpp)
+set (alglibsrc ${ALGLIB_SRC})
+add_library (alglibobj OBJECT ${alglibsrc})
+target_compile_features(alglibobj PUBLIC cxx_std_17)
+set_target_properties (alglibobj PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions (alglibobj PRIVATE DLL_EXPORTS=1)
+add_library (alglib SHARED $<TARGET_OBJECTS:alglibobj>)
+set (ALGLIB alglib)
+
+
 add_executable (pc2grid src/pc2grid.cpp libgeo/src/geo.cpp)
 target_compile_features(pc2grid PUBLIC cxx_std_17)
 target_link_libraries (pc2grid geoutil geogrid geopc ${GEOS_LIBRARY} ${PDAL_LIBRARIES})
@@ -168,7 +178,7 @@ target_link_libraries (srtmlakes geoutil geogrid)
 
 add_executable (idw src/idw.cpp)
 target_compile_features(idw PUBLIC cxx_std_17)
-target_link_libraries (idw geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+target_link_libraries (idw geoutil geogrid ${ALGLIB} ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
 if (FULL_BUILD)
 

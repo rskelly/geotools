@@ -11,6 +11,7 @@
 #include <fstream>
 #include <algorithm>
 
+#include "alglib/interpolation.h"
 #include "util.hpp"
 #include "grid.hpp"
 
@@ -60,7 +61,7 @@ void usage() {
 			"                    the bounds of the output raster.\n"
 			" -t <raster>        A template raster. Supercedes the resolution, projection,"
 			"                    srid and buffer parameters.\n"
-			" -x <type>          Method. idw, dw, gauss.\n"
+			" -x <type>          Method. idw, dw, gauss, rbf.\n"
 			" -r <radius>        The std deviation to use with gauss. Others in future.\n"
 			" -h                 If there's a header in the csv point file, use this switch.\n\n"
 			" -m <smooth>        The smoothing parameter. If not given or less than or equal to zero, \n"
@@ -234,6 +235,8 @@ int main(int argc, char** argv) {
 
 	}
 
+	alglib::rbfmodel rm;
+
 	int meth = 0;
 	if(method == "idw") {
 		meth = 1;
@@ -241,6 +244,21 @@ int main(int argc, char** argv) {
 		meth = 2;
 	} else if(method == "gauss") {
 		meth = 3;
+	} else if(method == "rbf") {
+		meth = 4;
+		alglib::rbfcreate(2, 1, rm);
+		alglib::real_2d_array xy;
+		double lst[pts.size() * 3];
+		for(size_t i = 0; i < pts.size(); ++i) {
+			lst[(i * 3) + 0] = pts[i].x();
+			lst[(i * 3) + 1] = pts[i].y();
+			lst[(i * 3) + 2] = pts[i].z();
+		}
+		xy.setcontent(pts.size(), 3, lst);
+		alglib::rbfsetpoints(rm, xy, pts.size());
+		alglib::rbfsetalgohierarchical(rm, 1.0, 3, 0.0);
+		alglib::rbfreport rep;
+		alglib::rbfbuildmodel(rm, rep);
 	} else {
 		g_runerr("Unknown method " << method);
 	}
@@ -343,6 +361,8 @@ int main(int argc, char** argv) {
 					} else {
 						outgrid.set(x, y, props.nodata());
 					}
+				} else if(meth == 4) {
+					outgrid.set(x, y, alglib::rbfcalc2(rm, x, y));
 				}
 			}
 		}
