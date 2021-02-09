@@ -182,10 +182,10 @@ target_link_libraries (idw geoutil geogrid ${ALGLIB} ${GDAL_LIBRARIES} ${GEOS_LI
 
 if (FULL_BUILD)
 
-	install(TARGETS idw voidfill pc2grid rastermerge tilemerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install(TARGETS idw ${ALGLIB} voidfill pc2grid rastermerge tilemerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 else ()
 
-	install(TARGETS idw voidfill pc2grid pcnorm map2raw tilemerge RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install(TARGETS idw ${ALGLIB} voidfill pc2grid pcnorm map2raw tilemerge RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 endif ()
