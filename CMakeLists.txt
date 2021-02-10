@@ -134,9 +134,6 @@ if (FULL_BUILD)
 	add_executable (splinesmooth src/splinesmooth.cpp)
 	target_link_libraries (splinesmooth geoutil geogrid fitpack_mod ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
-	add_executable (rastermerge src/rastermerge.cpp)
-	target_link_libraries (rastermerge geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
-
 	add_executable (polygonize src/polygonize.cpp)
 	target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
 
@@ -180,12 +177,16 @@ add_executable (idw src/idw.cpp)
 target_compile_features(idw PUBLIC cxx_std_17)
 target_link_libraries (idw geoutil geogrid ${ALGLIB} ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
+add_executable (rastermerge src/rastermerge.cpp)
+target_compile_features(idw PUBLIC cxx_std_17)
+target_link_libraries (rastermerge geoutil geogrid ${ALGLIB} ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+
 if (FULL_BUILD)
 
-	install(TARGETS idw ${ALGLIB} voidfill pc2grid rastermerge tilemerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install (TARGETS idw ${ALGLIB} voidfill pc2grid rastermerge tilemerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 else ()
 
-	install(TARGETS idw ${ALGLIB} voidfill pc2grid pcnorm map2raw tilemerge RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install (TARGETS idw ${ALGLIB} voidfill pc2grid rastermerge pcnorm map2raw tilemerge RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 endif ()
