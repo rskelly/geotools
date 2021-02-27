@@ -161,14 +161,12 @@ void processIDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx,
 				// The sum and weight variables.
 				float s = 0;
 				float w = 0;
-				// If true, exit the loops.
-				bool halt = false;
 				// Col and row in the difference raster.
 				int scol = sprops.toCol(dprops.toX(col));
-				int srow = sprops.toRow(dprops.toY(row));
+				int srow = sprops.toRow(dprops.toY(row + b));
 				nearest = geo::maxvalue<float>();
 				// Run the circular kernel.
-				for(int r = -size; !halt && r < size+ 1; ++r) {
+				for(int r = -size; r < size + 1; ++r) {
 					for(int c = -size; c < size + 1; ++c) {
 						// Calculate the kernel pixel.
 						int cc = scol + c;
@@ -179,12 +177,10 @@ void processIDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx,
 						if(d <= maxrad
 								&& sprops.hasCell(cc, rr)
 								&& (v0 = src->get(cc, rr)) != sprops.nodata()) {
-							if(false) { //d == 0) {
-								// If the distance is zero, use the value directly and halt.
-								s = v0;
-								w = 1;
-								halt = true;
-								break;
+							if(d == 0) {
+								// If the distance is zero, use a very large weight.
+								s = v0 * 0.99999999;
+								w = 0.99999999;
 							} else {
 								// Add to sum and weight.
 								if(d < nearest)
@@ -198,7 +194,7 @@ void processIDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx,
 				}
 				// If the weight is valid, adjust the value.
 				if(w > 0) {
-					rowbuf[b * dcols + col] = v1 + (s / w) * (1.0f - nearest / maxrad);
+					rowbuf[b * dcols + col] = v1 + (s / w);// * (1.0f - nearest / maxrad);
 				} else {
 					rowbuf[b * dcols + col] = v1;
 				}
@@ -212,124 +208,13 @@ void processIDW(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx,
 	}
 }
 
-/**
- * Process inverse distance waiting.
- * \param rowq A queue of row index/block height pairs.
- * \param qmtx A mutex to protect the queue.
- * \param src The source (difference) raster.
- * \param dst The target (output) raster.
- * \param dmtx A mutex to protect the output raster.
- * \param size The search radius in pixels.
- */
-void processRBF(std::list<std::pair<int, int>>* rowq, std::mutex* qmtx,
-		Band<float>* src, Band<float>* dst, std::mutex* dmtx, int size) {
-
-	// The row index and block height.
-	int row, block;
-
-	// The source and destination properties.
-	const GridProps& sprops = src->props();
-	const GridProps& dprops = dst->props();
-
-	// Row data buffer.
-	std::vector<float> rowbuf;
-
-	// Cols and rows in the destination raster.
-	int dcols = dst->props().cols();
-	int drows = dst->props().rows();
-
-	while(!rowq->empty()) {
-		{
-			// Grab a row/block pair off the queue.
-			std::lock_guard<std::mutex> lk(*qmtx);
-			if(!rowq->empty()) {
-				std::pair<int, int>& item = rowq->front();
-				row = item.first;
-				block = item.second;
-				rowq->pop_front();
-				std::cout << "Row " << row << " of " << drows << "\n";
-			} else {
-				std::this_thread::yield();
-				continue;
-			}
-		}
-
-		// If the block size is too large, shrink it.
-		if(row + block >= drows)
-			block = drows - row;
-
-		// Resize and fill the row data buffer.
-		rowbuf.resize(dcols * block);
-		std::fill(rowbuf.begin(), rowbuf.end(), dprops.nodata());
-
-		// Squared radius for validation.
-		float maxrad = size * size;
-		float nearest;
-		// Raster values.
-		float v0, v1;
-		for(int b = 0; b < block; ++b) {
-			for(int col = 0; col < dcols; ++col) {
-				// If the destination pixel is invalid skip it.
-				if((v1 = dst->get(col, row + b)) == dprops.nodata())
-					continue;
-				// The sum and weight variables.
-				float s = 0;
-				float w = 0;
-				// If true, exit the loops.
-				bool halt = false;
-				// Col and row in the difference raster.
-				int scol = sprops.toCol(dprops.toX(col));
-				int srow = sprops.toRow(dprops.toY(row));
-				nearest = geo::maxvalue<float>();
-				// Run the circular kernel.
-				for(int r = -size; !halt && r < size+ 1; ++r) {
-					for(int c = -size; c < size + 1; ++c) {
-						// Calculate the kernel pixel.
-						int cc = scol + c;
-						int rr = srow + r;
-						// The distance from the kernel center.
-						float d = (float) (c * c + r * r);
-						// If the distance is within the max radius, and the pixel is valid, add to sum and weight.
-						if(d <= maxrad
-								&& sprops.hasCell(cc, rr)
-								&& (v0 = src->get(cc, rr)) != sprops.nodata()) {
-							if(false) { //d == 0) {
-								// If the distance is zero, use the value directly and halt.
-								s = v0;
-								w = 1;
-								halt = true;
-								break;
-							} else {
-								// Add to sum and weight.
-								if(d < nearest)
-									nearest = d;
-								float w0 = 1.0f - (d / maxrad);
-								s += v0 * w0;
-								w += w0;
-							}
-						}
-					}
-				}
-				// If the weight is valid, adjust the value.
-				if(w > 0) {
-					rowbuf[b * dcols + col] = v1 + (s / w) * (1.0f - nearest / maxrad);
-				} else {
-					rowbuf[b * dcols + col] = v1;
-				}
-			}
-		}
-
-		// Write the block to the output raster.
-		std::lock_guard<std::mutex> lk(*dmtx);
-		for(int b = 0; b < block; ++b)
-			dst->setRow(row + b, rowbuf.data() + (b * dcols));
-	}
-}
 
 int main(int argc, char** argv) {
 
 	if(argc < 6) {
 		std::cerr << "Usage: rastermerge [options] <<anchor file 1> <anchor band 1> [<anchor file 2> <anchor band 2> [...]]> <target file 2> <target band 2> <output file>\n"
+				<< " -a <value>	        The anchor file is replaced by this, the elevation of a plane. If the value is \n"
+				<< "                    -9999, the average height of the target is used.\n"
 				<< " -m <method         avg (shift by average difference), idw or rbf.\n"
 				<< " -s <size>          The radius of the window in map units. If a comma-delimited list, will make\n"
 				<< "                    multiple passes.\n"
@@ -353,6 +238,9 @@ int main(int argc, char** argv) {
 	int maskband = 0;
 	bool mapped = true;
 	std::string method;
+	bool needRadii = false;
+	double plane = 0;
+	bool hasPlane = false;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string arg(argv[i]);
@@ -361,6 +249,9 @@ int main(int argc, char** argv) {
 			geo::util::split(std::back_inserter(rad), argv[++i], ",");
 			for(const std::string& r : rad)
 				radii.push_back(atof(r.c_str()));
+		} else if(arg == "-a") {
+			plane = atof(argv[++i]);
+			hasPlane = true;
 		} else if(arg == "-m") {
 			method = argv[++i];
 		} else if(arg == "-r") {
@@ -389,13 +280,21 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	if(radii.empty())
+	if(method == "idw")
+		needRadii = true;
+
+	if(radii.empty() && needRadii)
 		g_runerr("No radii specified. Need at least one.");
-	if(radii.size() != resamples.size())
+
+	if(radii.size() != resamples.size() && needRadii)
 		g_runerr("The radius and resample lists should be the same length.");
 
-	if(method != "idw")
+	// Don't need a radius, but the list drives the loop, so need at least one element.
+	if(!needRadii) {
 		radii.resize(1);
+		if(resamples.empty())
+			resamples.push_back(1);
+	}
 
 	g_debug("Using mapped memory: " << mapped);
 
@@ -423,7 +322,18 @@ int main(int argc, char** argv) {
 	// Load the anchor rasters(s).
 	g_debug("Loading anchor raster.")
 	Band<float> anchor;	// The anchor raster.
-	loadRasters("/tmp/anchor.tif", files, bands, files.size() - 1, 1, anchor, mapped);
+	if(!hasPlane) {
+		// If no plane value is given, load anchor files.
+		loadRasters("/tmp/anchor.tif", files, bands, files.size() - 1, 1, anchor, mapped);
+	} else {
+		// Else init and fill a plane.
+		anchor.init(oprops, mapped);
+		if(std::isnan(plane) || plane == -9999.0) {
+			GridStats stats = output.stats();
+			plane = stats.mean;
+		}
+		anchor.fill(plane);
+	}
 	GridProps aprops = anchor.props();
 
 	// Load the mask raster if available.
@@ -573,8 +483,8 @@ int main(int argc, char** argv) {
 					return 1;
 				}
 
-				for(int i = 0; i < tcount; ++i)
-					threads.emplace_back(processRBF, &rowq, &qmtx, &rdiff, &output, &dmtx, size);
+//				for(int i = 0; i < tcount; ++i)
+//					threads.emplace_back(processRBF, &rowq, &qmtx, &rdiff, &output, &dmtx, size);
 
 			} else if(method == "avg") {
 
