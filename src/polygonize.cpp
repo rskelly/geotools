@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
 	std::string outfile = args[1];
 	std::string layer = args[2];
 	std::string id = "id";
-	Band<float> test(infile, band - 1, false, true);
+	Band<uint32_t> test(infile, band - 1, false, true);
 	test.polygonizeToFile(outfile, layer, id, driver, holes, dangles);
 	return 0;
 }
