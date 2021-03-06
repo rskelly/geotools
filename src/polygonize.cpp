@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
 				fieldValues.emplace_back(kv[0], kv[1]);
 				kv.clear();
 			}
-		} else if(v == "ids") {
+		} else if(v == "-ids") {
 			std::vector<std::string> ids;
 			geo::util::split(std::back_inserter(ids), argv[++i], ",");
 			for(const std::string id : ids)
