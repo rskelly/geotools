@@ -21,7 +21,9 @@ void usage() {
 			<< " -i <field>      The field to store the pixel value (id).\n"
 			<< " -g <geom>       The name of the geometry field (geom).\n"
 			<< " -v <k=v[,k=v]>  A comma-delimited list of fields and values to insert.\n"
-			<< " -m <mask image> A mask image to determine the bounds of the input.\n";
+			<< " -m <mask image> A mask image to determine the bounds of the input.\n"
+			<< " -ids <1,2,3>    A comma-delimited list of IDs to target. If given,\n"
+			<< "                 only polygons with these IDs will be extracted.\n";
 }
 
 int main(int argc, char** argv) {
@@ -44,6 +46,7 @@ int main(int argc, char** argv) {
 	std::string idField = "id";
 	std::string geomField = "geom";
 	std::vector<PolygonValue> fieldValues;
+	std::vector<int> targetIDs;
 
 	for(int i = 1; i < argc; ++i) {
 		std::string v = argv[i];
@@ -62,7 +65,13 @@ int main(int argc, char** argv) {
 			for(const std::string pair : pairs) {
 				geo::util::split(std::back_inserter(kv), pair, "=");
 				fieldValues.emplace_back(kv[0], kv[1]);
+				kv.clear();
 			}
+		} else if(v == "ids") {
+			std::vector<std::string> ids;
+			geo::util::split(std::back_inserter(ids), argv[++i], ",");
+			for(const std::string id : ids)
+				targetIDs.push_back(atoi(id.c_str()));
 		} else if(v == "-b") {
 			band = atoi(argv[++i]);
 		} else if(v == "-h") {
@@ -100,10 +109,12 @@ int main(int argc, char** argv) {
 
 	Band<uint32_t> test(infile, band - 1, false, true);
 
+	bool d3 = false;
+
 	if(std::find(dbdrivers.begin(), dbdrivers.end(), ldriver) == dbdrivers.end()) {
-		test.polygonizeToFile(outfile, layer, idField, driver, fieldValues, holes, dangles);
+		test.polygonizeToFile(outfile, layer, idField, driver, fieldValues, holes, dangles, d3, targetIDs);
 	} else {
-		test.polygonizeToTable(outfile, layer, idField, geomField, fieldValues, holes, dangles);
+		test.polygonizeToTable(outfile, layer, idField, geomField, fieldValues, holes, dangles, d3, targetIDs);
 	}
 	return 0;
 }
