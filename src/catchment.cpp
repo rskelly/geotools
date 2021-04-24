@@ -15,7 +15,7 @@
 using namespace geo::grid;
 using namespace geo::util;
 
-int main(int argc, char** argv[]) {
+int main(int, char** argv) {
 
 	std::string accumfile(argv[1]);
 	std::string outfile(argv[2]);
@@ -78,10 +78,4 @@ int main(int argc, char** argv[]) {
 			}
 		}
 	}
-
-
-		}
-	}
-
-
 }

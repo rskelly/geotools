@@ -178,6 +178,10 @@ add_executable (rastermerge src/rastermerge.cpp)
 target_compile_features(idw PUBLIC cxx_std_17)
 target_link_libraries (rastermerge geoutil geogrid ${ALGLIB} ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
 
+add_executable (catchment src/catchment.cpp)
+target_compile_features(catchment PUBLIC cxx_std_17)
+target_link_libraries (catchment geoutil geogrid ${GDAL_LIBRARIES} ${GEOS_LIBRARY})
+
 add_executable (polygonize src/polygonize.cpp)
 target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
 
