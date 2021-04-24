@@ -187,10 +187,10 @@ target_link_libraries (polygonize geoutil geogrid ${Boost_LIBRARIES})
 
 if (FULL_BUILD)
 
-	install (TARGETS idw polygonize ${ALGLIB} voidfill pc2grid rastermerge tilemerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install (TARGETS catchment idw polygonize ${ALGLIB} voidfill pc2grid rastermerge tilemerge pcnorm convolve geotools_plot geotools_reader geotools_writer geotools_stats RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 else ()
 
-	install (TARGETS idw polygonize ${ALGLIB} voidfill pc2grid rastermerge pcnorm map2raw tilemerge RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
+	install (TARGETS catchment idw polygonize ${ALGLIB} voidfill pc2grid rastermerge pcnorm map2raw tilemerge RUNTIME DESTINATION bin LIBRARY DESTINATION lib) 
 
 endif ()
