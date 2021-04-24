@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <fstream>
 
 #include "grid.hpp"
 #include "util.hpp"
@@ -19,14 +20,18 @@ int main(int, char** argv) {
 
 	std::string accumfile(argv[1]);
 	std::string outfile(argv[2]);
-	std::string ptsstr(argv[3]);
+	std::string seedfile(argv[3]);
 
 	std::vector<std::tuple<int, float, float>> pts;
 	{
+		std::ifstream seeds(seedfile);
 		std::vector<std::string> tmp;
-		geo::util::split(std::back_inserter(tmp), ptsstr, ",");
-		for(size_t i = 0; i < tmp.size(); i += 3)
-			pts.emplace_back(atoi(tmp[i].c_str()), atof(tmp[i].c_str()), atof(tmp[i + 1].c_str()));
+		std::string line;
+		while(std::getline(seeds, line)) {
+			split(std::back_inserter(tmp), line, ",");
+			for(size_t i = 0; i < tmp.size(); i += 3)
+				pts.emplace_back(atoi(tmp[i].c_str()), atof(tmp[i + 1].c_str()), atof(tmp[i + 2].c_str()));
+		}
 	}
 	if(pts.empty()) {
 		std::cerr << "No points given." << std::endl;
