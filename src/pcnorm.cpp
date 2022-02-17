@@ -324,10 +324,10 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 			// Get the barycentric z
 			double nz = bary(x, y, cx0, cy0, cz0, cx1, cy1, cz1, cx2, cy2, cz2);
 			// Write the new z value.
-			//wview->appendPoint(*view, i);
+			wview->appendPoint(*view, i);
 			//g_debug(wview->size());
-			wview->setField(pdal::Dimension::Id::X, i, x);
-			wview->setField(pdal::Dimension::Id::Y, i, y);
+			//wview->setField(pdal::Dimension::Id::X, i, x);
+			//wview->setField(pdal::Dimension::Id::Y, i, y);
 			wview->setField(pdal::Dimension::Id::Z, i, z - nz);
 
 			// Adjust bounds.
