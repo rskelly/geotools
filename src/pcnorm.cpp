@@ -5,6 +5,18 @@
  *      Author: rob
  */
 
+#include <pdal/StageFactory.hpp>
+#include <pdal/io/BufferReader.hpp>
+#include <pdal/PointTable.hpp>
+#include <pdal/PointView.hpp>
+#include <pdal/io/LasReader.hpp>
+#include <pdal/io/LasWriter.hpp>
+#include <pdal/io/LasHeader.hpp>
+#include <pdal/Options.hpp>
+#include <pdal/PointRef.hpp>
+#include <pdal/io/BufferReader.hpp>
+//#include <pdal/StreamPointTable.hpp>
+
 #include <limits>
 #include <fstream>
 
@@ -14,7 +26,64 @@
 
 using namespace geo::util;
 
-bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double res, int& cols, int& rows, std::vector<float>& grid) {
+/*
+class TestPointTable : public pdal::StreamPointTable {
+public:
+	TestPointTable(const std::string& file, pdal::PointView& view) :
+		StreamPointTable(*view.table().layout(), 0),
+		m_count(0),
+		m_file(file),
+		m_view(view) {
+		m_psize = view.table().layout()->pointSize();
+		m_buf.resize(m_psize);
+	}
+
+protected:
+	size_t m_count;
+	size_t m_psize;
+	std::string m_file;
+	std::fstream m_str;
+	std::vector<char> m_buf;
+
+	virtual void reset() override {
+		m_count = 0;
+	}
+
+	virtual char* getPoint(pdal::PointId index) override {
+		if(index >= m_count) {
+			std::fill(m_buf.begin(), m_buf.end(), 0);
+			while(index >= m_count) {
+				m_str.seekg(m_count * m_psize, std::ios::seekdir::_S_beg);
+				m_str << m_buf;
+				++m_count;
+			}
+			m_str << m_buf;
+		}
+		m_str.seekg(m_count * m_psize, std::ios::seekdir::_S_beg);
+		m_buf << m_str;
+		return m_buf.data();
+	}
+
+};
+*/
+
+
+/**
+ * \brief Build the interpolation grid.
+ *
+ * Creates a an average grid by adding the point z coordinates to each cell, then
+ * dividing by the number of points in the cell.
+ *
+ * \param infiles A list of LAS files to read.
+ * \param bounds The bounds of the grid.
+ * \param res The resolution.
+ * \param[out] cols The number of columns in the grid.
+ * \param[out] rows The number of rows in the grid.
+ * \param[out] grid The raster.
+ */
+bool buildGrid(
+		const std::vector<std::string>& infiles,
+		double* bounds, double res, int& cols, int& rows, std::vector<float>& grid) {
 
 	// Increase bounds enough to add 2 cells all around.
 	bounds[0] -= res;
@@ -23,8 +92,8 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 	bounds[3] += res;
 
 	// Get grid size.
-	cols = (int) std::ceil((bounds[1] - bounds[0]) / res);
-	rows = (int) std::ceil((bounds[3] - bounds[2]) / res);
+	cols = (int) std::ceil((bounds[2] - bounds[0]) / res);
+	rows = (int) std::ceil((bounds[3] - bounds[1]) / res);
 
 	std::vector<float> weights(cols * rows);
 	size_t count = 0;
@@ -52,14 +121,14 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 				py = pt.y();
 				pz = pt.z();
 				col = (int) (px - bounds[0]) / res;
-				row = (int) (py - bounds[2]) / res;
+				row = (int) (py - bounds[1]) / res;
 
 				for(int r = row - 1; r < row + 2; ++r) {
 					for(int c = col - 1; c < col + 2; ++c) {
 						if(c >= 0 && r >= 0 && c < cols && r < rows) {
 
 							x = bounds[0] + (c * res) + res * 0.5;
-							y = bounds[2] + (r * res) + res * 0.5;
+							y = bounds[1] + (r * res) + res * 0.5;
 							d = std::pow(x - px, 2.0) + std::pow(y - py, 2.0);
 
 							if(d > rad)
@@ -134,6 +203,21 @@ bool buildGrid(const std::vector<std::string>& infiles, double* bounds, double r
 	return true;
 }
 
+/**
+ * \brief Interpolate the z-coordinate of the given horizontal coordinate.
+ *
+ * \param x The target x-coordinate.
+ * \param y The target y-coordinate.
+ * \param x0 The first triangle x-coordinate.
+ * \param y0 The first triangle y-coordinate.
+ * \param z0 The first triangle z-coordinate.
+ * \param x1 The second triangle x-coordinate.
+ * \param y1 The second triangle y-coordinate.
+ * \param z1 The second triangle z-coordinate.
+ * \param x2 The third triangle x-coordinate.
+ * \param y2 The third triangle y-coordinate.
+ * \param z2 The third triangle z-coordinate.
+ */
 double bary(double x, double y,
 		double x0, double y0, double z0,
 		double x1, double y1, double z1,
@@ -144,55 +228,128 @@ double bary(double x, double y,
 	return (w0 * z0) + (w1 * z1) + (w2 * z2);
 }
 
-void normalize(const std::vector<std::string>& infiles, geo::pc::PCWriter& wtr,
+/**
+ * \brief Normalize the given LAS files.
+ *
+ * \param infiles The list of input files.
+ * \param wtr The point cloud writer instance.
+ * \param bounds The grid bounds.
+ * \param res The resolution.
+ * \param cols The number of columns in the grid.
+ * \param rows The number of rows in the grid.
+ * \param grid The grid.
+ */
+void normalize(const std::vector<std::string>& infiles, const std::string& outfile,
 		double* bounds, double res, int cols, int /*rows*/, std::vector<float>& grid) {
 
 	bounds[4] = std::numeric_limits<double>::max();
 	bounds[5] = std::numeric_limits<double>::lowest();
 
-	double z, px, py, pz, cx0, cy0, cz0, cx1, cy1, cz1, cx2, cy2, cz2, nz;
-	int col, row, col0, row0;
+	pdal::PointTable table;
+	pdal::LasReader reader;
+	pdal::PointViewSet viewset;
+	pdal::PointViewPtr view;
+	pdal::Dimension::IdList dims;
+	pdal::LasHeader hdr;
 
+	pdal::Stage* writer;
+	pdal::PointTable wtable;
+
+	size_t total_size = 0;
 	size_t num = 0;
 	for(const std::string& infile : infiles) {
 		std::cout << ++num << " of " << infiles.size() << "\n";
-		geo::pc::PCFile rdr(infile);
-		geo::pc::Point pt;
-		while(rdr.next(pt)) {
-			px = pt.x();
-			py = pt.y();
-			pz = pt.z();
+		pdal::Options opts;
+		opts.add(pdal::Option("filename", infile));
+		reader.setOptions(opts);
+		reader.prepare(table);
+		hdr = reader.header();
+		total_size += hdr.pointCount();
+
+		if(num == 1) {
+			dims = table.layout()->dims();
+			for(pdal::Dimension::Id id : dims)
+				wtable.layout()->registerDim(id, table.layout()->dimType(id));
+			///table.layout()->registerDim(pdal::Dimension::Id::X);
+			//wtable.layout()->registerDim(pdal::Dimension::Id::Y);
+			//wtable.layout()->registerDim(pdal::Dimension::Id::Z);
+		}
+	}
+
+	pdal::PointViewPtr wview(new pdal::PointView(wtable));
+
+	num = 0;
+	for(const std::string& infile : infiles) {
+		std::cout << ++num << " of " << infiles.size() << "\n";
+
+		pdal::Options opts;
+		opts.add(pdal::Option("filename", infile));
+		reader.setOptions(opts);
+		reader.prepare(table);
+		hdr = reader.header();
+		size_t size = hdr.pointCount();
+
+		viewset = reader.execute(table);
+		view = *viewset.begin();
+		dims = view->dims();
+		view->size();
+
+		for(size_t i = 0; i < size; ++i) {
+
+			double x = view->getFieldAs<double>(pdal::Dimension::Id::X, i);
+			double y = view->getFieldAs<double>(pdal::Dimension::Id::Y, i);
+			double z = view->getFieldAs<double>(pdal::Dimension::Id::Z, i);
+
 			// Point's home cell.
-			col = (int) (px - bounds[0]) / res;
-			row = (int) (py - bounds[2]) / res;
+			int col = (int) (x - bounds[0]) / res;
+			int row = (int) (y - bounds[1]) / res;
 			// Center of home cell.
-			cx0 = bounds[0] + (col * res) + res * 0.5;
-			cy0 = bounds[2] + (row * res) + res * 0.5;
-			cz0 = grid[row * cols + col];
+			int cx0 = bounds[0] + (col * res) + res * 0.5;
+			int cy0 = bounds[1] + (row * res) + res * 0.5;
+			int cz0 = grid[row * cols + col];
 			// Cell offsets.
-			col0 = px < cx0 ? col - 1 : col + 1;
-			row0 = py < cy0 ? row - 1 : row + 1;
+			int col0 = x < cx0 ? col - 1 : col + 1;
+			int row0 = y < cy0 ? row - 1 : row + 1;
 			// Centers of offset cells.
-			cx1 = bounds[0] + (col0 * res) + res * 0.5;
-			cy1 = bounds[2] + (row * res) + res * 0.5;
-			cz1 = grid[row * cols + col0];
-			cx2 = bounds[0] + (col * res) + res * 0.5;
-			cy2 = bounds[2] + (row0 * res) + res * 0.5;
-			cz2 = grid[row0 * cols + col];
+			int cx1 = bounds[0] + (col0 * res) + res * 0.5;
+			int cy1 = bounds[1] + (row * res) + res * 0.5;
+			int cz1 = grid[row * cols + col0];
+			int cx2 = bounds[0] + (col * res) + res * 0.5;
+			int cy2 = bounds[1] + (row0 * res) + res * 0.5;
+			int cz2 = grid[row0 * cols + col];
 
 			if(cz0 == -9999.0 || cz1 == -9999.0 || cz2 == -9999.0)
 				continue;
 
 			// Get the barycentric z
-			nz = bary(px, py, cx0, cy0, cz0, cx1, cy1, cz1, cx2, cy2, cz2);
-			// Make point and write it.
-			pt.z((z = pz - nz));
-			wtr.addPoint(pt);
+			double nz = bary(x, y, cx0, cy0, cz0, cx1, cy1, cz1, cx2, cy2, cz2);
+			// Write the new z value.
+			//wview->appendPoint(*view, i);
+			//g_debug(wview->size());
+			wview->setField(pdal::Dimension::Id::X, i, x);
+			wview->setField(pdal::Dimension::Id::Y, i, y);
+			wview->setField(pdal::Dimension::Id::Z, i, z - nz);
+
 			// Adjust bounds.
 			if(z < bounds[4]) bounds[4] = z;
 			if(z > bounds[5]) bounds[5] = z;
 		}
 	}
+
+	pdal::BufferReader brdr;
+	brdr.addView(wview);
+
+	pdal::StageFactory fact;
+	pdal::Options opts;
+	opts.add("filename", outfile);
+	writer = fact.createStage("writers.las");
+	writer->setInput(brdr);
+	writer->setOptions(opts);
+	writer->prepare(wtable);
+	writer->execute(wtable);
+
+	//writer->setSpatialReference(reader.getSpatialReference());
+	//wview.reset(new pdal::PointView(wtable));
 }
 
 void usage() {
@@ -261,7 +418,8 @@ int main(int argc, char** argv) {
 	std::cout << "Computing bounds\n";
 	for(const std::string& infile : infiles) {
 		geo::pc::PCFile rdr(infile);
-		rdr.bounds(bounds);
+		rdr.init();
+		rdr.fileBounds(bounds);
 	}
 
 	double gbounds[6];
@@ -275,10 +433,8 @@ int main(int argc, char** argv) {
 	if(!buildGrid(infiles, gbounds, resolution, cols, rows, grid))
 		return 1;
 
-	geo::pc::PCWriter wtr(outfile, infiles.front());
-
 	std::cout << "Normalizing\n";
-	normalize(infiles, wtr, gbounds, resolution, cols, rows, grid);
+	normalize(infiles, outfile, gbounds, resolution, cols, rows, grid);
 
 	return 0;
 }
