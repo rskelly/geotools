@@ -250,6 +250,7 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 	pdal::PointViewSet viewset;
 	pdal::PointViewPtr view;
 	pdal::Dimension::IdList dims;
+	std::unordered_map<pdal::Dimension::Id, pdal::Dimension::Type> types;
 	pdal::LasHeader hdr;
 
 	pdal::Stage* writer;
@@ -268,11 +269,11 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 
 		if(num == 1) {
 			dims = table.layout()->dims();
-			for(pdal::Dimension::Id id : dims)
+			for(pdal::Dimension::Id id : dims) {
 				wtable.layout()->registerDim(id, table.layout()->dimType(id));
-			///table.layout()->registerDim(pdal::Dimension::Id::X);
-			//wtable.layout()->registerDim(pdal::Dimension::Id::Y);
-			//wtable.layout()->registerDim(pdal::Dimension::Id::Z);
+				const pdal::Dimension::Detail* d = table.layout()->dimDetail(id);
+				types[id] = d->type();
+			}
 		}
 	}
 
@@ -293,6 +294,8 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 		view = *viewset.begin();
 		dims = view->dims();
 		view->size();
+
+		std::vector<char> buf(1024);
 
 		for(size_t i = 0; i < size; ++i) {
 
@@ -324,11 +327,15 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 			// Get the barycentric z
 			double nz = bary(x, y, cx0, cy0, cz0, cx1, cy1, cz1, cx2, cy2, cz2);
 			// Write the new z value.
-			wview->appendPoint(*view, i);
-			//g_debug(wview->size());
-			//wview->setField(pdal::Dimension::Id::X, i, x);
-			//wview->setField(pdal::Dimension::Id::Y, i, y);
-			wview->setField(pdal::Dimension::Id::Z, i, z - nz);
+
+			for(pdal::Dimension::Id id : dims) {
+				if(id == pdal::Dimension::Id::Z) {
+					wview->setField(pdal::Dimension::Id::Z, i, z - nz);
+				} else {
+					view->getRawField(id, i, (void*) buf.data());
+					wview->setField(id, types[id], i, (const void*) buf.data());
+				}
+			}
 
 			// Adjust bounds.
 			if(z < bounds[4]) bounds[4] = z;
@@ -340,23 +347,21 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 	brdr.addView(wview);
 
 	pdal::StageFactory fact;
-	pdal::Options opts;
-	opts.add("filename", outfile);
+	pdal::Options wopts;
+	wopts.add("filename", outfile);
 	writer = fact.createStage("writers.las");
 	writer->setInput(brdr);
-	writer->setOptions(opts);
+	writer->setOptions(wopts);
 	writer->prepare(wtable);
 	writer->execute(wtable);
 
-	//writer->setSpatialReference(reader.getSpatialReference());
-	//wview.reset(new pdal::PointView(wtable));
 }
 
 void usage() {
 	std::cerr << "Usage: pcnorm [options] <outfile (.las)> <resolution> <infile(s) (.las)>\n"
 			<< " -f   Force overwrite of existing files.\n";
-
 }
+
 int main(int argc, char** argv) {
 
 	if(argc < 4) {
