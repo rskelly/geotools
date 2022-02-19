@@ -86,10 +86,10 @@ bool buildGrid(
 		double* bounds, double res, int& cols, int& rows, std::vector<float>& grid) {
 
 	// Increase bounds enough to add 2 cells all around.
-	bounds[0] -= res;
-	bounds[1] += res;
-	bounds[2] -= res;
-	bounds[3] += res;
+	bounds[0] -= res * 2;
+	bounds[1] += res * 2;
+	bounds[2] -= res * 2;
+	bounds[3] += res * 2;
 
 	// Get grid size.
 	cols = (int) std::ceil((bounds[2] - bounds[0]) / res);
