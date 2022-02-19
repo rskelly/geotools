@@ -80,10 +80,13 @@ protected:
  * \param[out] cols The number of columns in the grid.
  * \param[out] rows The number of rows in the grid.
  * \param[out] grid The raster.
+ * \param saveGrid Save the raw grid to a local file called pcnorm.grid
+ * \return True if nothing screws up.
  */
 bool buildGrid(
 		const std::vector<std::string>& infiles,
-		double* bounds, double res, int& cols, int& rows, std::vector<float>& grid) {
+		double* bounds, double res, int& cols, int& rows, std::vector<float>& grid,
+		bool saveGrid) {
 
 	// Increase bounds enough to add 2 cells all around.
 	bounds[0] -= res * 2;
@@ -199,6 +202,11 @@ bool buildGrid(
 
 			grid[i] = s / w;
 		}
+	}
+	if(saveGrid) {
+		std::ofstream grd("pcnorm.grid", std::ios::binary);
+		for(char g : grid)
+			grd << g;
 	}
 	return true;
 }
@@ -373,12 +381,15 @@ int main(int argc, char** argv) {
 	std::vector<std::string> infiles;
 	double resolution = 0;
 	bool force = false;
+	bool saveGrid = false;
 
 	int mode = 0;
 	for(int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
 		if(arg == "-f") {
 			force = true;
+		} else if(arg == "-g") {
+			saveGrid = true;
 		} else if(mode == 0) {
 			++mode;
 			outfile = arg;
@@ -435,7 +446,7 @@ int main(int argc, char** argv) {
 	std::vector<float> grid;
 
 	std::cout << "Building grid\n";
-	if(!buildGrid(infiles, gbounds, resolution, cols, rows, grid))
+	if(!buildGrid(infiles, gbounds, resolution, cols, rows, grid, saveGrid))
 		return 1;
 
 	std::cout << "Normalizing\n";
