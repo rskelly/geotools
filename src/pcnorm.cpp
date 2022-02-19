@@ -330,7 +330,11 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 
 			for(pdal::Dimension::Id id : dims) {
 				if(id == pdal::Dimension::Id::Z) {
-					wview->setField(pdal::Dimension::Id::Z, i, z - nz);
+					if(std::abs(nz) > 30000) {
+						g_debug("fail " << z << " " << nz);
+					} else {
+						wview->setField(pdal::Dimension::Id::Z, i, z - nz);
+					}
 				} else {
 					view->getRawField(id, i, (void*) buf.data());
 					wview->setField(id, types[id], i, (const void*) buf.data());
