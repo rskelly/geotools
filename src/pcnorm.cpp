@@ -100,11 +100,12 @@ bool buildGrid(
 
 	std::vector<float> weights(cols * rows);
 	size_t count = 0;
+
+	// To compute weighted mean, need weights and values arrays.
+	grid.resize(cols * rows);
+	std::fill(grid.begin(), grid.end(), 0);
+	std::fill(weights.begin(), weights.end(), 0);
 	{
-		// To compute weighted mean, need weights and values arrays.
-		grid.resize(cols * rows);
-		std::fill(grid.begin(), grid.end(), 0);
-		std::fill(weights.begin(), weights.end(), 0);
 
 		double px, py, pz;
 		double x, y, d, w;
@@ -161,49 +162,43 @@ bool buildGrid(
 			grid[i] /= weights[i];
 	}
 
-	// Fill in zeroes.
+	// Fill in gaps. Iteratively average the neighbours of invalid
+	// cells until there are none left.
 	std::cout << "Filling gaps\n";
-	for(size_t i = 0; i < grid.size(); ++i) {
-		if(i % cols == 0)
-			std::cout << "Row " << (i / cols) << " of " << rows << "\n";
-		if(weights[i] == 0) {
-			double x, y, d, w0, rad, w = 0, s = 0;
-			int o = 2;
-			int col = i % cols;
-			int row = i / cols;
-			double cx = bounds[0] + col * res + res * 0.5;
-			double cy = bounds[2] + row * res + res * 0.5;
-			do {
-				rad = std::pow(o * res, 2);
-				for(int r = row - o; r < row + o + 1; ++r) {
-					for(int c = col - o; c < col + o + 1; ++c) {
-						if(c >= 0 && r >= 0 && c < cols && r < rows) {
-
-							if(weights[r * cols + c] == 0)
-								continue;
-
-							x = bounds[0] + (c * res) + res * 0.5;
-							y = bounds[2] + (r * res) + res * 0.5;
-							d = std::pow(x - cx, 2.0) + std::pow(y - cy, 2.0);
-
-							if(d > rad)
-								continue;
-
-							w0 = 1.0 - d / rad;
-
-							// Accumulate the weighted heights and weights.
-							s += grid[r * cols + c] * w0;
-							w += w0;
+	int fillCount = 0;
+	do {
+		fillCount = 0;
+		// Loop over the grid.
+		for(int r = 0; r < rows; ++r) {
+			for(int c = 0; c < cols; ++c) {
+				size_t i = r * cols + c;
+				if(weights[i] == 0) {
+					// If the cell is invalid, loop over the immediate neighbours.
+					double w = 0;
+					double h = 0;
+					for(int rr = r - 1; rr < r + 2; ++rr) {
+						for(int cc = c - 1; cc < c + 2; ++c) {
+							if(rr >= 0 && rr < rows && cc >= 0 && cc < cols) {
+								size_t ii = rr * cols + cc;
+								if(weights[ii] > 0) {
+									double w0 = std::pow(rr - r, 2) + std::pow(cc - c, 2);
+									h += grid[ii] * w0;
+									w += w0;
+								}
+							}
 						}
 					}
+					if(w > 0) {
+						grid[i] = h / w;
+						++fillCount;
+					}
 				}
-				++o;
-			} while(w == 0);
-
-			grid[i] = s / w;
+			}
 		}
-	}
+	} while(fillCount);
+
 	if(saveGrid) {
+		g_debug("Saving the grid.");
 		std::ofstream grd("pcnorm.grid", std::ios::binary);
 		for(char g : grid)
 			grd << g;
