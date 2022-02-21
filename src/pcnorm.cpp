@@ -90,8 +90,8 @@ bool buildGrid(
 
 	// Increase bounds enough to add 2 cells all around.
 	bounds[0] -= res * 2;
-	bounds[1] += res * 2;
-	bounds[2] -= res * 2;
+	bounds[1] -= res * 2;
+	bounds[2] += res * 2;
 	bounds[3] += res * 2;
 
 	// Get grid size.
@@ -177,7 +177,7 @@ bool buildGrid(
 					double w = 0;
 					double h = 0;
 					for(int rr = r - 1; rr < r + 2; ++rr) {
-						for(int cc = c - 1; cc < c + 2; ++c) {
+						for(int cc = c - 1; cc < c + 2; ++cc) {
 							if(rr >= 0 && rr < rows && cc >= 0 && cc < cols) {
 								size_t ii = rr * cols + cc;
 								if(weights[ii] > 0) {
@@ -190,18 +190,29 @@ bool buildGrid(
 					}
 					if(w > 0) {
 						grid[i] = h / w;
+						weights[i] = 1;
 						++fillCount;
 					}
 				}
 			}
 		}
+		g_debug("fill count " << fillCount);
 	} while(fillCount);
 
 	if(saveGrid) {
 		g_debug("Saving the grid.");
-		std::ofstream grd("pcnorm.grid", std::ios::binary);
-		for(char g : grid)
-			grd << g;
+		geo::grid::GridProps p;
+		p.setBands(1);
+		p.setResolution(1, 1);
+		p.setSize(cols, rows);
+		p.setTrans(0, 1, 0, 1);
+		p.setBounds(geo::util::Bounds<float>(0, 0, 500, 500));
+		p.setDataType(DataType::Float32);
+		p.setDriver("GTiff");
+		p.setFilename("pcnorm.tif");
+		p.setSrid(2956);
+		geo::grid::Band<float> g("pcnorm.tif", p, false);
+		g.readFromVector(grid, 0, 0, 500, 500);	
 	}
 	return true;
 }
@@ -243,7 +254,7 @@ double bary(double x, double y,
  * \param grid The grid.
  */
 void normalize(const std::vector<std::string>& infiles, const std::string& outfile,
-		double* bounds, double res, int cols, int /*rows*/, std::vector<float>& grid) {
+		double* bounds, double res, int cols, int rows, std::vector<float>& grid) {
 
 	bounds[4] = std::numeric_limits<double>::max();
 	bounds[5] = std::numeric_limits<double>::lowest();
@@ -306,6 +317,17 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 			double y = view->getFieldAs<double>(pdal::Dimension::Id::Y, i);
 			double z = view->getFieldAs<double>(pdal::Dimension::Id::Z, i);
 
+			int c1 = (int) (x - bounds[0]) / res;
+			int c2 = c1 + 1;
+			int r1 = (int) (y - bounds[1]) / res;
+			int r2 = r1 + 1;
+
+			double x1 = bounds[0] + c1 * res + res * 0.5;
+			double x2 = x1 + res;
+			double y1 = bounds[1] + r1 * res + res * 0.5;
+			double y2 = y1 + res;
+
+			/*
 			// Point's home cell.
 			int col = (int) (x - bounds[0]) / res;
 			int row = (int) (y - bounds[1]) / res;
@@ -330,11 +352,37 @@ void normalize(const std::vector<std::string>& infiles, const std::string& outfi
 			// Get the barycentric z
 			double nz = bary(x, y, cx0, cy0, cz0, cx1, cy1, cz1, cx2, cy2, cz2);
 			// Write the new z value.
+			*/
+
+			double nz = 0;
+			double w = 0;
+			if(c1 >= 0 && r1 >= 0) {
+				double w0 = std::pow(x - x1, 2) + std::pow(y - y1, 2);
+				nz += grid[r1 * cols + c1] * w0;
+				w += w0;
+			}
+			if(c1 >= 0 && r2 < rows) {
+				double w0 = std::pow(x - x1, 2) + std::pow(x - y2, 2);
+				nz += grid[r2 * cols + c1] * w0;
+				w += w0;
+			}
+			if(c2 < cols && r1 >= 0) {
+				double w0 = std::pow(x - x2, 2) + std::pow(x - y1, 2);
+				nz += grid[r1 * cols + c2] * w0;
+				w += w0;
+			}
+			if(c2 < cols && r2 > rows) {
+				double w0 = std::pow(x - x2, 2) + std::pow(x - y2, 2);
+				nz += grid[r2 * cols + c2] * w0;;
+				w += w0;
+			}
+			
+			nz /= w;
 
 			for(pdal::Dimension::Id id : dims) {
 				if(id == pdal::Dimension::Id::Z) {
 					if(std::abs(nz) > 30000) {
-						g_debug("fail " << z << " " << nz);
+						g_debug("fail " << x << " " << y << " " << z << " " << nz << " " << w);
 					} else {
 						wview->setField(pdal::Dimension::Id::Z, i, z - nz);
 					}
@@ -381,12 +429,15 @@ int main(int argc, char** argv) {
 	double resolution = 0;
 	bool force = false;
 	bool saveGrid = false;
-
+	bool useHeader = false;
 	int mode = 0;
+
 	for(int i = 1; i < argc; ++i) {
 		std::string arg = argv[i];
 		if(arg == "-f") {
 			force = true;
+		} else if(arg == "-h") {
+			useHeader = true;
 		} else if(arg == "-g") {
 			saveGrid = true;
 		} else if(mode == 0) {
@@ -433,7 +484,7 @@ int main(int argc, char** argv) {
 	std::cout << "Computing bounds\n";
 	for(const std::string& infile : infiles) {
 		geo::pc::PCFile rdr(infile);
-		rdr.init();
+		rdr.init(useHeader);
 		rdr.fileBounds(bounds);
 	}
 

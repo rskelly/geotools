@@ -112,9 +112,9 @@ int main(int argc, char** argv) {
 	bool d3 = false;
 
 	if(std::find(dbdrivers.begin(), dbdrivers.end(), ldriver) == dbdrivers.end()) {
-		test.polygonizeToFile(outfile, layer, idField, driver, fieldValues, holes, dangles, d3, targetIDs);
+		test.polygonizeToFile(outfile, layer, idField, driver, fieldValues, holes, dangles, d3, targetIDs, nullptr, threads);
 	} else {
-		test.polygonizeToTable(outfile, layer, idField, geomField, fieldValues, holes, dangles, d3, targetIDs);
+		test.polygonizeToTable(outfile, layer, idField, geomField, fieldValues, holes, dangles, d3, targetIDs, nullptr, threads);
 	}
 	return 0;
 }
